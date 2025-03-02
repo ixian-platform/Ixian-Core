@@ -66,8 +66,8 @@ namespace IXICore.Inventory
 
                     writer.WriteIxiVarInt(lastSeen);
 
-                    writer.WriteIxiVarInt(address.addressWithChecksum.Length);
-                    writer.Write(address.addressWithChecksum);
+                    writer.WriteIxiVarInt(address.addressNoChecksum.Length);
+                    writer.Write(address.addressNoChecksum);
 
                     writer.WriteIxiVarInt(deviceId.Length);
                     writer.Write(deviceId);

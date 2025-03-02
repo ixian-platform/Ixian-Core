@@ -882,7 +882,7 @@ namespace IXICore
                                 break;
 
                             default:
-                                Logging.warn("Disconnected with message: {0} {1} {2}", byeCode.ToString(), byeMessage, byeData);
+                                Logging.warn("Disconnected by '{0}', with message: {1} {2} {3}", endpoint.address.ToString(), byeCode.ToString(), byeMessage, byeData);
                                 break;
                         }
                     }

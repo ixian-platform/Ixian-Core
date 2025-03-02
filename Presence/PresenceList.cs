@@ -613,7 +613,7 @@ namespace IXICore
                     if (listEntry == null)
                     {
                         // request for additional data
-                        CoreProtocolMessage.broadcastGetPresence(wallet.addressWithChecksum, endpoint);
+                        CoreProtocolMessage.broadcastGetPresence(wallet.addressNoChecksum, endpoint);
                         return false;
                     }
 
@@ -686,7 +686,7 @@ namespace IXICore
                         }
                         else
                         {
-                            CoreProtocolMessage.broadcastGetPresence(wallet.addressWithChecksum, endpoint);
+                            CoreProtocolMessage.broadcastGetPresence(wallet.addressNoChecksum, endpoint);
                             return false;
                         }
                     }
