@@ -20,7 +20,7 @@ namespace IXICore
         /// <summary>
         /// Current version of IxiCore.
         /// </summary>
-        public static readonly string version = "xcore-0.9.3f-rc1";
+        public static readonly string version = "xcore-0.9.3f";
 
         /// <summary>
         /// Current version of the Ixian network protocol.
@@ -91,7 +91,7 @@ namespace IXICore
         /// <summary>
         /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for server (M, H, R) nodes.
         /// </summary>
-        public static readonly int serverKeepAliveInterval = 60;
+        public static readonly int serverKeepAliveInterval = 100;
         
         /// <summary>
         /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for client nodes.
