@@ -87,8 +87,7 @@ namespace IXICore.Network
         hello = 0,
         helloData = 1,
         bye = 2,
-        //[Obsolete("Use getBlock3 instead")]
-        //getBlock = 3,
+        rejected = 3,
         //[Obsolete("Use blockData2 instead")]
         //blockData = 4,
         [Obsolete("Use inventory instead")]
@@ -139,7 +138,7 @@ namespace IXICore.Network
         //[Obsolete("Use transactionsChunk3 instead")]
         //blockTransactionsChunk = 37, // deprecated
         getUnappliedTransactions = 38,
-        extend = 39,
+        //extend = 39,
         attachEvent = 40,
         detachEvent = 41,
         //[Obsolete("Use blockSignature2 instead")]

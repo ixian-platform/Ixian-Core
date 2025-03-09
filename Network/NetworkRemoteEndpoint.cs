@@ -905,9 +905,12 @@ namespace IXICore.Network
                 case ProtocolMessageCode.bye:
                 case ProtocolMessageCode.keepAlivePresence:
                 case ProtocolMessageCode.getPresence2:
-                case ProtocolMessageCode.updatePresence:
-                case ProtocolMessageCode.keepAlivesChunk:
                 case ProtocolMessageCode.getKeepAlives:
+                case ProtocolMessageCode.keepAlivesChunk:
+                case ProtocolMessageCode.updatePresence:
+                case ProtocolMessageCode.rejected:
+                case ProtocolMessageCode.getNameRecord:
+                case ProtocolMessageCode.nameRecord:
                     lock (sendQueueMessagesHighPriority)
                     {
                         addMessageToSendQueue(sendQueueMessagesHighPriority, message);

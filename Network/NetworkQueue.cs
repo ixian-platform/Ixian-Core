@@ -270,7 +270,12 @@ namespace IXICore.Network
 
                     case ProtocolMessageCode.keepAlivePresence:
                     case ProtocolMessageCode.getPresence2:
+                    case ProtocolMessageCode.getKeepAlives:
+                    case ProtocolMessageCode.keepAlivesChunk:
                     case ProtocolMessageCode.updatePresence:
+                    case ProtocolMessageCode.rejected:
+                    case ProtocolMessageCode.getNameRecord:
+                    case ProtocolMessageCode.nameRecord:
                         // Prioritize if queue is large
                         if (queueHighPriority.Count > 10)
                         {
