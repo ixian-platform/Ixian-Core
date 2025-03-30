@@ -316,8 +316,10 @@ function getStatus() {
                 }
                 var minerEl = document.getElementById("MinerSection");
                 minerEl.style.display = "block";
-                var html = "Miner: " + status + "<br/>";
-                html += "Rate: " + data["result"]["Hashrate"] + "<br/>";
+                var html = "Miner: " + status;
+                html += " Rate: " + data["result"]["Hashrate"] + "<br/>";
+		html += "Current block: " + data["result"]["Current Block"] + "<br/>";
+                html += "Found blocks: " + data["result"]["Solved Blocks (Local)"] + " (" + data["result"]["Last Solved Block Time"] + ")<br/>";
                 html += "Algorithm: " + data["result"]["Search Mode"] + "<br/>";
                 html += "<div class=\"dropDown\">";
                 html += "<span onclick=\"setBlockSelectionAlgorithm(-1);\">Disable</span><br/>";
