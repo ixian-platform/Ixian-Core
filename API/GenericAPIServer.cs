@@ -278,7 +278,7 @@ namespace IXICore
                 }
             }
 
-            if (methodName.Equals("addmultisigtransaction", StringComparison.OrdinalIgnoreCase))
+            /*if (methodName.Equals("addmultisigtransaction", StringComparison.OrdinalIgnoreCase))
             {
                 response = onAddMultiSigTransaction(parameters);
             }
@@ -301,7 +301,7 @@ namespace IXICore
             if (methodName.Equals("changemultisigs", StringComparison.OrdinalIgnoreCase))
             {
                 response = onChangeMultiSigs(parameters);
-            }
+            }*/
 
             if (methodName.Equals("gettotalbalance", StringComparison.OrdinalIgnoreCase))
             {
@@ -811,14 +811,17 @@ namespace IXICore
 
             object r = createTransactionHelper(parameters);
             Transaction transaction = null;
+            List<Address> relayNodeAddresses = null;
             if (r is JsonResponse)
             {
                 // there was an error
                 return (JsonResponse)r;
             }
-            else if (r is Transaction)
+            else if (r is (Transaction, List<Address>))
             {
-                transaction = (Transaction)r;
+                (Transaction tx, List<Address> relayNodeAddresses) helperResponse = ((Transaction, List<Address>))r;
+                transaction = helperResponse.tx;
+                relayNodeAddresses = helperResponse.relayNodeAddresses;
             }
             else
             {
@@ -832,9 +835,9 @@ namespace IXICore
                     }
                 };
             }
-            if (IxianHandler.addTransaction(transaction, true))
+            if (IxianHandler.addTransaction(transaction, relayNodeAddresses, true))
             {
-                PendingTransactions.addPendingLocalTransaction(transaction);
+                PendingTransactions.addPendingLocalTransaction(transaction, relayNodeAddresses);
                 return new JsonResponse { result = transaction.toDictionary(), error = null };
             }
 
@@ -861,14 +864,17 @@ namespace IXICore
 
             object r = createTransactionHelper(parameters, sign);
             Transaction transaction = null;
+            List<Address> relayNodeAddresses = null;
             if (r is JsonResponse)
             {
                 // there was an error
                 return (JsonResponse)r;
             }
-            else if (r is Transaction)
+            else if (r is (Transaction, List<Address>))
             {
-                transaction = (Transaction)r;
+                (Transaction tx, List<Address> relayNodeAddresses) helperResponse = ((Transaction, List<Address>))r;
+                transaction = helperResponse.tx;
+                relayNodeAddresses = helperResponse.relayNodeAddresses;
             }
             else
             {
@@ -952,9 +958,17 @@ namespace IXICore
 
             Transaction raw_transaction = new Transaction(Crypto.stringToHash(raw_transaction_hex), false, true);
 
-            if (IxianHandler.addTransaction(raw_transaction, true))
+            if (!parameters.ContainsKey("relayNodeAddress"))
             {
-                PendingTransactions.addPendingLocalTransaction(raw_transaction);
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "relayNodeAddress parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+
+            List<Address> relayNodeAddresses = new() { new Address((string)parameters["relayNodeAddress"]) };
+
+            if (IxianHandler.addTransaction(raw_transaction, relayNodeAddresses, true))
+            {
+                PendingTransactions.addPendingLocalTransaction(raw_transaction, relayNodeAddresses);
                 return new JsonResponse { result = raw_transaction.toDictionary(), error = null };
             }
 
@@ -966,14 +980,17 @@ namespace IXICore
             // Create a dummy transaction, just so that we can calculate the appropriate fee required to process this (minimum fee)
             object r = createTransactionHelper(parameters);
             Transaction transaction = null;
+            List<Address> relayNodeAddresses = null;
             if (r is JsonResponse)
             {
                 // there was an error
                 return (JsonResponse)r;
             }
-            else if (r is Transaction)
+            else if (r is (Transaction, List<Address>))
             {
-                transaction = (Transaction)r;
+                (Transaction tx, List<Address> relayNodeAddresses) helperResponse = ((Transaction, List<Address>))r;
+                transaction = helperResponse.tx;
+                relayNodeAddresses = helperResponse.relayNodeAddresses;
             }
             else
             {
@@ -990,7 +1007,7 @@ namespace IXICore
             return new JsonResponse { result = transaction.fee.ToString(), error = null };
         }
 
-        private JsonResponse onAddMultiSigTxSignature(Dictionary<string, object> parameters)
+        /*private JsonResponse onAddMultiSigTxSignature(Dictionary<string, object> parameters)
         {
             if (IxianHandler.status != NodeStatus.ready
                 && IxianHandler.status != NodeStatus.stalled)
@@ -1242,7 +1259,7 @@ namespace IXICore
             }
 
             return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "Error while creating the transaction." } };
-        }
+        }*/
 
         private JsonResponse onGetTotalBalance(Dictionary<string, object> parameters)
         {
@@ -1717,15 +1734,17 @@ namespace IXICore
             uint capacity = uint.Parse((string)parameters["capacity"]);
             ToEntry toEntry = RegisteredNamesTransactions.createRegisterToEntry(nameBytes, regTime, capacity, recoveryHash, pkHash, ConsensusConfig.rnPricePerUnit * (ulong)capacity * (ulong)(regTime / ConsensusConfig.rnMonthInBlocks));
 
-            Transaction fundedTx = createRegNameTransaction(toEntry, null, null);
+            var txTuple = createRegNameTransaction(toEntry, null, null);
+            Transaction fundedTx = txTuple.tx;
+            List<Address> relayNodeAddresses = txTuple.relayNodeAddresses;
             if (fundedTx == null)
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx);
+                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1748,15 +1767,17 @@ namespace IXICore
             var capacity = name.capacity;
             ToEntry toEntry = RegisteredNamesTransactions.createExtendToEntry(nameBytes, regTime, ConsensusConfig.rnPricePerUnit * (ulong)capacity * (ulong)(regTime / ConsensusConfig.rnMonthInBlocks));
 
-            Transaction fundedTx = createRegNameTransaction(toEntry, null, null);
+            var txTuple = createRegNameTransaction(toEntry, null, null);
+            Transaction fundedTx = txTuple.tx;
+            List<Address> relayNodeAddresses = txTuple.relayNodeAddresses;
             if (fundedTx == null)
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx);
+                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1808,15 +1829,17 @@ namespace IXICore
 
             ToEntry toEntry = RegisteredNamesTransactions.createChangeCapacityToEntry(nameBytes, newCapacity, sequence, nextPkHash, sigPk, sig, ConsensusConfig.rnPricePerUnit * months * (ulong)newCapacity);
 
-            Transaction fundedTx = createRegNameTransaction(toEntry, null, null);
+            var txTuple = createRegNameTransaction(toEntry, null, null);
+            Transaction fundedTx = txTuple.tx;
+            List<Address> relayNodeAddresses = txTuple.relayNodeAddresses;
             if (fundedTx == null)
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx);
+                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1863,15 +1886,17 @@ namespace IXICore
 
             ToEntry toEntry = RegisteredNamesTransactions.createRecoverToEntry(nameBytes, sequence, nextPkHash, nextRecoveryHash, sigPk, sig);
 
-            Transaction fundedTx = createRegNameTransaction(toEntry, null, null);
+            var txTuple = createRegNameTransaction(toEntry, null, null);
+            Transaction fundedTx = txTuple.tx;
+            List<Address> relayNodeAddresses = txTuple.relayNodeAddresses;
             if (fundedTx == null)
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx);
+                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1927,15 +1952,17 @@ namespace IXICore
             }
             ToEntry toEntry = RegisteredNamesTransactions.createUpdateRecordToEntry(nameBytes, records, sequence, nextPkHash, sigPk, sig);
 
-            Transaction fundedTx = createRegNameTransaction(toEntry, null, null);
+            var txTuple = createRegNameTransaction(toEntry, null, null);
+            Transaction fundedTx = txTuple.tx;
+            List<Address> relayNodeAddresses = txTuple.relayNodeAddresses;
             if (fundedTx == null)
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx);
+                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1972,7 +1999,7 @@ namespace IXICore
             return new JsonResponse { result = decodedTransaction, error = null };
         }
 
-        private Transaction createRegNameTransaction(ToEntry toEntry, Address walletAddress, Address primaryAddress)
+        private (Transaction tx, List<Address> relayNodeAddresses) createRegNameTransaction(ToEntry toEntry, Address walletAddress, Address primaryAddress)
         {
             Transaction t = new Transaction((int)Transaction.Type.RegName);
             t.toList = new Dictionary<Address, ToEntry>(new AddressComparer())
@@ -1982,7 +2009,7 @@ namespace IXICore
             return createTransaction(t, walletAddress, primaryAddress, 0);
         }
 
-        private Transaction createTransaction(Transaction t, Address walletAddress, Address primaryAddress, IxiNumber additionalFees)
+        private (Transaction tx, List<Address> relayNodeAddresses) createTransaction(Transaction t, Address walletAddress, Address primaryAddress, IxiNumber additionalFees)
         {
             IxiNumber fromAmount = 0;
             IxiNumber fee = ConsensusConfig.forceTransactionPrice;
@@ -1993,9 +2020,7 @@ namespace IXICore
             {
                 primaryAddress = ws.getPrimaryAddress();
             }
-
             IxiNumber toAmount = additionalFees;
-            SortedDictionary<Address, Transaction.ToEntry> toList = new SortedDictionary<Address, Transaction.ToEntry>(new AddressComparer());
             if (t.toList.Count > 0)
             {
                 foreach (var toEntry in t.toList)
@@ -2003,7 +2028,7 @@ namespace IXICore
                     IxiNumber singleToAmount = toEntry.Value.amount;
                     if (singleToAmount < 0)
                     {
-                        return null;
+                        return (null, null);
                     }
                     toAmount += singleToAmount;
                 }
@@ -2012,18 +2037,27 @@ namespace IXICore
             // Only create a transaction if there is a valid amount
             if (toAmount < 0)
             {
-                return null;
+                return (null, null);
+            }
+
+            List<Address> relayNodeAddresses = null;
+            IxiNumber relayFee = 0;
+            if (PresenceList.myPresenceType == 'C')
+            {
+                // Add relay node fee
+                relayNodeAddresses = NetworkClientManager.getRandomConnectedClientAddresses(2);
+                foreach (var relayNodeAddress in relayNodeAddresses)
+                {
+                    ToEntry relayNodeToEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()),
+                                                  fee,
+                                                  null,
+                                                  null);
+                    t.toList.Add(relayNodeAddress, relayNodeToEntry);
+                    relayFee += fee;
+                }
             }
 
             byte[] pubKey = ws.getKeyPair(primaryAddress).publicKeyBytes;
-
-            // Check if this wallet's public key is already in the WalletState
-            Wallet mywallet = IxianHandler.getWallet(primaryAddress);
-            if (mywallet.publicKey != null && mywallet.publicKey.SequenceEqual(pubKey))
-            {
-                // Walletstate public key matches, we don't need to send the public key in the transaction
-                pubKey = primaryAddress.addressNoChecksum;
-            }
 
             t.blockHeight = IxianHandler.getHighestKnownNetworkBlockHeight();
             t.pubKey = new Address(ws.getPrimaryPublicKey());
@@ -2031,10 +2065,19 @@ namespace IXICore
             SortedDictionary<byte[], IxiNumber> fromList = null;
             lock (PendingTransactions.pendingTransactions)
             {
-                fromList = ws.generateFromList(primaryAddress, toAmount + fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
+                fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + fee, t.toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
                 t.fromList = fromList;
                 t.amount = t.calculateTotalAmount();
                 t.fee = t.calculateMinimumFee(ConsensusConfig.forceTransactionPrice);
+                if (relayNodeAddresses != null)
+                {
+                    relayFee = 0;
+                    foreach (var relayNodeAddress in relayNodeAddresses)
+                    {
+                        t.toList[relayNodeAddress].amount = t.fee;
+                        relayFee += t.fee;
+                    }
+                }
             }
 
             IxiNumber totalTxFee = fee;
@@ -2043,33 +2086,42 @@ namespace IXICore
                 totalTxFee = t.fee;
                 lock (PendingTransactions.pendingTransactions)
                 {
-                    fromList = ws.generateFromList(primaryAddress, toAmount + totalTxFee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
+                    fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + totalTxFee, t.toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
                 }
                 if (fromList == null || fromList.Count == 0)
                 {
-                    return null;
+                    return (null, null);
                 }
                 t.fromList = fromList;
-                t.amount = t.calculateTotalAmount();
                 t.fee = t.calculateMinimumFee(ConsensusConfig.forceTransactionPrice);
+                if (relayNodeAddresses != null)
+                {
+                    relayFee = 0;
+                    foreach (var relayNodeAddress in relayNodeAddresses)
+                    {
+                        t.toList[relayNodeAddress].amount = t.fee;
+                        relayFee += t.fee;
+                    }
+                }
+                t.amount = t.calculateTotalAmount();
             }
 
             // verify that all "from amounts" match all "to_amounts" and that the fee is included in "from_amounts"
             // we need to recalculate "from_amount"
             fromAmount = fromList.Aggregate(new IxiNumber(), (sum, next) => sum + next.Value, sum => sum);
-            if (fromAmount != (toAmount + t.fee))
+            if (fromAmount != (toAmount + relayFee + t.fee))
             {
-                return null;
+                return (null, null);
             }
-            if (toAmount + t.fee > ws.getMyTotalBalance(primaryAddress))
+            if (toAmount + relayFee + t.fee > ws.getMyTotalBalance(primaryAddress))
             {
-                return null;
+                return (null, null);
             }
 
             t.generateChecksums();
             t.signature = t.getSignature(t.checksum, ws.getPrimaryPrivateKey());
             // the transaction appears valid
-            return t;
+            return (t, relayNodeAddresses);
         }
 
         // This is a bit hacky way to return useful error values
@@ -2145,7 +2197,7 @@ namespace IXICore
             }
 
             IxiNumber to_amount = 0;
-            SortedDictionary<Address, Transaction.ToEntry> toList = new SortedDictionary<Address, Transaction.ToEntry>(new AddressComparer());
+            Dictionary<Address, ToEntry> toList = new Dictionary<Address, ToEntry>(new AddressComparer());
             string[] to_split = ((string)parameters["to"]).Split('-');
             if (to_split.Length > 0)
             {
@@ -2163,7 +2215,7 @@ namespace IXICore
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_PARAMS, message = "Invalid to amount was specified" } };
                     }
                     to_amount += singleToAmount;
-                    Transaction.ToEntry toEntry = new Transaction.ToEntry(Transaction.getExpectedVersion(IxianHandler.getLastBlockVersion()), singleToAmount, null, null);
+                    ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()), singleToAmount, null, null);
                     toList.Add(new Address(single_to_address), toEntry);
                 }
             }
@@ -2171,6 +2223,31 @@ namespace IXICore
             if (parameters.ContainsKey("fee") && ((string)parameters["fee"]).Length > 0)
             {
                 fee = new IxiNumber((string)parameters["fee"]);
+            }
+
+            List<Address> relayNodeAddresses = null;
+            IxiNumber relayFee = 0;
+            if (PresenceList.myPresenceType == 'C')
+            {
+                if (parameters.ContainsKey("relayNodeAddress"))
+                {
+                    relayNodeAddresses = new() { new Address((string)parameters["relayNodeAddress"]) };
+                }
+                else
+                {
+                    relayNodeAddresses = NetworkClientManager.getRandomConnectedClientAddresses(2);
+                }
+
+
+                foreach (Address relayNodeAddress in relayNodeAddresses)
+                {
+                    ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()),
+                                                  fee,
+                                                  null,
+                                                  null);
+                    toList.Add(relayNodeAddress, toEntry);
+                    relayFee += fee;
+                }
             }
 
             // Only create a transaction if there is a valid amount
@@ -2181,20 +2258,12 @@ namespace IXICore
 
             byte[] pubKey = ws.getKeyPair(primary_address).publicKeyBytes;
 
-            // Check if this wallet's public key is already in the WalletState
-            Wallet mywallet = IxianHandler.getWallet(primary_address);
-            if (mywallet.publicKey != null && mywallet.publicKey.SequenceEqual(pubKey))
-            {
-                // Walletstate public key matches, we don't need to send the public key in the transaction
-                pubKey = primary_address.addressNoChecksum;
-            }
-
             bool adjust_amount = false;
             if (fromList.Count == 0)
             {
                 lock (PendingTransactions.pendingTransactions)
                 {
-                    fromList = ws.generateFromList(primary_address, to_amount + fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
+                    fromList = ws.generateFromList(primary_address, to_amount + relayFee + fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
                 }
                 adjust_amount = true;
             }
@@ -2205,8 +2274,8 @@ namespace IXICore
             }
 
             Transaction transaction = new Transaction((int)Transaction.Type.Normal, fee, toList, fromList, new Address(pubKey), IxianHandler.getHighestKnownNetworkBlockHeight(), -1, sign_transaction);
-            //Logging.info(String.Format("Intial transaction size: {0}.", transaction.getBytes().Length));
-            //Logging.info(String.Format("Intial transaction set fee: {0}.", transaction.fee));
+            //Logging.info("Initial transaction size: {0}.", transaction.getBytes().Length);
+            //Logging.info("Initial transaction set fee: {0}.", transaction.fee);
             if (adjust_amount) //true only if automatically generating from address
             {
                 IxiNumber total_tx_fee = fee;
@@ -2215,13 +2284,23 @@ namespace IXICore
                     total_tx_fee = transaction.fee;
                     lock (PendingTransactions.pendingTransactions)
                     {
-                        fromList = ws.generateFromList(primary_address, to_amount + total_tx_fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
+                        fromList = ws.generateFromList(primary_address, to_amount + relayFee + total_tx_fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
                     }
                     if (fromList == null || fromList.Count == 0)
                     {
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_VERIFY_ERROR, message = "From list is empty" } };
                     }
                     transaction = new Transaction((int)Transaction.Type.Normal, fee, toList, fromList, new Address(pubKey), IxianHandler.getHighestKnownNetworkBlockHeight(), -1, sign_transaction);
+
+                    if (relayNodeAddresses != null)
+                    {
+                        relayFee = 0;
+                        foreach (Address relayNodeAddress in relayNodeAddresses)
+                        {
+                            transaction.toList[relayNodeAddress].amount = transaction.fee;
+                            relayFee += transaction.fee;
+                        }
+                    }
                 }
             }
             else if (auto_fee) // true if user specified both a valid from address and the parameter autofee=true
@@ -2235,22 +2314,22 @@ namespace IXICore
                 }
                 transaction = new Transaction((int)Transaction.Type.Normal, fee, toList, fromList, new Address(pubKey), IxianHandler.getHighestKnownNetworkBlockHeight(), -1, sign_transaction);
             }
-            //Logging.info(String.Format("Transaction size after automatic adjustments: {0}.", transaction.getBytes().Length));
-            //Logging.info(String.Format("Transaction fee after automatic adjustments: {0}.", transaction.fee));
+            //Logging.info("Transaction size after automatic adjustments: {0}.", transaction.getBytes().Length);
+            //Logging.info("Transaction fee after automatic adjustments: {0}.", transaction.fee);
             // verify that all "from amounts" match all "to_amounts" and that the fee is included in "from_amounts"
             // we need to recalculate "from_amount"
             from_amount = fromList.Aggregate(new IxiNumber(), (sum, next) => sum + next.Value, sum => sum);
-            if (from_amount != (to_amount + transaction.fee))
+            if (from_amount != (to_amount + relayFee + transaction.fee))
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_VERIFY_ERROR, message = "From amounts (incl. fee) do not match to amounts. If you haven't accounted for the transaction fee in the from amounts, use the parameter 'autofee' to have the node do it automatically." } };
             }
-            if (to_amount + transaction.fee > ws.getMyTotalBalance(primary_address))
+            if (to_amount + relayFee + transaction.fee > ws.getMyTotalBalance(primary_address))
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_WALLET_INSUFFICIENT_FUNDS, message = "Balance is too low" } };
             }
 
             // the transaction appears valid
-            return transaction;
+            return (transaction, relayNodeAddresses);
         }
     }
 }

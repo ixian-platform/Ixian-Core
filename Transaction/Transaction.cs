@@ -83,7 +83,7 @@ namespace IXICore
         public class ToEntry
         {
             private int txVersion = 0;
-            public IxiNumber amount { get; private set; } = 0;
+            public IxiNumber amount = 0;
 
             /// <summary>
             ///  Optional data included with the transaction. This can be any byte-field. The transaction fee will increase with the amount of data.

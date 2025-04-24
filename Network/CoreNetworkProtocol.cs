@@ -628,7 +628,7 @@ namespace IXICore
         {
             if (data == null)
             {
-                Logging.warn(string.Format("Invalid protocol message data for {0}", code));
+                Logging.warn("Invalid protocol message data for {0}", code);
                 return false;
             }
 
