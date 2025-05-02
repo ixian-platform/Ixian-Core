@@ -450,6 +450,16 @@ namespace IXICore
                 response = onDecodeTransaction(parameters);
             }
 
+            if (methodName.Equals("pl", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onPl();
+            }
+
+            if (methodName.Equals("relaySectors", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onRelaySectors();
+            }
+
             return response;
         }
 
@@ -629,7 +639,7 @@ namespace IXICore
 
         public void sendResponse(HttpListenerResponse responseObject, JsonResponse response)
         {
-            string responseString = JsonConvert.SerializeObject(response);
+            string responseString = JsonConvert.SerializeObject(response, new JsonSerializerSettings() { ReferenceLoopHandling = ReferenceLoopHandling.Ignore });
 
             string responseError = "null";
             if (response.error != null)
@@ -817,10 +827,10 @@ namespace IXICore
                 // there was an error
                 return (JsonResponse)r;
             }
-            else if (r is (Transaction, List<Address>))
+            else if (r is TransactionWithRelays)
             {
-                (Transaction tx, List<Address> relayNodeAddresses) helperResponse = ((Transaction, List<Address>))r;
-                transaction = helperResponse.tx;
+                TransactionWithRelays helperResponse = (TransactionWithRelays)r;
+                transaction = helperResponse.transaction;
                 relayNodeAddresses = helperResponse.relayNodeAddresses;
             }
             else
@@ -870,10 +880,10 @@ namespace IXICore
                 // there was an error
                 return (JsonResponse)r;
             }
-            else if (r is (Transaction, List<Address>))
+            else if (r is TransactionWithRelays)
             {
-                (Transaction tx, List<Address> relayNodeAddresses) helperResponse = ((Transaction, List<Address>))r;
-                transaction = helperResponse.tx;
+                TransactionWithRelays helperResponse = (TransactionWithRelays)r;
+                transaction = helperResponse.transaction;
                 relayNodeAddresses = helperResponse.relayNodeAddresses;
             }
             else
@@ -986,10 +996,10 @@ namespace IXICore
                 // there was an error
                 return (JsonResponse)r;
             }
-            else if (r is (Transaction, List<Address>))
+            else if (r is TransactionWithRelays)
             {
-                (Transaction tx, List<Address> relayNodeAddresses) helperResponse = ((Transaction, List<Address>))r;
-                transaction = helperResponse.tx;
+                TransactionWithRelays helperResponse = (TransactionWithRelays)r;
+                transaction = helperResponse.transaction;
                 relayNodeAddresses = helperResponse.relayNodeAddresses;
             }
             else
@@ -2329,7 +2339,38 @@ namespace IXICore
             }
 
             // the transaction appears valid
-            return (transaction, relayNodeAddresses);
+            return new TransactionWithRelays(transaction, relayNodeAddresses);
+        }
+
+        public JsonResponse onPl()
+        {
+            JsonError error = null;
+
+            List<Presence> presences = PresenceList.getPresences();
+
+            // Show a list of presences
+            return new JsonResponse { result = presences, error = error };
+        }
+
+        public JsonResponse onRelaySectors()
+        {
+            JsonError error = null;
+
+            var sectors = RelaySectors.Instance.debugDump();
+
+            return new JsonResponse { result = sectors, error = error };
+        }
+    }
+
+    internal class TransactionWithRelays
+    {
+        public Transaction transaction { get; private set; }
+        public List<Address> relayNodeAddresses { get; private set; }
+
+        public TransactionWithRelays(Transaction transaction, List<Address> relayNodeAddresses)
+        {
+            this.transaction = transaction;
+            this.relayNodeAddresses = relayNodeAddresses;
         }
     }
 }

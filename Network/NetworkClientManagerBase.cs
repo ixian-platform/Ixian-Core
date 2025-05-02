@@ -1,5 +1,5 @@
-// Copyright (C) 2017-2025 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -58,8 +58,8 @@ namespace IXICore.Network
             }
 
             running = true;
-            networkClients = new List<NetworkClient>();
-            connectingClients = new List<string>();
+            networkClients.Clear();
+            connectingClients.Clear();
 
             if (connections_to_wait_for > 0)
             {
@@ -70,6 +70,7 @@ namespace IXICore.Network
                 {
                     new Thread(() =>
                     {
+                        handleDisconnectedClients();
                         reconnectClients();
                     }).Start();
                     i++;
@@ -184,8 +185,8 @@ namespace IXICore.Network
                 return false;
             }
             running = true;
-            networkClients = new List<NetworkClient>();
-            connectingClients = new List<string>();
+            networkClients.Clear();
+            connectingClients.Clear();
 
             bool result = connectTo(address, null);
             if (!result)

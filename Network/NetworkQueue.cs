@@ -276,6 +276,8 @@ namespace IXICore.Network
                     case ProtocolMessageCode.rejected:
                     case ProtocolMessageCode.getNameRecord:
                     case ProtocolMessageCode.nameRecord:
+                    case ProtocolMessageCode.getSectorNodes:
+                    case ProtocolMessageCode.sectorNodes:
                         // Prioritize if queue is large
                         if (queueHighPriority.Count > 10)
                         {

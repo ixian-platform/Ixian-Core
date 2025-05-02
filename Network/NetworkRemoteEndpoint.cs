@@ -911,6 +911,8 @@ namespace IXICore.Network
                 case ProtocolMessageCode.rejected:
                 case ProtocolMessageCode.getNameRecord:
                 case ProtocolMessageCode.nameRecord:
+                case ProtocolMessageCode.getSectorNodes:
+                case ProtocolMessageCode.sectorNodes:
                     lock (sendQueueMessagesHighPriority)
                     {
                         addMessageToSendQueue(sendQueueMessagesHighPriority, message);

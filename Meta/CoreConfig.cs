@@ -215,5 +215,10 @@ namespace IXICore
         /// Number of seconds to check block signature's inclusion in PL.
         /// </summary>
         public static int blockSignaturePlCheckTimeout = 450;
+
+        /// <summary>
+        /// Relay sector levels for indexing. Higher value increases performance at the cost of memory.
+        /// </summary>
+        public static int relaySectorLevels = 4;
     }
 }
