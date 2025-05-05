@@ -49,8 +49,10 @@ namespace IXICore
 
         private static bool running = false;
 
+        private static int keepAliveInterval = CoreConfig.serverKeepAliveInterval;
+
         // Generate an initial presence list
-        public static void init(string initial_ip, int port, char type)
+        public static void init(string initial_ip, int port, char type, int keep_alive_interval)
         {
             Logging.info("Generating presence list.");
 
@@ -60,6 +62,8 @@ namespace IXICore
             // Initialize with the default presence state
             curNodePresenceAddress = new PresenceAddress(CoreConfig.device_id, _myPublicAddress, type, CoreConfig.productVersion, 0, null);
             curNodePresence = new Presence(IxianHandler.getWalletStorage().getPrimaryAddress(), IxianHandler.getWalletStorage().getPrimaryPublicKey(), null, curNodePresenceAddress);
+
+            keepAliveInterval = keep_alive_interval;
         }
 
         // Searches through the entire presence list to find a matching IP with a specific type.
@@ -435,12 +439,7 @@ namespace IXICore
                 {
                     TLC.Report();
 
-                    int keepalive_interval = CoreConfig.serverKeepAliveInterval;
-
-                    if (curNodePresenceAddress.type == 'C')
-                    {
-                        keepalive_interval = CoreConfig.clientKeepAliveInterval;
-                    }
+                    int keepalive_interval = keepAliveInterval;
 
                     // Wait x seconds before rechecking
                     for (int i = 0; i < keepalive_interval; i++)

@@ -10,7 +10,6 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore.Meta;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;

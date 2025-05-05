@@ -425,6 +425,34 @@ namespace IXICore.Network
             return result;
         }
 
+        public RemoteEndpoint getClient(Address clientAddress, bool fullyConnected = true)
+        {
+            lock (networkClients)
+            {
+                foreach (NetworkClient c in networkClients)
+                {
+                    if (fullyConnected)
+                    {
+                        if (!c.isConnected() || !c.helloReceived)
+                        {
+                            continue;
+                        }
+                        if (c.presenceAddress == null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (c.serverWalletAddress.SequenceEqual(clientAddress))
+                    {
+                        return c;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
         {
             NetworkClient client = null;

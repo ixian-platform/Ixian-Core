@@ -89,10 +89,15 @@ namespace IXICore
         public static readonly int networkClientReconnectInterval = 2 * 1000;
         
         /// <summary>
-        /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for server (M, H, R) nodes.
+        /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for server (M, H) nodes.
         /// </summary>
         public static readonly int serverKeepAliveInterval = 100;
-        
+
+        /// <summary>
+        /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for relay (R) nodes.
+        /// </summary>
+        public static readonly int relayKeepAliveInterval = 200;
+
         /// <summary>
         /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for client nodes.
         /// </summary>

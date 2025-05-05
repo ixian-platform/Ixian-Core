@@ -628,6 +628,34 @@ namespace IXICore.Network
             }
         }
 
+        public static RemoteEndpoint getClient(Address clientAddress, bool fullyConnected = true)
+        {
+            lock (connectedClients)
+            {
+                foreach (RemoteEndpoint c in connectedClients)
+                {
+                    if (fullyConnected)
+                    {
+                        if (!c.isConnected() || !c.helloReceived)
+                        {
+                            continue;
+                        }
+                        if (c.presenceAddress == null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (c.serverWalletAddress.SequenceEqual(clientAddress))
+                    {
+                        return c;
+                    }
+                }
+            }
+
+            return null;
+        }
+
 
         /// <summary>
         ///  Adds the speficied node to the blacklist by public IP.

@@ -29,6 +29,34 @@ namespace IXICore.Network
         public void setClientsToConnectTo(List<Peer> newClientsToConnectTo)
         {
             clientsToConnectTo = newClientsToConnectTo;
+            disconnectFromOldClients();
+        }
+
+        private void disconnectFromOldClients()
+        {
+            lock (networkClients)
+            {
+                List<NetworkClient> safeNetworkClients = new(networkClients);
+                foreach (var nc in safeNetworkClients)
+                {
+                    if (!nc.isConnected()
+                        || nc.helloReceived == false)
+                    {
+                        continue;
+                    
+                    }
+
+                    if (nc.serverWalletAddress == null)
+                    {
+                        continue;
+                    }
+
+                    if (clientsToConnectTo.FindIndex(x => x.walletAddress != null && x.walletAddress.SequenceEqual(nc.serverWalletAddress)) == -1)
+                    {
+                        networkClients.Remove(nc);
+                    }
+                }
+            }
         }
 
         // Returns a random new potential neighbor. Returns null if no new neighbor is found.
@@ -57,6 +85,7 @@ namespace IXICore.Network
         // Scan for and connect to a new neighbor
         protected override void connectToRandomNeighbor()
         {
+            disconnectFromOldClients();
             Peer neighbor = scanForNeighbor();
             if (neighbor != null)
             {

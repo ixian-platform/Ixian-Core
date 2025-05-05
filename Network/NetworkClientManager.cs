@@ -148,5 +148,10 @@ namespace IXICore.Network
         {
             return clientManagerBase.getBlockHeights();
         }
+
+        public static RemoteEndpoint getClient(Address clientAddress)
+        {
+            return clientManagerBase.getClient(clientAddress);
+        }
     }
 }
