@@ -54,6 +54,8 @@ namespace IXICore.Network
                     if (clientsToConnectTo.FindIndex(x => x.walletAddress != null && x.walletAddress.SequenceEqual(nc.serverWalletAddress)) == -1)
                     {
                         networkClients.Remove(nc);
+                        CoreProtocolMessage.sendBye(nc, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
+                        nc.stop();
                     }
                 }
             }

@@ -47,9 +47,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Network\Network.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManager.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)network\NetworkClientManagerBase.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)network\NetworkClientManagerRandomized.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)network\NetworkClientManagerStatic.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerRandomized.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerStatic.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkEvents.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkRemoteEndpoint.cs" />
@@ -61,8 +61,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Platform\NativeMethods.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pow\Argon2id.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pow\MiningUtils.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Presence\KeepAlive.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pow\SignerPowSolution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Presence\KeepAlive.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\Presence.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceList.cs" />
@@ -82,7 +82,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Users\BotContact.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\BotInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Users\BotUsers.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)streaming\CoreStreamProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\CoreStreamProcessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\Friend.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
@@ -101,7 +101,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransaction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransactionRequest.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)streaming\UIInterface.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\UIInterface.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Time\Clock.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Transaction\PendingTransactions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Transaction\PrefixInclusionTree.cs" />
