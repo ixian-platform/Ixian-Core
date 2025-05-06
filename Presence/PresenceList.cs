@@ -724,12 +724,12 @@ namespace IXICore
                                 // Check if timestamp is older than 300 seconds
                                 if ((currentTime - pa.lastSeenTime) > expiration_time)
                                 {
-                                    Logging.info("Expired lastseen for {0} / {1}", pa.address, Crypto.hashToString(pa.device));
+                                    Logging.info("Expired lastseen for {0} / {1} / {2}", pr.wallet.ToString(), pa.address, Crypto.hashToString(pa.device));
                                     removeAddressEntry(pr.wallet, pa);
                                 }
                                 else if ((currentTime - pa.lastSeenTime) < -30) // future time + 30 seconds amortization
                                 {
-                                    Logging.info("Expired future lastseen for {0} / {1}", pa.address, Crypto.hashToString(pa.device));
+                                    Logging.info("Expired future lastseen for {0} / {1} / {2}", pr.wallet.ToString(), pa.address, Crypto.hashToString(pa.device));
                                     removeAddressEntry(pr.wallet, pa);
                                 }
                             }

@@ -1120,5 +1120,86 @@ namespace IXICore
                 }
             }
         }
+
+        public static void processGetKeepAlives(byte[] data, RemoteEndpoint endpoint)
+        {
+            using (MemoryStream m = new MemoryStream(data))
+            {
+                using (BinaryReader reader = new BinaryReader(m))
+                {
+                    int ka_count = (int)reader.ReadIxiVarUInt();
+
+                    int max_ka_per_chunk = CoreConfig.maximumKeepAlivesPerChunk;
+
+                    for (int i = 0; i < ka_count;)
+                    {
+                        using (MemoryStream mOut = new MemoryStream(max_ka_per_chunk * 570))
+                        {
+                            using (BinaryWriter writer = new BinaryWriter(mOut))
+                            {
+                                int next_ka_count;
+                                if (ka_count - i > max_ka_per_chunk)
+                                {
+                                    next_ka_count = max_ka_per_chunk;
+                                }
+                                else
+                                {
+                                    next_ka_count = ka_count - i;
+                                }
+                                writer.WriteIxiVarInt(next_ka_count);
+
+                                for (int j = 0; j < next_ka_count && i < ka_count; j++)
+                                {
+                                    i++;
+
+                                    long in_rollback_pos = reader.BaseStream.Position;
+                                    long out_rollback_len = mOut.Length;
+
+                                    if (m.Position == m.Length)
+                                    {
+                                        break;
+                                    }
+
+                                    int address_len = (int)reader.ReadIxiVarUInt();
+                                    Address address = new Address(reader.ReadBytes(address_len));
+
+                                    int device_len = (int)reader.ReadIxiVarUInt();
+                                    byte[] device = reader.ReadBytes(device_len);
+
+                                    Presence p = PresenceList.getPresenceByAddress(address);
+                                    if (p == null)
+                                    {
+                                        Logging.info("I don't have presence: " + address.ToString());
+                                        continue;
+                                    }
+
+                                    PresenceAddress pa = p.addresses.Find(x => x.device.SequenceEqual(device));
+                                    if (pa == null)
+                                    {
+                                        Logging.info("I don't have presence address: " + address.ToString());
+                                        continue;
+                                    }
+
+                                    KeepAlive ka = pa.getKeepAlive(address, p.powSolution);
+                                    byte[] ka_bytes = ka.getBytes();
+                                    byte[] ka_len = IxiVarInt.GetIxiVarIntBytes(ka_bytes.Length);
+                                    writer.Write(ka_len);
+                                    writer.Write(ka_bytes);
+
+                                    if (mOut.Length > CoreConfig.maxMessageSize)
+                                    {
+                                        reader.BaseStream.Position = in_rollback_pos;
+                                        mOut.SetLength(out_rollback_len);
+                                        i--;
+                                        break;
+                                    }
+                                }
+                            }
+                            endpoint.sendData(ProtocolMessageCode.keepAlivesChunk, mOut.ToArray(), null);
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian DLT - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -458,6 +458,12 @@ namespace IXICore
             if (methodName.Equals("relaySectors", StringComparison.OrdinalIgnoreCase))
             {
                 response = onRelaySectors();
+            }
+
+
+            if (methodName.Equals("getSectorNodes", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onGetSectorNodes(parameters);
             }
 
             return response;
@@ -1340,31 +1346,29 @@ namespace IXICore
             return new JsonResponse { result = res, error = error };
         }
 
-        private JsonResponse onStatus(Dictionary<string, object> parameters)
+        protected Dictionary<string, object> getStatus(bool verbose)
         {
-            JsonError error = null;
+            Dictionary<string, object> status = new Dictionary<string, object>();
 
-            Dictionary<string, object> networkArray = new Dictionary<string, object>();
+            status.Add("Core Version", CoreConfig.version);
+            status.Add("Node Version", CoreConfig.productVersion);
+            status.Add("Network type", IxianHandler.networkType.ToString());
+            status.Add("My time", Clock.getTimestamp());
+            status.Add("Network time difference", Clock.networkTimeDifference);
+            status.Add("Real network time difference", Clock.realNetworkTimeDifference);
+            status.Add("My External IP", IxianHandler.publicIP);
+            status.Add("My Listening Port", IxianHandler.publicPort);
+            //status.Add("Listening interface", context.Request.RemoteEndPoint.Address.ToString());
 
-            networkArray.Add("Core Version", CoreConfig.version);
-            networkArray.Add("Node Version", CoreConfig.productVersion);
-            networkArray.Add("Network type", IxianHandler.networkType.ToString());
-            networkArray.Add("My time", Clock.getTimestamp());
-            networkArray.Add("Network time difference", Clock.networkTimeDifference);
-            networkArray.Add("Real network time difference", Clock.realNetworkTimeDifference);
-            networkArray.Add("My External IP", IxianHandler.publicIP);
-            networkArray.Add("My Listening Port", IxianHandler.publicPort);
-            //networkArray.Add("Listening interface", context.Request.RemoteEndPoint.Address.ToString());
+            status.Add("Core Status", IxianHandler.status);
 
-            networkArray.Add("Core Status", IxianHandler.status);
+            status.Add("Block Height", IxianHandler.getLastBlockHeight());
+            status.Add("Block Version", IxianHandler.getLastBlockVersion());
+            status.Add("Network Block Height", IxianHandler.getHighestKnownNetworkBlockHeight());
+            status.Add("Node Type", PresenceList.myPresenceType);
+            status.Add("Connectable", NetworkServer.isConnectable());
 
-            networkArray.Add("Block Height", IxianHandler.getLastBlockHeight());
-            networkArray.Add("Block Version", IxianHandler.getLastBlockVersion());
-            networkArray.Add("Network Block Height", IxianHandler.getHighestKnownNetworkBlockHeight());
-            networkArray.Add("Node Type", PresenceList.myPresenceType);
-            networkArray.Add("Connectable", NetworkServer.isConnectable());
-
-            if (parameters.ContainsKey("verbose"))
+            if (verbose)
             {
                 Dictionary<string, object> queues = new Dictionary<string, object>();
                 queues.Add("RcvLow", NetworkQueue.getLowPriorityMessageCount());
@@ -1375,19 +1379,33 @@ namespace IXICore
                 queues.Add("Logging", Logging.getRemainingStatementsCount());
                 queues.Add("Pending Transactions", PendingTransactions.pendingTransactionCount());
 
-                networkArray.Add("Queues", queues);
+                status.Add("Queues", queues);
 
-                networkArray.Add("Presences", PresenceList.getTotalPresences());
+                status.Add("Presences", PresenceList.getTotalPresences());
 
-                networkArray.Add("Masters", PresenceList.countPresences('M'));
-                networkArray.Add("Relays", PresenceList.countPresences('R'));
-                networkArray.Add("Clients", PresenceList.countPresences('C'));
+                status.Add("Masters", PresenceList.countPresences('M'));
+                status.Add("Relays", PresenceList.countPresences('R'));
+                status.Add("Clients", PresenceList.countPresences('C'));
             }
 
-            networkArray.Add("Network Clients", NetworkServer.getConnectedClients());
-            networkArray.Add("Network Servers", NetworkClientManager.getConnectedClients(true));
+            status.Add("Network Clients", NetworkServer.getConnectedClients());
+            status.Add("Network Servers", NetworkClientManager.getConnectedClients(true));
 
-            return new JsonResponse { result = networkArray, error = error };
+            return status;
+        }
+
+        private JsonResponse onStatus(Dictionary<string, object> parameters)
+        {
+            bool verbose = false;
+
+            if (parameters.ContainsKey("verbose"))
+            {
+                verbose = true;
+            }
+
+            var status = getStatus(verbose);
+
+            return new JsonResponse { result = status, error = null };
         }
 
         private JsonResponse onBlockHeight()
@@ -2359,6 +2377,30 @@ namespace IXICore
             var sectors = RelaySectors.Instance.debugDump();
 
             return new JsonResponse { result = sectors, error = error };
+        }
+
+        public JsonResponse onGetSectorNodes(Dictionary<string, object> parameters)
+        {
+            JsonError error = null;
+
+            if (!parameters.ContainsKey("prefix"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "prefix parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+
+            if (!parameters.ContainsKey("maxRelayCount"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "maxRelayCount parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+
+            string prefixHex = (string)parameters["prefixHex"];
+            int maxRelayCount = (int)parameters["maxRelayCount"];
+
+            var relayList = RelaySectors.Instance.getSectorNodes(Crypto.stringToHash(prefixHex), maxRelayCount);
+
+            return new JsonResponse { result = relayList, error = error };
         }
     }
 
