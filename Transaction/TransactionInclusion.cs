@@ -166,7 +166,7 @@ namespace IXICore
             tiv_thread = null;
         }
 
-        private bool updateBlockHeaders(bool force_update = false)
+        private bool updateBlockHeaders(bool force_update = false, RemoteEndpoint endpoint = null)
         {
             long currentTime = Clock.getTimestamp();
 
@@ -176,7 +176,7 @@ namespace IXICore
                 lastRequestedBlockTime = currentTime;
 
                 // request next blocks
-                requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk);
+                requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk, endpoint);
 
                 return true;
             }
@@ -533,7 +533,7 @@ namespace IXICore
             }
         }
 
-        private void requestBlockHeaders(ulong from, ulong count)
+        private void requestBlockHeaders(ulong from, ulong count, RemoteEndpoint endpoint = null)
         {
             Logging.info("Requesting block headers from {0} to {1}", from, from + count);
             using (MemoryStream mOut = new MemoryStream())
@@ -544,11 +544,15 @@ namespace IXICore
                     writer.WriteIxiVarInt(count);
                 }
 
-                // Request from all nodes
-                //NetworkClientManager.broadcastData(new char[] { 'M', 'H' }, ProtocolMessageCode.getBlockHeaders, mOut.ToArray(), null);
-
-                // Request from a single random node
-                CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                if (endpoint != null)
+                {
+                    endpoint.sendData(ProtocolMessageCode.getBlockHeaders3, mOut.ToArray());
+                }
+                else
+                {
+                    // Request from a single random node
+                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                }
             }
         }
 
@@ -593,7 +597,17 @@ namespace IXICore
                     pitCache.Clear();
                 }
             }
+        }
 
+        public void requestNewBlockHeaders(ulong blockNum, RemoteEndpoint endpoint)
+        {
+            if (blockNum <= lastBlockHeader.blockNum)
+            {
+                return;
+            }
+
+            updateBlockHeaders(true, endpoint);
+            verifyUnprocessedTransactions();
         }
     }
 }
