@@ -69,17 +69,45 @@ namespace IXICore.Network
                 PeerStorage.resetInitialConnectionCount();
             }
 
-            // Find only masternodes
-            foreach (var p in clientsToConnectTo)
+            if (clientsToConnectTo.Count() == 0)
             {
-                // If the address is valid, add it to the candidates
-                if (shouldConnectToPeer(p))
+                Peer connectToPeer = null;
+                // Find only masternodes
+                while (connectToPeer == null)
                 {
-                    return p;
-                }
+                    Thread.Sleep(10);
 
-                Thread.Sleep(10);
+                    if (getConnectedClients(true).Count() == 0)
+                    {
+                        PeerStorage.resetInitialConnectionCount();
+                    }
+                    Peer p = PeerStorage.getRandomMasterNodeAddress();
+
+                    if (p == null)
+                    {
+                        break;
+                    }
+
+                    // If the address is valid, add it to the candidates
+                    if (shouldConnectToPeer(p))
+                    {
+                        return p;
+                    }
+                }
+            } else
+            {
+                foreach (var p in clientsToConnectTo)
+                {
+                    // If the address is valid, add it to the candidates
+                    if (shouldConnectToPeer(p))
+                    {
+                        return p;
+                    }
+
+                    Thread.Sleep(10);
+                }
             }
+
 
             return null;
         }

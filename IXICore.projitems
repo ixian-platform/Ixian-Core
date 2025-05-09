@@ -43,6 +43,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Meta\UpdateVerify.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Miner\SignerPowMiner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\CoreNetworkProtocol.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\InventoryCacheClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Messages\Rejected.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Network.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClient.cs" />
@@ -120,6 +121,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\KDTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\NetDump.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Wordlist.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\WordlistSources.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Wallet\Wallet.cs" />
