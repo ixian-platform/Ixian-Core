@@ -21,7 +21,13 @@ using System.Linq;
 using System.Threading;
 
 namespace IXICore.Storage
-{  
+{
+    public interface LocalStorageCallbacks
+    {
+        public void processMessage(FriendMessage friendMessage);
+        public void receivedNewTransaction(Transaction transaction);
+    }
+
     class WriteRequest
     {
         public long startTime = 0;
@@ -67,7 +73,9 @@ namespace IXICore.Storage
 
         private object flushLock = new object();
 
-        public LocalStorage(string path, int messages_per_file = 1000)
+        private LocalStorageCallbacks localStorageCallbacks = null;
+
+        public LocalStorage(string path, LocalStorageCallbacks localStorageCallbacks, int messages_per_file = 1000)
         {
             // Retrieve the app-specific and platform-specific documents path
             documentsPath = path;
@@ -75,6 +83,8 @@ namespace IXICore.Storage
             tmpPath = Path.Combine(path, "tmp");
 
             messagesPerFile = messages_per_file;
+
+            this.localStorageCallbacks = localStorageCallbacks;
 
             // Prepare html path
             if (!Directory.Exists(Path.Combine(path, "html")))
@@ -502,7 +512,7 @@ namespace IXICore.Storage
                         FriendMessage msg = new FriendMessage(reader.ReadBytes(msg_len));
                         messages.Add(msg);
 
-                        IxianHandler.processFriendMessage(msg);
+                        localStorageCallbacks.processMessage(msg);
                     }
                 }
                 catch (Exception e)
@@ -838,7 +848,7 @@ namespace IXICore.Storage
 
                         Transaction transaction = new(data, true);
                         TransactionCache.addUnconfirmedTransaction(transaction, false);
-                        IxianHandler.receivedNewTransaction(transaction);
+                        localStorageCallbacks.receivedNewTransaction(transaction);
                     }
                 }
                 else
@@ -862,7 +872,7 @@ namespace IXICore.Storage
                         StorageTransaction storageTransaction = new(data);
 
                         TransactionCache.addUnconfirmedTransaction(storageTransaction);
-                        IxianHandler.receivedNewTransaction(storageTransaction.transaction);
+                        localStorageCallbacks.receivedNewTransaction(storageTransaction.transaction);
                     }
                 }
             }

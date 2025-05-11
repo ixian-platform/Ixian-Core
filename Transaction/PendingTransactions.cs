@@ -18,15 +18,15 @@ namespace IXICore
     public class PendingTransaction
     {
         public Transaction transaction;
-        public List<Address> relayNodeAddress;
+        public List<Address> relayNodeAddresses;
         public long addedTimestamp;
         public List<byte[]> confirmedNodeList = new List<byte[]>();
         public byte[] messageId;
 
-        public PendingTransaction(Transaction t, List<Address> relayNodeAddress, long addedTimestamp, byte[] message_id)
+        public PendingTransaction(Transaction t, List<Address> relayNodeAddresses, long addedTimestamp, byte[] message_id)
         {
             transaction = t;
-            this.relayNodeAddress = relayNodeAddress;
+            this.relayNodeAddresses = relayNodeAddresses;
             this.addedTimestamp = addedTimestamp;
             messageId = message_id;
         }

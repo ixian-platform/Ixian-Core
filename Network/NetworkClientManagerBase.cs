@@ -38,6 +38,12 @@ namespace IXICore.Network
 
         public NetworkClientManagerBase(int simultaneousConnectedNeighbors)
         {
+            if (simultaneousConnectedNeighbors < 3)
+            {
+                Logging.error("Setting simultanousConnectedNeighbors should be at least 3.");
+                IxianHandler.shutdown();
+                throw new Exception("Setting simultanousConnectedNeighbors should be at least 3.");
+            }
             this.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
         }
 
@@ -141,13 +147,6 @@ namespace IXICore.Network
         // Checks for missing clients
         protected void reconnectClients()
         {
-            if (simultaneousConnectedNeighbors < 4)
-            {
-                Logging.error("Setting simultanousConnectedNeighbors should be at least 4.");
-                IxianHandler.shutdown();
-                throw new Exception("Setting simultanousConnectedNeighbors should be at least 4.");
-            }
-
             // Check if we need to connect to more neighbors
             if (getConnectedClients().Count() < simultaneousConnectedNeighbors)
             {

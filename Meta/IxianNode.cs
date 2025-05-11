@@ -70,28 +70,16 @@ namespace IXICore.Meta
 
         public abstract void shutdown();
 
-        // Optional
-        public virtual void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified) { }
-        public virtual void receivedBlockHeader(Block block_header, bool verified) { }
-
         public abstract IxiNumber getMinSignerPowDifficulty(ulong blockNum, int curBlockVersion, long curBlockTimestamp);
 
         public abstract RegisteredNameRecord getRegName(byte[] name, bool useAbsoluteId);
 
-        public virtual void processFriendMessage(FriendMessage msg) { }
-        public abstract bool receivedNewTransaction(Transaction tx);
+        public virtual long getTimeSinceLastBlock()
+        {
+            return Clock.getNetworkTimestamp() - getLastBlock().timestamp;
+        }
 
-        public abstract FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0);
-
-        public abstract byte[] resizeImage(byte[] imageData, int width, int height, int quality);
-
-        public abstract void resubscribeEvents();
-
-        public abstract void receiveStreamData(byte[] data, RemoteEndpoint endpoint, bool fireLocalNotification);
-
-        public abstract long getTimeSinceLastBlock();
-
-        public abstract void triggerSignerPowSolutionFound();
+        public virtual void triggerSignerPowSolutionFound() { }
     }
 
     public static class IxianHandler
@@ -238,18 +226,6 @@ namespace IXICore.Meta
         {
             verifyHandler();
             return handlerClass.getWalletBalance(id);
-        }
-
-        public static void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified)
-        {
-            verifyHandler();
-            handlerClass.receivedTransactionInclusionVerificationResponse(txid, verified);
-        }
-
-        public static void receivedBlockHeader(Block block_header, bool verified)
-        {
-            verifyHandler();
-            handlerClass.receivedBlockHeader(block_header, verified);
         }
 
         public static Block getBlockHeader(ulong blockNum)
@@ -446,47 +422,11 @@ namespace IXICore.Meta
             return publicIP + ":" + publicPort;
         }
 
-        public static void processFriendMessage(FriendMessage msg)
-        {
-            verifyHandler();
-            handlerClass.processFriendMessage(msg);
-        }
-
-        public static bool receivedNewTransaction(Transaction tx)
-        {
-            verifyHandler();
-            return handlerClass.receivedNewTransaction(tx);
-        }
-
-        public static FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
-        {
-            verifyHandler();
-            return handlerClass.addMessageWithType(id, type, wallet_address, channel, message, local_sender, sender_address, timestamp, fire_local_notification, payable_data_len);
-        }
-        public static byte[] resizeImage(byte[] imageData, int width, int height, int quality)
-        {
-            verifyHandler();
-            return handlerClass.resizeImage(imageData, width, height, quality);
-        }
-
-        public static void resubscribeEvents()
-        {
-            verifyHandler();
-            handlerClass.resubscribeEvents();
-        }
-
-        public static void receiveStreamData(byte[] data, RemoteEndpoint endpoint, bool fireLocalNotification)
-        {
-            verifyHandler();
-            handlerClass.resubscribeEvents();
-        }
-
         public static long getTimeSinceLastBlock()
         {
             verifyHandler();
             return handlerClass.getTimeSinceLastBlock();
         }
-
 
         public static void triggerSignerPowSolutionFound()
         {

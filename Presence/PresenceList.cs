@@ -172,7 +172,7 @@ namespace IXICore
 
                                     if (addr.type == 'M' || addr.type == 'H')
                                     {
-                                        PeerStorage.addPeerToPeerList(addr.address, presence.wallet, Clock.getTimestamp(), 0, 0, 0);
+                                        PeerStorage.addPeerToPeerList(addr.address, presence.wallet, addr.lastSeenTime, 0, 0, 0);
                                     }
 
                                     //Logging.info("[PL] Last time updated for {0}", addr.device);
@@ -186,7 +186,7 @@ namespace IXICore
 
                                 if (local_addr.type == 'M' || local_addr.type == 'H')
                                 {
-                                    PeerStorage.addPeerToPeerList(local_addr.address, presence.wallet, Clock.getTimestamp(), 0, 0, 0);
+                                    PeerStorage.addPeerToPeerList(local_addr.address, presence.wallet, local_addr.lastSeenTime, 0, 0, 0);
                                 }
 
                                 if (local_addr.type == 'R')
@@ -222,7 +222,7 @@ namespace IXICore
                     {
                         if (pa.type == 'M' || pa.type == 'H')
                         {
-                            PeerStorage.addPeerToPeerList(pa.address, presence.wallet, Clock.getTimestamp(), 0, 0, 0);
+                            PeerStorage.addPeerToPeerList(pa.address, presence.wallet, pa.lastSeenTime, 0, 0, 0);
                         }
 
                         if (pa.type == 'R')

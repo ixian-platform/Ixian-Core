@@ -15,25 +15,43 @@ using IXICore.Network;
 using IXICore.SpixiBot;
 using IXICore.Storage;
 using IXICore.Utils;
-using System.Collections.Generic;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Threading;
-using System.Linq;
 using static IXICore.Transaction;
 
 namespace IXICore.Streaming
 {
+    class ReceiveDataResponse
+    {
+        public SpixiMessage spixiMessage { get; private set; }
+        public StreamMessage streamMessage { get; private set; }
+        public Friend friend { get; private set; }
+        public Address senderAddress { get; private set; }
+        public Address realSenderAddress { get; private set; }
+
+        public ReceiveDataResponse(SpixiMessage spixiMessage, StreamMessage streamMessage, Friend friend, Address senderAddress, Address realSenderAddress)
+        {
+            this.spixiMessage = spixiMessage;
+            this.streamMessage = streamMessage;
+            this.friend = friend;
+            this.senderAddress = senderAddress;
+            this.realSenderAddress = realSenderAddress;
+        }
+    }
+
     class CoreStreamProcessor
     {
-        private static bool running = false;
+        protected bool running = false;
 
-        private static PendingMessageProcessor pendingMessageProcessor = null;
+        protected static PendingMessageProcessor pendingMessageProcessor = null;
 
-        private static List<Timer> _typingTimers = new();
+        protected List<Timer> _typingTimers = new();
 
         // Initialize the global stream processor
-        public static void initialize(string root_storage_path, bool enablePushNotifications)
+        public void initialize(string root_storage_path, bool enablePushNotifications)
         {
             if (running)
             {
@@ -46,7 +64,7 @@ namespace IXICore.Streaming
         }
 
         // Uninitialize the global stream processor
-        public static void uninitialize()
+        public void uninitialize()
         {
             running = false;
             if (pendingMessageProcessor != null)
@@ -78,7 +96,7 @@ namespace IXICore.Streaming
 
 
         // Called when receiving encryption keys from the S2 node
-        public static bool handleReceivedKeys(Address sender, byte[] data)
+        protected bool handleReceivedKeys(Address sender, byte[] data)
         {
             // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
 
@@ -111,7 +129,7 @@ namespace IXICore.Streaming
         }
 
         // Called when receiving received confirmation from the message recipient
-        public static bool handleMsgReceived(Address sender, int channel, byte[] msg_id)
+        protected bool handleMsgReceived(Address sender, int channel, byte[] msg_id)
         {
             Friend friend = FriendList.getFriend(sender);
 
@@ -217,7 +235,7 @@ namespace IXICore.Streaming
         }
 
         // Called when receiving read confirmation from the message recipient
-        public static bool handleMsgRead(Address sender, int channel, byte[] msg_id)
+        protected bool handleMsgRead(Address sender, int channel, byte[] msg_id)
         {
             Friend friend = FriendList.getFriend(sender);
             if (friend != null)
@@ -235,11 +253,11 @@ namespace IXICore.Streaming
 
 
         // Called when receiving S2 data from clients
-        public static (SpixiMessage spixiMessage, StreamMessage streamMessage, Friend friend, Address senderAddress) receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true)
+        public ReceiveDataResponse receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true)
         {
             if (running == false)
             {
-                return (null, null, null, null);
+                return null;
             }
 
             StreamMessage message = new StreamMessage(bytes);
@@ -247,7 +265,7 @@ namespace IXICore.Streaming
             if (message.data == null)
             {
                 Logging.error("Null message data.");
-                return (null, null, null, null);
+                return null;
             }
 
             bool replaced_sender_address = false;
@@ -268,13 +286,13 @@ namespace IXICore.Streaming
                 else
                 {
                     Logging.error("Received message intended for recipient {0} that isn't a bot.", tmp_friend.walletAddress.ToString());
-                    return (null, null, null, null);
+                    return null;
                 }
             }
             else if (!IxianHandler.getWalletStorage().isMyAddress(message.recipient))
             {
                 Logging.error("Received message for {0} but this address is not one of ours.", message.recipient.ToString());
-                return (null, null, null, null);
+                return null;
             }
 
 
@@ -306,7 +324,7 @@ namespace IXICore.Streaming
                     friend.online = false;
                     friend.forcePush = true;
                     // TODO TODO current friend's keepalive has to be permanently discarded - i.e. save the timestamp
-                    return (null, null, null, null);
+                    return null;
                 }
 
                 // decrypt the message if necessary
@@ -316,7 +334,7 @@ namespace IXICore.Streaming
                     if (!message.decrypt(IxianHandler.getWalletStorage().getPrimaryPrivateKey(), aes_key, chacha_key))
                     {
                         Logging.error("Could not decrypt message from {0}", sender_address.ToString());
-                        return (null, null, null, null);
+                        return null;
                     }
                 }
 
@@ -342,7 +360,7 @@ namespace IXICore.Streaming
                                     break;
                                 default:
                                     Logging.error("Expecting encrypted message from {0}", sender_address.ToString());
-                                    return (null, null, null, null);
+                                    return null;
                             }
                         }
                     }
@@ -376,10 +394,11 @@ namespace IXICore.Streaming
                     case SpixiMessageCode.pubKey:
                         if (!handlePubKey(sender_address, spixi_message.data))
                         {
-                            return (null, null, null, null);
-                        } else
+                            return null;
+                        }
+                        else
                         {
-                            return (spixi_message, message, friend, sender_address);
+                            return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                         }
                         break;
                     case SpixiMessageCode.chat:
@@ -401,7 +420,7 @@ namespace IXICore.Streaming
                             {*/
                             // Add the message to the friend list
                             FriendMessage fm = FriendList.addMessage(message.id, sender_address, spixi_message.channel, Encoding.UTF8.GetString(spixi_message.data), real_sender_address, message.timestamp, fireLocalNotification);
-                            return (spixi_message, message, friend, sender_address);
+                            return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             //}
                         }
                         break;
@@ -411,10 +430,11 @@ namespace IXICore.Streaming
                             // Send the nickname to the sender as requested
                             if (!handleGetNick(sender_address, Encoding.UTF8.GetString(spixi_message.data)))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -427,17 +447,17 @@ namespace IXICore.Streaming
                                 && !message.verifySignature(friend.publicKey))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else if (replaced_sender_address && (!friend.users.hasUser(real_sender_address) || friend.users.getUser(real_sender_address).publicKey == null))
                             {
                                 requestBotUser(friend, real_sender_address);
-                                return (null, null, null, null);
+                                return null;
                             }
                             else if (replaced_sender_address && !message.verifySignature(friend.users.getUser(real_sender_address).publicKey))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), real_sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else
                             {
@@ -458,7 +478,7 @@ namespace IXICore.Streaming
                                     }
                                     FriendList.setNickname(sender_address, nick, real_sender_address);
                                 }
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -468,10 +488,11 @@ namespace IXICore.Streaming
                             // Send the avatar to the sender as requested
                             if (!handleGetAvatar(sender_address, Encoding.UTF8.GetString(spixi_message.data)))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -484,29 +505,21 @@ namespace IXICore.Streaming
                                 && !message.verifySignature(friend.publicKey))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else if (replaced_sender_address && (!friend.users.hasUser(real_sender_address) || friend.users.getUser(real_sender_address).publicKey == null))
                             {
                                 requestBotUser(friend, real_sender_address);
-                                return (null, null, null, null);
+                                return null;
                             }
                             else if (replaced_sender_address && !message.verifySignature(friend.users.getUser(real_sender_address).publicKey))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), real_sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else
                             {
-                                if (spixi_message.data != null && spixi_message.data.Length < 500000)
-                                {
-                                    FriendList.setAvatar(sender_address, spixi_message.data, real_sender_address);
-                                }
-                                else
-                                {
-                                    FriendList.setAvatar(sender_address, null, real_sender_address);
-                                }
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -516,10 +529,11 @@ namespace IXICore.Streaming
                             // Friend requested funds
                             if (!handleSentFunds(message.id, sender_address, Transaction.getTxIdString(spixi_message.data)))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -529,10 +543,11 @@ namespace IXICore.Streaming
                             // Friend requested funds
                             if (!handleRequestFunds(message.id, sender_address, Encoding.UTF8.GetString(spixi_message.data)))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -541,10 +556,11 @@ namespace IXICore.Streaming
                         {
                             if (!handleRequestFundsResponse(message.id, sender_address, Encoding.UTF8.GetString(spixi_message.data)))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -553,10 +569,11 @@ namespace IXICore.Streaming
                         {
                             if (!handleMsgReceived(sender_address, spixi_message.channel, spixi_message.data))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
 
@@ -564,10 +581,11 @@ namespace IXICore.Streaming
                         {
                             if (!handleMsgRead(sender_address, spixi_message.channel, spixi_message.data))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
 
@@ -577,16 +595,18 @@ namespace IXICore.Streaming
                             if (!new Address(spixi_message.data).SequenceEqual(sender_address) || !message.verifySignature(spixi_message.data))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type.ToString(), Crypto.hashToString(message.id), sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else
                             {
                                 if (!handleRequestAdd(message.id, sender_address, spixi_message.data, message.timestamp))
                                 {
-                                    return (null, null, null, null);
-                                } else
+                                    return null;
+                                }
+                                else
                                 {
-                                    return (spixi_message, message, friend, sender_address);
+                                    friend = FriendList.getFriend(sender_address);
+                                    return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                                 }
                             }
                         }
@@ -599,12 +619,12 @@ namespace IXICore.Streaming
                             if (pub_k == null)
                             {
                                 Logging.info("Contact {0} not found in presence list!", friend.walletAddress.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             if (!message.verifySignature(pub_k))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type.ToString(), Crypto.hashToString(message.id), sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else
                             {
@@ -613,10 +633,11 @@ namespace IXICore.Streaming
                                     friend.lastReceivedHandshakeMessageTimestamp = message.timestamp;
                                     if (!handleAcceptAdd(sender_address, spixi_message.data))
                                     {
-                                        return (null, null, null, null);
-                                    } else
+                                        return null;
+                                    }
+                                    else
                                     {
-                                        return (spixi_message, message, friend, sender_address);
+                                        return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                                     }
                                 }
                             }
@@ -628,7 +649,7 @@ namespace IXICore.Streaming
                             if (!message.verifySignature(friend.publicKey))
                             {
                                 Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), real_sender_address.ToString());
-                                return (null, null, null, null);
+                                return null;
                             }
                             else
                             {
@@ -637,10 +658,11 @@ namespace IXICore.Streaming
                                     friend.lastReceivedHandshakeMessageTimestamp = message.timestamp;
                                     if (!handleReceivedKeys(sender_address, spixi_message.data))
                                     {
-                                        return (null, null, null, null);
-                                    } else
+                                        return null;
+                                    }
+                                    else
                                     {
-                                        return (spixi_message, message, friend, sender_address);
+                                        return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                                     }
                                 }
                             }
@@ -652,10 +674,11 @@ namespace IXICore.Streaming
                             // Friend accepted request
                             if (!handleAcceptAddBot(sender_address, spixi_message.data))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -663,10 +686,11 @@ namespace IXICore.Streaming
                     case SpixiMessageCode.botAction:
                         if (!onBotAction(spixi_message.data, friend, channel))
                         {
-                            return (null, null, null, null);
-                        } else
+                            return null;
+                        }
+                        else
                         {
-                            return (spixi_message, message, friend, sender_address);
+                            return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                         }
                         break;
 
@@ -674,16 +698,17 @@ namespace IXICore.Streaming
                         if (friend.bot && !message.verifySignature(friend.publicKey))
                         {
                             Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), real_sender_address.ToString());
-                            return (null, null, null, null);
+                            return null;
                         }
                         else
                         {
                             if (!handleMsgDelete(friend, message.id, spixi_message.data, channel))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -694,26 +719,27 @@ namespace IXICore.Streaming
                             && !message.verifySignature(friend.publicKey))
                         {
                             Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), sender_address.ToString());
-                            return (null, null, null, null);
+                            return null;
                         }
                         else if (replaced_sender_address && (!friend.users.hasUser(real_sender_address) || friend.users.getUser(real_sender_address).publicKey == null))
                         {
                             requestBotUser(friend, real_sender_address);
-                            return (null, null, null, null);
+                            return null;
                         }
                         else if (replaced_sender_address && !message.verifySignature(friend.users.getUser(real_sender_address).publicKey))
                         {
                             Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type, Crypto.hashToString(message.id), real_sender_address.ToString());
-                            return (null, null, null, null);
+                            return null;
                         }
                         else
                         {
                             if (!handleMsgReaction(friend, message.sender, message.id, spixi_message.data, channel))
                             {
-                                return (null, null, null, null);
-                            } else
+                                return null;
+                            }
+                            else
                             {
-                                return (spixi_message, message, friend, sender_address);
+                                return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
                         break;
@@ -721,32 +747,32 @@ namespace IXICore.Streaming
                     case SpixiMessageCode.leaveConfirmed:
                         if (!friend.bot)
                         {
-                            return (null, null, null, null);
+                            return null;
                         }
                         if (friend.pendingDeletion)
                         {
                             FriendList.removeFriend(friend);
-                            return (spixi_message, message, friend, sender_address);
+                            return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                         }
                         break;
 
                     case SpixiMessageCode.msgTyping:
                         if (friend.bot)
                         {
-                            return (null, null, null, null);
+                            return null;
                         }
                         handleFriendIsTyping(friend);
-                        return (spixi_message, message, friend, sender_address);
+                        return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                 }
             }
             catch (Exception e)
             {
                 Logging.error("Exception occured in StreamProcessor.receiveData: " + e);
             }
-            return (null, null, null, null);
+            return null;
         }
 
-        private static void sendReceivedConfirmation(Friend friend, Address senderAddress, byte[] messageId, int channel)
+        protected void sendReceivedConfirmation(Friend friend, Address senderAddress, byte[] messageId, int channel)
         {
             if (friend == null)
                 return;
@@ -762,7 +788,7 @@ namespace IXICore.Streaming
             sendMessage(friend, msg_received, true, true, false, true);
         }
 
-        public static bool handleMsgDelete(Friend friend, byte[] msg_id, byte[] msg_id_to_del, int channel)
+        protected bool handleMsgDelete(Friend friend, byte[] msg_id, byte[] msg_id_to_del, int channel)
         {
             if (friend.deleteMessage(msg_id_to_del, channel))
             {
@@ -774,7 +800,7 @@ namespace IXICore.Streaming
             }
             return false;
         }
-        public static bool handleMsgReaction(Friend friend, Address sender, byte[] msg_id, byte[] reaction_data, int channel)
+        protected bool handleMsgReaction(Friend friend, Address sender, byte[] msg_id, byte[] reaction_data, int channel)
         {
             if (friend.addReaction(sender, new SpixiMessageReaction(reaction_data), channel))
             {
@@ -787,7 +813,7 @@ namespace IXICore.Streaming
             return false;
         }
 
-        private static bool handlePubKey(Address sender_wallet, byte[] pub_key)
+        protected bool handlePubKey(Address sender_wallet, byte[] pub_key)
         {
             Friend friend = FriendList.getFriend(sender_wallet);
             if (friend == null)
@@ -807,7 +833,7 @@ namespace IXICore.Streaming
         }
 
         // Sends the nickname back to the sender, detects if it should fetch the sender's nickname and fetches it automatically
-        private static bool handleGetNick(Address sender_wallet, string text)
+        protected bool handleGetNick(Address sender_wallet, string text)
         {
             Friend friend = FriendList.getFriend(sender_wallet);
             if (friend == null)
@@ -821,7 +847,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        private static bool handleGetAvatar(Address sender_wallet, string text)
+        protected bool handleGetAvatar(Address sender_wallet, string text)
         {
             Friend friend = FriendList.getFriend(sender_wallet);
             if (friend == null)
@@ -835,7 +861,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        private static bool handleRequestAdd(byte[] id, Address sender_wallet, byte[] pub_key, long received_timestamp)
+        protected bool handleRequestAdd(byte[] id, Address sender_wallet, byte[] pub_key, long received_timestamp)
         {
             // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
 
@@ -883,7 +909,7 @@ namespace IXICore.Streaming
             return false;
         }
 
-        private static bool handleAcceptAdd(Address sender_wallet, byte[] aes_key)
+        protected bool handleAcceptAdd(Address sender_wallet, byte[] aes_key)
         {
             // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
 
@@ -917,7 +943,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        private static bool handleAcceptAddBot(Address sender_wallet, byte[] aes_key)
+        protected bool handleAcceptAddBot(Address sender_wallet, byte[] aes_key)
         {
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
@@ -946,7 +972,7 @@ namespace IXICore.Streaming
         }
 
 
-        private static bool handleRequestFunds(byte[] id, Address sender_wallet, string amount)
+        protected bool handleRequestFunds(byte[] id, Address sender_wallet, string amount)
         {
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
@@ -963,7 +989,7 @@ namespace IXICore.Streaming
             return false;
         }
 
-        public static bool handleRequestFundsResponse(byte[] id, Address sender_wallet, string msg_id_tx_id)
+        protected bool handleRequestFundsResponse(byte[] id, Address sender_wallet, string msg_id_tx_id)
         {
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
@@ -997,7 +1023,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        private static bool handleSentFunds(byte[] id, Address sender_wallet, string txid)
+        protected bool handleSentFunds(byte[] id, Address sender_wallet, string txid)
         {
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
@@ -1040,9 +1066,7 @@ namespace IXICore.Streaming
             message.id = new byte[] { 1 };
 
             sendMessage(friend, message);
-
-            IxianHandler.resubscribeEvents();
-
+            
             friend.save();
             friend.saveMetaData();
 
@@ -1099,7 +1123,7 @@ namespace IXICore.Streaming
         }
 
         // Requests the nickname of the sender
-        public static void requestPubKey(Friend friend, byte[] contact_address)
+        protected void requestPubKey(Friend friend, byte[] contact_address)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.getPubKey, contact_address);
@@ -1125,7 +1149,7 @@ namespace IXICore.Streaming
         }
 
         // Requests the nickname of the sender
-        public static void requestNickname(Friend friend, byte[] contact_address = null)
+        protected void requestNickname(Friend friend, byte[] contact_address = null)
         {
             if (contact_address == null)
             {
@@ -1160,7 +1184,7 @@ namespace IXICore.Streaming
         }
 
         // Requests the avatar of the sender
-        public static void requestAvatar(Friend friend, Address contact_address = null)
+        protected void requestAvatar(Friend friend, Address contact_address = null)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.getAvatar, contact_address.addressWithChecksum);
@@ -1209,7 +1233,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false);
         }
 
-        public static void sendContactRequest(Friend friend)
+        protected void sendContactRequest(Friend friend)
         {
             Logging.info("Sending contact request");
 
@@ -1231,7 +1255,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        private static void sendGetMessages(Friend friend, int channel, byte[] id)
+        protected void sendGetMessages(Friend friend, int channel, byte[] id)
         {
             // Send the message to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.botGetMessages, id, channel);
@@ -1246,7 +1270,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false);
         }
 
-        public static void sendGetBotInfo(Friend friend)
+        protected void sendGetBotInfo(Friend friend)
         {
             SpixiBotAction sba = new SpixiBotAction(SpixiBotActionCode.getInfo, null);
             // Send the message to the S2 nodes
@@ -1264,7 +1288,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        public static void sendGetBotChannels(Friend friend)
+        protected void sendGetBotChannels(Friend friend)
         {
             SpixiBotAction sba = new SpixiBotAction(SpixiBotActionCode.getChannels, null);
             // Send the message to the S2 nodes
@@ -1282,7 +1306,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        public static void sendGetBotUsers(Friend friend)
+        protected void sendGetBotUsers(Friend friend)
         {
             SpixiBotAction sba = new SpixiBotAction(SpixiBotActionCode.getUsers, null);
             // Send the message to the S2 nodes
@@ -1300,7 +1324,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        public static void sendGetBotGroups(Friend friend)
+        protected void sendGetBotGroups(Friend friend)
         {
             SpixiBotAction sba = new SpixiBotAction(SpixiBotActionCode.getGroups, null);
             // Send the message to the S2 nodes
@@ -1318,13 +1342,13 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        public static void deletePendingMessages()
+        protected void deletePendingMessages()
         {
             pendingMessageProcessor.deleteAll();
         }
 
 
-        public static bool onBotAction(byte[] action_data, Friend bot, int channel_id)
+        protected bool onBotAction(byte[] action_data, Friend bot, int channel_id)
         {
             if (!bot.bot)
             {
@@ -1412,7 +1436,7 @@ namespace IXICore.Streaming
             return false;
         }
 
-        public static void onGetPayment(SpixiBotAction sba, Friend bot, int channel_id)
+        protected void onGetPayment(SpixiBotAction sba, Friend bot, int channel_id)
         {
             StreamTransactionRequest sta = new StreamTransactionRequest(sba.data);
             FriendMessage fm = bot.getMessages(channel_id).Find(x => x.id.SequenceEqual(sta.messageID));
@@ -1497,7 +1521,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public static void sendBotAction(Friend bot, SpixiBotActionCode action, byte[] data, int channel = 0, bool sign = false)
+        protected void sendBotAction(Friend bot, SpixiBotActionCode action, byte[] data, int channel = 0, bool sign = false)
         {
             SpixiBotAction sba = new SpixiBotAction(action, data);
 
@@ -1523,7 +1547,7 @@ namespace IXICore.Streaming
             sendMessage(bot, message);
         }
 
-        public static void sendMsgDelete(Friend friend, byte[] msg_id, int channel = 0)
+        protected void sendMsgDelete(Friend friend, byte[] msg_id, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgDelete, msg_id, channel);
@@ -1543,7 +1567,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        public static void sendMsgReport(Friend friend, byte[] msg_id, int channel = 0)
+        protected void sendMsgReport(Friend friend, byte[] msg_id, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgReport, msg_id, channel);
@@ -1566,7 +1590,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public static void sendReaction(Friend friend, byte[] msg_id, string reaction, int channel = 0)
+        protected void sendReaction(Friend friend, byte[] msg_id, string reaction, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgReaction, new SpixiMessageReaction(msg_id, reaction).getBytes(), channel);
@@ -1586,7 +1610,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        public static void sendTyping(Friend friend)
+        protected void sendTyping(Friend friend)
         {
             if (friend.bot)
             {
@@ -1612,7 +1636,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false, false, false, true);
         }
 
-        public static void sendLeave(Friend friend, byte[] data)
+        protected void sendLeave(Friend friend, byte[] data)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.leave, data, 0);
@@ -1632,7 +1656,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        private static void handleFriendIsTyping(Friend friend)
+        protected void handleFriendIsTyping(Friend friend)
         {
             friend.isTyping = true;
             UIInterfaceHandler.shouldRefreshContacts = true;

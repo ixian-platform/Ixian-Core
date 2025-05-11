@@ -20,7 +20,7 @@ using System.Web;
 
 namespace IXICore.Streaming
 {
-    public class OfflinePushMessages
+    class OfflinePushMessages
     {
         public static long lastUpdate = 0;
         private static int cooldownPeriod = 60; // cooldown period in seconds
@@ -30,6 +30,8 @@ namespace IXICore.Streaming
         private static long nonce = Clock.getTimestamp();
 
         public static string pushServiceUrl = null;
+
+        public static CoreStreamProcessor streamProcessor = null;
 
         public static bool sendPushMessage(StreamMessage msg, bool push)
         {
@@ -140,7 +142,7 @@ namespace IXICore.Streaming
                                         f.setPublicKey(pk);
                                     }
                                 }
-                                IxianHandler.receiveStreamData(data, null, fireLocalNotification);
+                                streamProcessor.receiveData(data, null, fireLocalNotification);
                             }
                         }
                         catch (Exception e)

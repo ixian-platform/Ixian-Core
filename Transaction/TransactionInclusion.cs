@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -24,6 +24,12 @@ using System.Threading;
 
 namespace IXICore
 {
+    public interface TransactionInclusionCallbacks
+    {
+        public void receivedBlockHeader(Block blockHeader, bool verified);
+        public void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified);
+    }
+
     /// <summary>
     /// Caches information about received PIT data for each block we're interested in.
     /// Note: Because we may request a PIT for a subset of that block's transactions, we must also store
@@ -59,8 +65,11 @@ namespace IXICore
 
         public ulong blockHeadersToRequestInChunk = 250;
 
-        public TransactionInclusion()
+        private TransactionInclusionCallbacks transactionInclusionCallbacks = null;
+
+        public TransactionInclusion(TransactionInclusionCallbacks transactionInclusionCallbacks)
         {
+            this.transactionInclusionCallbacks = transactionInclusionCallbacks;
         }
 
         public void start(string block_header_storage_path = "", bool compacted = false, bool pruneBlocks = true)
@@ -254,11 +263,11 @@ namespace IXICore
                         if(bh.transactions.Contains(tx.id, new ByteArrayComparer()))
                         {
                             // valid
-                            IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, true);
+                            transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, true);
                         }else
                         {
                             // invalid
-                            IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                            transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
                         }
 
                     }
@@ -288,12 +297,12 @@ namespace IXICore
                                     if (pitCache[tx.applied].pit.contains(txid))
                                     {
                                         // valid
-                                        IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, true);
+                                        transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, true);
                                     }
                                     else
                                     {
                                         // invalid
-                                        IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                                        transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
                                     }
                                 }
                                 else
@@ -325,7 +334,7 @@ namespace IXICore
                 {
                     txQueue.Remove(tx.id);
                     // invalid
-                    IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                    transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
                 }
             }
         }
@@ -426,7 +435,7 @@ namespace IXICore
                 }
             }
 
-            IxianHandler.receivedBlockHeader(lastBlockHeader, true);
+            transactionInclusionCallbacks.receivedBlockHeader(lastBlockHeader, true);
 
             return true;
         }

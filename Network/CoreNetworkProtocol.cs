@@ -14,6 +14,7 @@ using Force.Crc32;
 using IXICore.Inventory;
 using IXICore.Meta;
 using IXICore.Network;
+using IXICore.Network.Messages;
 using IXICore.RegNames;
 using IXICore.Utils;
 using System;
@@ -1200,6 +1201,11 @@ namespace IXICore
                     }
                 }
             }
+        }
+
+        public static void sendRejected(RejectedCode code, byte[] data, RemoteEndpoint endpoint)
+        {
+            endpoint.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
         }
     }
 }

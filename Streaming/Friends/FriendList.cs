@@ -121,7 +121,7 @@ namespace IXICore.Streaming
             }
         }
         // Set the avatar for a specific wallet address
-        public static void setAvatar(Address wallet_address, byte[] avatar, Address real_sender_address)
+        public static void setAvatar(Address wallet_address, byte[] avatar, byte[] resized_avatar, Address real_sender_address)
         {
             Friend friend = getFriend(wallet_address);
             if (friend == null)
@@ -139,10 +139,10 @@ namespace IXICore.Streaming
                 address = wallet_address.ToString();
             }
             IxianHandler.localStorage.deleteAvatar(address);
-            if (avatar != null)
+            if (avatar != null
+                && resized_avatar != null)
             {
                 IxianHandler.localStorage.writeAvatar(address, avatar);
-                byte[] resized_avatar = IxianHandler.resizeImage(avatar, 128, 128, 100);
                 IxianHandler.localStorage.writeAvatar(address + "_128", resized_avatar);
             }
             UIInterfaceHandler.shouldRefreshContacts = true;
@@ -347,7 +347,6 @@ namespace IXICore.Streaming
                         }
                     }
                 }
-                IxianHandler.resubscribeEvents();
             }
 
             sortFriends();
