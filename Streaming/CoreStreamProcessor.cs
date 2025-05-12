@@ -419,7 +419,6 @@ namespace IXICore.Streaming
                             else
                             {*/
                             // Add the message to the friend list
-                            FriendMessage fm = FriendList.addMessage(message.id, sender_address, spixi_message.channel, Encoding.UTF8.GetString(spixi_message.data), real_sender_address, message.timestamp, fireLocalNotification);
                             return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             //}
                         }
@@ -884,8 +883,8 @@ namespace IXICore.Streaming
                 new_friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 new_friend.handshakeStatus = 1;
                 new_friend.saveMetaData();
-                FriendList.addMessageWithType(id, FriendMessageType.requestAdd, sender_wallet, 0, "");
                 requestNickname(new_friend);
+                return true;
             }
             else
             {
@@ -983,7 +982,6 @@ namespace IXICore.Streaming
 
             if (new IxiNumber(amount) > 0)
             {
-                FriendList.addMessageWithType(id, FriendMessageType.requestFunds, sender_wallet, 0, amount);
                 return true;
             }
             return false;
@@ -1032,7 +1030,6 @@ namespace IXICore.Streaming
                 return false;
             }
 
-            FriendList.addMessageWithType(id, FriendMessageType.sentFunds, sender_wallet, 0, txid);
             return true;
         }
 
@@ -1233,7 +1230,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false);
         }
 
-        protected void sendContactRequest(Friend friend)
+        public static void sendContactRequest(Friend friend)
         {
             Logging.info("Sending contact request");
 
@@ -1270,7 +1267,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false);
         }
 
-        protected void sendGetBotInfo(Friend friend)
+        public static void sendGetBotInfo(Friend friend)
         {
             SpixiBotAction sba = new SpixiBotAction(SpixiBotActionCode.getInfo, null);
             // Send the message to the S2 nodes
@@ -1342,7 +1339,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        protected void deletePendingMessages()
+        public static void deletePendingMessages()
         {
             pendingMessageProcessor.deleteAll();
         }
@@ -1521,7 +1518,7 @@ namespace IXICore.Streaming
             }
         }
 
-        protected void sendBotAction(Friend bot, SpixiBotActionCode action, byte[] data, int channel = 0, bool sign = false)
+        public static void sendBotAction(Friend bot, SpixiBotActionCode action, byte[] data, int channel = 0, bool sign = false)
         {
             SpixiBotAction sba = new SpixiBotAction(action, data);
 
@@ -1547,7 +1544,7 @@ namespace IXICore.Streaming
             sendMessage(bot, message);
         }
 
-        protected void sendMsgDelete(Friend friend, byte[] msg_id, int channel = 0)
+        public static void sendMsgDelete(Friend friend, byte[] msg_id, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgDelete, msg_id, channel);
@@ -1567,7 +1564,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        protected void sendMsgReport(Friend friend, byte[] msg_id, int channel = 0)
+        public static void sendMsgReport(Friend friend, byte[] msg_id, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgReport, msg_id, channel);
@@ -1590,7 +1587,7 @@ namespace IXICore.Streaming
             }
         }
 
-        protected void sendReaction(Friend friend, byte[] msg_id, string reaction, int channel = 0)
+        public static void sendReaction(Friend friend, byte[] msg_id, string reaction, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgReaction, new SpixiMessageReaction(msg_id, reaction).getBytes(), channel);
@@ -1610,7 +1607,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message);
         }
 
-        protected void sendTyping(Friend friend)
+        public static void sendTyping(Friend friend)
         {
             if (friend.bot)
             {
@@ -1636,7 +1633,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false, false, false, true);
         }
 
-        protected void sendLeave(Friend friend, byte[] data)
+        public static void sendLeave(Friend friend, byte[] data)
         {
             // Prepare the message and send to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.leave, data, 0);

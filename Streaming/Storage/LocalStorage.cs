@@ -25,7 +25,7 @@ namespace IXICore.Storage
     public interface LocalStorageCallbacks
     {
         public void processMessage(FriendMessage friendMessage);
-        public void receivedNewTransaction(Transaction transaction);
+        public bool receivedNewTransaction(Transaction transaction);
     }
 
     class WriteRequest

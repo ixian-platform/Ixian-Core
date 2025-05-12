@@ -12,9 +12,6 @@
 
 using IXICore.Meta;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
 using System.Text;
 using System.Web;
 
@@ -22,16 +19,22 @@ namespace IXICore.Streaming
 {
     class OfflinePushMessages
     {
-        public static long lastUpdate = 0;
+        private static long lastUpdate = 0;
         private static int cooldownPeriod = 60; // cooldown period in seconds
 
         private static string pushNotificationAuthKey = null;
 
         private static long nonce = Clock.getTimestamp();
 
-        public static string pushServiceUrl = null;
+        private static string pushServiceUrl = null;
 
-        public static CoreStreamProcessor streamProcessor = null;
+        private static CoreStreamProcessor streamProcessor = null;
+
+        public static void init(string pushServiceUrl, CoreStreamProcessor streamProcessor)
+        {
+            OfflinePushMessages.pushServiceUrl = pushServiceUrl;
+            OfflinePushMessages.streamProcessor = streamProcessor;
+        }
 
         public static bool sendPushMessage(StreamMessage msg, bool push)
         {

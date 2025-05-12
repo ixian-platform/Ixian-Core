@@ -148,11 +148,6 @@ namespace IXICore.Streaming
             UIInterfaceHandler.shouldRefreshContacts = true;
         }
 
-        public static FriendMessage addMessage(byte[] id, Address wallet_address, int channel, string message, Address sender_address = null, long timestamp = 0, bool fire_local_notification = true)
-        {
-            return addMessageWithType(id, FriendMessageType.standard, wallet_address, channel, message, false, sender_address, timestamp, fire_local_notification);
-        }
-
         public static FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
             Friend friend = getFriend(wallet_address);

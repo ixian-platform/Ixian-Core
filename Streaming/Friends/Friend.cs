@@ -698,40 +698,20 @@ namespace IXICore.Streaming
             }
         }
 
-        public void endCall(byte[] session_id, bool call_accepted, long call_duration, bool local_sender)
+        public FriendMessage endCall(byte[] session_id, bool call_accepted, long call_duration, bool local_sender)
         {
             if(session_id == null)
             {
-                return;
+                return null;
             }
             lock (messages)
             {
                 var tmp_messages = getMessages(0);
                 if (tmp_messages == null)
                 {
-                    return;
+                    return null;
                 }
-                var fm = tmp_messages.Find(x => x.id.SequenceEqual(session_id));
-                if(fm == null)
-                {
-                    Logging.warn("Cannot end call, no message with session ID exists.");
-                    return;
-                }
-                if (call_accepted == true && tmp_messages.Last() != fm)
-                {
-                    fm.message = call_duration.ToString();
-                    FriendList.addMessageWithType(null, FriendMessageType.voiceCallEnd, walletAddress, 0, fm.message, local_sender, null, 0, false);
-                }
-                else
-                {
-                    fm.type = FriendMessageType.voiceCallEnd;
-                    if (call_accepted)
-                    {
-                        fm.message = call_duration.ToString();
-                    }
-                    IxianHandler.localStorage.requestWriteMessages(walletAddress, 0);
-                    UIInterfaceHandler.insertMessage(fm, 0);
-                }
+                return tmp_messages.Find(x => x.id.SequenceEqual(session_id));
             }
         }
 
