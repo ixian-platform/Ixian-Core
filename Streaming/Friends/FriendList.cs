@@ -104,9 +104,6 @@ namespace IXICore.Streaming
                             }
                         }
                     }
-                    // update UI with the new nick
-                    Logging.info("Updating group chat nicks");
-                    UIInterfaceHandler.updateGroupChatNicks(real_sender_address, nick);
 
                     friend.users.writeContactsToFile();
                 }
@@ -116,7 +113,6 @@ namespace IXICore.Streaming
                 if(friend.nickname != nick)
                 {
                     friend.nickname = nick;
-                    UIInterfaceHandler.shouldRefreshContacts = true;
                 }
             }
         }
@@ -126,7 +122,7 @@ namespace IXICore.Streaming
             Friend friend = getFriend(wallet_address);
             if (friend == null)
             {
-                Logging.error("Received nickname for a friend that's not in the friend list.");
+                Logging.error("Received avatar for a friend that's not in the friend list.");
                 return;
             }
             string address;
@@ -145,7 +141,6 @@ namespace IXICore.Streaming
                 IxianHandler.localStorage.writeAvatar(address, avatar);
                 IxianHandler.localStorage.writeAvatar(address + "_128", resized_avatar);
             }
-            UIInterfaceHandler.shouldRefreshContacts = true;
         }
 
         public static FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
@@ -277,23 +272,8 @@ namespace IXICore.Streaming
             friend.metaData.setLastMessage(friend_message, channel);
             friend.saveMetaData();
 
-            // If a chat page is visible, insert the message directly
-            if (UIInterfaceHandler.isChatScreenDisplayed(wallet_address))
-            {
-                UIInterfaceHandler.insertMessage(friend_message, channel);
-            }
-            else if(!set_read)
-            {
-                // Increase the unread counter if this is a new message
-                if(!old_message)
-                    friend.metaData.unreadMessageCount++;
-
-                friend.saveMetaData();
-            }
-
             // Write to chat history
             IxianHandler.localStorage.requestWriteMessages(wallet_address, channel);
-            UIInterfaceHandler.shouldRefreshContacts = true;
             return friend_message;
         }
 
@@ -322,8 +302,6 @@ namespace IXICore.Streaming
                 // Add new friend to the friendlist
                 friends.Add(new_friend);
             }
-
-            UIInterfaceHandler.shouldRefreshContacts = true;
 
             if (new_friend.approved)
             {
@@ -383,8 +361,6 @@ namespace IXICore.Streaming
 
             // Write changes to storage
             friend.delete();
-
-            UIInterfaceHandler.shouldRefreshContacts = true;
 
             return true;
         }
@@ -469,45 +445,6 @@ namespace IXICore.Streaming
                 {
                     // Clear messages from memory
                     friend.deleteHistory();
-                }
-            }
-        }
-
-        // Updates all contacts in the friendlist
-        public static void Update()
-        {
-            lock (friends)
-            {
-                // Go through each friend and check for the pubkey in the PL
-                foreach (Friend friend in friends)
-                {
-                    Presence presence = null;
-
-                    try
-                    {
-                        presence = PresenceList.getPresenceByAddress(friend.walletAddress);
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Presence Error {0}", e.Message);
-                        presence = null;
-                    }
-
-                    if (presence != null)
-                    {
-                        if(friend.online == false)
-                        {
-                            friend.online = true;
-                            UIInterfaceHandler.setContactStatus(friend.walletAddress, friend.online, friend.getUnreadMessageCount(), "", 0);
-                        }
-                    }else
-                    {
-                        if (friend.online == true)
-                        {
-                            friend.online = false;
-                            UIInterfaceHandler.setContactStatus(friend.walletAddress, friend.online, friend.getUnreadMessageCount(), "", 0);
-                        }
-                    }
                 }
             }
         }
@@ -597,12 +534,17 @@ namespace IXICore.Streaming
         }
 
 
-        public static void onLowMemory()
+        public static void onLowMemory(List<Address> excludeAddresses)
         {
             lock (friends)
             {
+                var ac = new AddressComparer();
                 foreach (var friend in friends)
                 {
+                    if (excludeAddresses.Contains(friend.walletAddress, ac))
+                    {
+                        continue;
+                    }
                     friend.freeMemory();
                 }
             }

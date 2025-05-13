@@ -102,7 +102,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransaction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransactionRequest.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Streaming\UIInterface.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Time\Clock.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Transaction\PendingTransactions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Transaction\PrefixInclusionTree.cs" />

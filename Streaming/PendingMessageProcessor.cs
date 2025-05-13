@@ -31,7 +31,7 @@ namespace IXICore.Streaming
     }
 
 
-    class PendingMessageProcessor
+    abstract class PendingMessageProcessor
     {
         Thread pendingMessagesThread; // Thread that checks the offline messages list for outstanding messages
         Thread offloadedMessagesThread;
@@ -336,6 +336,7 @@ namespace IXICore.Streaming
                         pending_message.sendToServer = false;
                         // TODO set the proper channel
                         friend.setMessageSent(0, pending_message.streamMessage.id);
+                        onMessageSent(friend, 0, msg);
                         if (add_to_pending_messages)
                         {
                             pending_message.save(storagePath);
@@ -452,5 +453,7 @@ namespace IXICore.Streaming
                 }
             }
         }
+
+        protected abstract void onMessageSent(Friend friend, int channel, StreamMessage msg);
     }
 }

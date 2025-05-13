@@ -562,13 +562,13 @@ namespace IXICore.Streaming
         public bool setMessageRead(int channel, byte[] id)
         {
             var tmp_messages = getMessages(channel);
-            if(tmp_messages == null)
+            if (tmp_messages == null)
             {
                 return false;
             }
 
             FriendMessage msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
-            if(msg == null)
+            if (msg == null)
             {
                 Logging.error("Error trying to set read indicator, message does not exist");
                 return false;
@@ -580,10 +580,7 @@ namespace IXICore.Streaming
                 {
                     msg.read = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
-                    UIInterfaceHandler.shouldRefreshContacts = true;
                 }
-
-                UIInterfaceHandler.updateMessage(msg);
             }
 
             return true;
@@ -591,7 +588,7 @@ namespace IXICore.Streaming
 
         public bool setMessageReceived(int channel, byte[] id)
         {
-            if(channel == -1)
+            if (channel == -1)
             {
                 return false;
             }
@@ -613,10 +610,7 @@ namespace IXICore.Streaming
                 {
                     msg.confirmed = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
-                    UIInterfaceHandler.shouldRefreshContacts = true;
                 }
-
-                UIInterfaceHandler.updateMessage(msg);
             }
 
             return true;
@@ -643,10 +637,7 @@ namespace IXICore.Streaming
                 {
                     msg.sent = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
-                    UIInterfaceHandler.shouldRefreshContacts = true;
                 }
-
-                UIInterfaceHandler.updateMessage(msg);
             }
 
             return true;
@@ -758,6 +749,28 @@ namespace IXICore.Streaming
             return null;
         }
 
+
+        public FriendMessage getMessage(int channel, byte[] msg_id)
+        {
+            try
+            {
+                if (channels != null && !channels.hasChannel(channel))
+                {
+                    Logging.error("Error getting messages for {0}, channel {1} does not exist", walletAddress.ToString(), channel.ToString());
+                    return null;
+                }
+                lock (messages)
+                {
+                    return messages[channel].Find(x => x.id.SequenceEqual(msg_id));
+                }
+            }
+            catch (Exception e)
+            {
+                Logging.error("Error reading contact's {0} messages: {1}", walletAddress.ToString(), e);
+            }
+            return null;
+        }
+
         public IxiNumber getMessagePrice(int msg_len)
         {
             return metaData.botInfo.cost * msg_len / 1000;
@@ -777,7 +790,6 @@ namespace IXICore.Streaming
                 {
                     tmp_messages.Remove(fm);
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
-                    UIInterfaceHandler.deleteMessage(msg_id, channel);
                     return true;
                 }
             }
@@ -786,12 +798,12 @@ namespace IXICore.Streaming
 
         public bool addReaction(Address sender_address, SpixiMessageReaction reaction_data, int channel)
         {
-            if(!reaction_data.reaction.StartsWith("tip:") && !reaction_data.reaction.StartsWith("like:"))
+            if (!reaction_data.reaction.StartsWith("tip:") && !reaction_data.reaction.StartsWith("like:"))
             {
                 Logging.warn("Invalid reaction data: " + reaction_data.reaction);
                 return false;
             }
-            if(reaction_data.reaction.Length > 128)
+            if (reaction_data.reaction.Length > 128)
             {
                 Logging.warn("Invalid reaction data length: " + reaction_data.reaction);
                 return false;
@@ -806,7 +818,7 @@ namespace IXICore.Streaming
                 FriendMessage fm = tmp_messages.Find(x => x.id.SequenceEqual(reaction_data.msgId));
                 if (fm != null)
                 {
-                    if(fm.reactions.Count >= 10)
+                    if (fm.reactions.Count >= 10)
                     {
                         Logging.warn("Too many reactions on message " + Crypto.hashToString(reaction_data.msgId));
                         return false;
@@ -814,7 +826,6 @@ namespace IXICore.Streaming
                     if (fm.addReaction(sender_address, reaction_data.reaction))
                     {
                         IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
-                        UIInterfaceHandler.updateReactions(fm.id, channel);
                         return true;
                     }
                 }
@@ -824,11 +835,6 @@ namespace IXICore.Streaming
 
         public void freeMemory()
         {
-            if (UIInterfaceHandler.isChatScreenDisplayed(walletAddress))
-            {
-                return;
-            }
-
             lock(messages)
             {
                 IxianHandler.localStorage.flush();

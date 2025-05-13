@@ -51,16 +51,12 @@ namespace IXICore.Streaming
         protected List<Timer> _typingTimers = new();
 
         // Initialize the global stream processor
-        public void initialize(string root_storage_path, bool enablePushNotifications)
+        public CoreStreamProcessor(PendingMessageProcessor pendingMessageProcessor)
         {
-            if (running)
-            {
-                return;
-            }
-            running = true;
-
-            pendingMessageProcessor = new PendingMessageProcessor(root_storage_path, enablePushNotifications);
+            CoreStreamProcessor.pendingMessageProcessor = pendingMessageProcessor;
             pendingMessageProcessor.start();
+
+            running = true;
         }
 
         // Uninitialize the global stream processor
@@ -240,8 +236,8 @@ namespace IXICore.Streaming
             Friend friend = FriendList.getFriend(sender);
             if (friend != null)
             {
-                friend.setMessageRead(channel, msg_id);
                 pendingMessageProcessor.removeMessage(friend, msg_id);
+                friend.setMessageRead(channel, msg_id);
                 return true;
             }
             else
@@ -760,7 +756,6 @@ namespace IXICore.Streaming
                         {
                             return null;
                         }
-                        handleFriendIsTyping(friend);
                         return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                 }
             }
@@ -1651,22 +1646,6 @@ namespace IXICore.Streaming
             }
 
             sendMessage(friend, message);
-        }
-
-        protected void handleFriendIsTyping(Friend friend)
-        {
-            friend.isTyping = true;
-            UIInterfaceHandler.shouldRefreshContacts = true;
-
-            Timer? timer = null;
-            timer = new(_ =>
-            {
-                friend.isTyping = false;
-                UIInterfaceHandler.shouldRefreshContacts = true;
-                _typingTimers.Remove(_typingTimers.FirstOrDefault());
-            }, timer, 5000, Timeout.Infinite);
-
-            _typingTimers.Add(timer);
         }
     }
 }
