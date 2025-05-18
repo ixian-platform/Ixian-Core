@@ -115,6 +115,10 @@ namespace IXICore
                 {
                     BlockHeaderStorage.initCache();
                 }
+                catch (ThreadInterruptedException)
+                {
+                    throw;
+                }
                 catch (Exception e)
                 {
                     Logging.error("Exception occurred in BlockHeaderStorage.init: " + e);
