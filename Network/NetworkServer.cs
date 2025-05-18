@@ -234,6 +234,10 @@ namespace IXICore.Network
                     {
                         // Could be an interupt request
                     }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
+                    }
                     catch (Exception)
                     {
                         if (continueRunning)

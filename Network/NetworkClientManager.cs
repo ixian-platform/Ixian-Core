@@ -17,7 +17,7 @@ using System.Collections.Generic;
 
 namespace IXICore.Network
 {
-    public class NetworkClientManager
+    public static class NetworkClientManager
     {
         public static List<NetworkClient> networkClients { get; private set; } = null;
         public static NetworkClientManagerBase clientManagerBase;

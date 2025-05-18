@@ -330,6 +330,10 @@ namespace IXICore.Network
                     {
                         state = RemoteEndpointState.Closed;
                     }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
+                    }
                     catch (Exception e)
                     {
                         if (running)

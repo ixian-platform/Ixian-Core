@@ -206,6 +206,10 @@ namespace IXICore.Network
                     {
                         throw;
                     }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
+                    }
                     catch (Exception e)
                     {
                         Logging.error("Error trying to reconnect stream clients: " + e);

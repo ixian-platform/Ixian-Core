@@ -120,6 +120,10 @@ namespace IXICore.Network
                             handleDisconnectedClients();
                             reconnectClients();
                         }
+                        catch (ThreadInterruptedException)
+                        {
+                            throw;
+                        }
                         catch (ThreadAbortException)
                         {
                             break;

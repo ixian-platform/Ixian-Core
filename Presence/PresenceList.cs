@@ -511,6 +511,10 @@ namespace IXICore
                         // Send this keepalive message to all connected clients
                         CoreProtocolMessage.broadcastEventDataMessage(NetworkEvents.Type.keepAlive, address.addressNoChecksum, ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
                     }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
+                    }
                     catch (Exception e)
                     {
                         Logging.error("Exception occurred while generating keepalive: " + e);
