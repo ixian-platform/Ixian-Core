@@ -735,7 +735,7 @@ namespace IXICore
         {
             // TODO TODO TODO TODO we should put this in a separate thread
             string hostname = endpoint.getFullAddress(true);
-            if (CoreNetworkUtils.PingAddressReachable(hostname) == false)
+            if (NetworkUtils.PingAddressReachable(hostname) == false)
             {
                 Logging.warn("Node {0} was not reachable on the advertised address.", hostname);
                 sendBye(endpoint, ProtocolByeCode.notConnectable, "External " + hostname + " not reachable!", "");

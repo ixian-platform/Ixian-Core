@@ -18,7 +18,7 @@ using System.Threading;
 
 namespace IXICore.Network
 {
-    class StreamClientManager
+    static class StreamClientManager
     {
         private static List<NetworkClient> streamClients = new List<NetworkClient>();
         private static List<string> connectingClients = new List<string>(); // A list of clients that we're currently connecting
@@ -30,12 +30,16 @@ namespace IXICore.Network
 
         private static bool running = false;
 
-        public static void start()
+        private static int simultaneousConnectedNeighbors;
+
+        public static void start(int simultaneousConnectedNeighbors)
         {
             if (running)
             {
                 return;
             }
+
+            StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
 
             running = true;
 
@@ -91,7 +95,7 @@ namespace IXICore.Network
             stop();
             Thread.Sleep(100);
             Logging.info("Starting stream clients...");
-            start();
+            start(simultaneousConnectedNeighbors);
         }
 
         // Send data to all connected nodes
@@ -185,6 +189,22 @@ namespace IXICore.Network
                             // Scan for and connect to a new neighbor
                             connectToRandomStreamNode();
                         }
+
+                        if (getConnectedClients(true).Count() > simultaneousConnectedNeighbors)
+                        {
+                            NetworkClient client;
+                            lock (streamClients)
+                            {
+                                client = streamClients[0];
+                                streamClients.RemoveAt(0);
+                            }
+                            CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
+                            client.stop();
+                        }
+                    }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
                     }
                     catch (Exception e)
                     {
@@ -300,7 +320,7 @@ namespace IXICore.Network
                 }
 
                 // Get all self addresses and run through them
-                List<string> self_addresses = CoreNetworkUtils.GetAllLocalIPAddresses();
+                List<string> self_addresses = NetworkUtils.GetAllLocalIPAddresses();
                 foreach (string self_address in self_addresses)
                 {
                     // Don't connect to self

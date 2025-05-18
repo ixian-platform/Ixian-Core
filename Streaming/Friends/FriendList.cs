@@ -159,20 +159,6 @@ namespace IXICore.Streaming
                 return null;
             }
 
-            if (!friend.online)
-            {
-                using (MemoryStream mw = new MemoryStream())
-                {
-                    using (BinaryWriter writer = new BinaryWriter(mw))
-                    {
-                        writer.WriteIxiVarInt(wallet_address.addressWithChecksum.Length);
-                        writer.Write(wallet_address.addressWithChecksum);
-
-                        CoreProtocolMessage.broadcastProtocolMessage(new char[] { 'M', 'H' }, ProtocolMessageCode.getPresence2, mw.ToArray(), null);
-                    }
-                }
-            }
-
             bool set_read = false;
 
             string sender_nick = "";
@@ -469,29 +455,6 @@ namespace IXICore.Streaming
             lock (friendMatcher)
             {
                 return friendMatcher.getFilterBytes();
-            }
-        }
-
-        public static void requestAllFriendsPresences()
-        {
-            // TODO TODO use hidden address matcher
-            List<Friend> tmp_friends = null;
-            lock (friends)
-            {
-                tmp_friends = new List<Friend>(friends);
-            }
-            foreach (var entry in tmp_friends)
-            {
-                using (MemoryStream m = new MemoryStream(1280))
-                {
-                    using (BinaryWriter writer = new BinaryWriter(m))
-                    {
-                        writer.WriteIxiVarInt(entry.walletAddress.addressWithChecksum.Length);
-                        writer.Write(entry.walletAddress.addressWithChecksum);
-
-                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getPresence2, m.ToArray(), 0, null);
-                    }
-                }
             }
         }
 

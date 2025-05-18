@@ -299,7 +299,7 @@ namespace IXICore.Network
                 }
 
                 // Get all self addresses and run through them
-                List<string> self_addresses = CoreNetworkUtils.GetAllLocalIPAddresses();
+                List<string> self_addresses = NetworkUtils.GetAllLocalIPAddresses();
                 foreach (string self_address in self_addresses)
                 {
                     // Don't connect to self
@@ -886,7 +886,7 @@ namespace IXICore.Network
             if (NetworkServer.isRunning())
             {
                 // Get all self addresses and run through them
-                List<string> self_addresses = CoreNetworkUtils.GetAllLocalIPAddresses();
+                List<string> self_addresses = NetworkUtils.GetAllLocalIPAddresses();
                 foreach (string self_address in self_addresses)
                 {
                     // Don't connect to self

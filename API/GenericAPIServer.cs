@@ -785,7 +785,7 @@ namespace IXICore
                 resetNetworkQueue = true;
             }
 
-            CoreNetworkUtils.reconnect(resetNetworkQueue);
+            NetworkUtils.reconnect(resetNetworkQueue);
 
             return new JsonResponse { result = "Reconnecting node to network now.", error = error };
         }
@@ -811,7 +811,7 @@ namespace IXICore
         {
             JsonError error = null;
 
-            CoreNetworkUtils.isolate();
+            NetworkUtils.isolate();
 
             return new JsonResponse { result = "Isolating from network now.", error = error };
         }

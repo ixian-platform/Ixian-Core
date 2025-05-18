@@ -32,7 +32,7 @@ namespace IXICore.Network
             PeerStorage.readPeersFile();
 
             // Now add the seed nodes to the list
-            foreach (string[] addr in CoreNetworkUtils.getSeedNodes(IxianHandler.networkType))
+            foreach (string[] addr in NetworkUtils.getSeedNodes(IxianHandler.networkType))
             {
                 Address wallet_addr = null;
                 if (addr[1] != null)

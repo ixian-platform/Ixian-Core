@@ -13,11 +13,6 @@
 using IXICore.Meta;
 using IXICore.SpixiBot;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-
 
 namespace IXICore.Streaming
 {
@@ -169,9 +164,6 @@ namespace IXICore.Streaming
         public byte[] aesKey = null; // TODO TODO don't keep keys in plaintext in memory
         public long keyGeneratedTime = 0;
 
-        public string relayIP = null;
-        public byte[] relayWallet = null;
-
         public bool online = false;
         public bool isTyping = false;
 
@@ -201,6 +193,12 @@ namespace IXICore.Streaming
         private object saveLock = new object();
 
         public FriendState state = FriendState.Unknown;
+
+        public long updatedSectorNodes = 0;
+        public List<Peer> sectorNodes = new();
+
+        public long updatedStreamingNodes = 0;
+        public List<Peer> relayNodes = new();
 
         public Friend(FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
         {
