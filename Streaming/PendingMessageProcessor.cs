@@ -304,13 +304,12 @@ namespace IXICore.Streaming
             }
 
             bool sent = false;
-            string hostname = friend.searchForRelay(); // TODO cuckoo filter should be used instead, need to check the performance when PL is big
             if (friend.online)
             {
-                if (hostname != "" && hostname != null)
+                if (friend.relayNode != null)
                 {
-                    StreamClientManager.connectTo(hostname, null); // TODO replace null with node address
-                    sent = StreamClientManager.sendToClient(hostname, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                    StreamClientManager.connectTo(friend.relayNode.hostname, null); // TODO replace null with node address
+                    sent = StreamClientManager.sendToClient(friend.relayNode.hostname, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
                     if (sent && pending_message.removeAfterSending)
                     {
                         removeMessage(friend, pending_message.streamMessage.id);

@@ -13,6 +13,10 @@
 using IXICore.Meta;
 using IXICore.SpixiBot;
 using IXICore.Utils;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 
 namespace IXICore.Streaming
 {
@@ -198,7 +202,7 @@ namespace IXICore.Streaming
         public List<Peer> sectorNodes = new();
 
         public long updatedStreamingNodes = 0;
-        public List<Peer> relayNodes = new();
+        public Peer relayNode = null;
 
         public Friend(FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
         {
@@ -538,23 +542,6 @@ namespace IXICore.Streaming
             }
 
             return false;
-        }
-
-        // Retrieve the friend's connected S2 node address. Returns null if not found
-        public string searchForRelay()
-        {
-            relayIP = null;
-            relayWallet = null;
-
-            string hostname = FriendList.getRelayHostname(walletAddress);
-
-            if (hostname != null && hostname != "")
-            {
-                // Store the last relay ip and wallet for this friend
-                relayIP = hostname;
-            }
-            // Finally, return the ip address of the node
-            return relayIP;
         }
 
         public bool setMessageRead(int channel, byte[] id)
