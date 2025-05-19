@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -12,6 +12,7 @@
 
 using IXICore.Network;
 using IXICore.RegNames;
+using IXICore.Storage;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -19,6 +20,22 @@ using System.Linq;
 
 namespace IXICore.Meta
 {
+    public class Balance
+    {
+        public Address address = null;
+        public IxiNumber balance = 0;
+        public ulong blockHeight = 0;
+        public byte[] blockChecksum = null;
+        public bool verified = false;
+        public long lastUpdate = 0;
+
+        public Balance(Address address, IxiNumber balance)
+        {
+            this.address = address;
+            this.balance = balance;
+        }
+    }
+
     public enum NetworkType
     {
         main = 0,
@@ -44,7 +61,7 @@ namespace IXICore.Meta
         public abstract Block getLastBlock();
         public abstract ulong getLastBlockHeight();
         public abstract int getLastBlockVersion();
-        public abstract bool addTransaction(Transaction tx, bool force_broadcast);
+        public abstract bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, bool force_broadcast);
         public abstract bool isAcceptingConnections();
         public abstract Wallet getWallet(Address id);
         public abstract IxiNumber getWalletBalance(Address id);
@@ -52,18 +69,25 @@ namespace IXICore.Meta
 
         public abstract void shutdown();
 
-        // Optional
-        public virtual void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified) { }
-        public virtual void receivedBlockHeader(Block block_header, bool verified) { }
-
         public abstract IxiNumber getMinSignerPowDifficulty(ulong blockNum, int curBlockVersion, long curBlockTimestamp);
 
         public abstract RegisteredNameRecord getRegName(byte[] name, bool useAbsoluteId);
+
+        public virtual long getTimeSinceLastBlock()
+        {
+            return Clock.getNetworkTimestamp() - getLastBlock().timestamp;
+        }
+
+        public virtual void triggerSignerPowSolutionFound() { }
     }
 
     public static class IxianHandler
     {
         private static IxianNode handlerClass = null;
+
+        public static LocalStorage localStorage = null;
+
+        public static List<Balance> balances = new List<Balance>(); // Stores the last known balances for this node
 
         private static string _publicIP = "";
         private static int _publicPort = 0;
@@ -93,7 +117,7 @@ namespace IXICore.Meta
             byte[] checksum_lock = null)
         {
             CoreConfig.productVersion = product_version;
-            if(set_title)
+            if (set_title)
             {
                 Console.Title = product_version + " (" + CoreConfig.version + ")";
             }
@@ -104,13 +128,14 @@ namespace IXICore.Meta
         {
             handlerClass = handler_class;
             networkType = type;
-            switch(type)
+            switch (type)
             {
                 case NetworkType.main:
-                    if(checksum_lock != null)
+                    if (checksum_lock != null)
                     {
                         ConsensusConfig.ixianChecksumLock = checksum_lock;
-                    }else
+                    }
+                    else
                     {
                         ConsensusConfig.ixianChecksumLock = ConsensusConfig.ixianChecksumLockMainNet;
                     }
@@ -178,10 +203,10 @@ namespace IXICore.Meta
             return handlerClass.getLastBlockVersion();
         }
 
-        public static bool addTransaction(Transaction tx, bool force_broadcast)
+        public static bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, bool force_broadcast)
         {
             verifyHandler();
-            return handlerClass.addTransaction(tx, force_broadcast);
+            return handlerClass.addTransaction(tx, relayNodeAddresses, force_broadcast);
         }
 
         public static bool isAcceptingConnections()
@@ -200,18 +225,6 @@ namespace IXICore.Meta
         {
             verifyHandler();
             return handlerClass.getWalletBalance(id);
-        }
-
-        public static void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified)
-        {
-            verifyHandler();
-            handlerClass.receivedTransactionInclusionVerificationResponse(txid, verified);
-        }
-
-        public static void receivedBlockHeader(Block block_header, bool verified)
-        {
-            verifyHandler();
-            handlerClass.receivedBlockHeader(block_header, verified);
         }
 
         public static Block getBlockHeader(ulong blockNum)
@@ -265,7 +278,8 @@ namespace IXICore.Meta
             try
             {
                 return wallets.First(x => x.Value.filename == filename).Value;
-            }catch (Exception)
+            }
+            catch (Exception)
             {
 
             }
@@ -307,9 +321,9 @@ namespace IXICore.Meta
 
         public static bool removeWallet(Address walletAddress)
         {
-            lock(wallets)
+            lock (wallets)
             {
-                if(walletAddress.addressNoChecksum.SequenceEqual(primaryWalletAddress.addressNoChecksum))
+                if (walletAddress.addressNoChecksum.SequenceEqual(primaryWalletAddress.addressNoChecksum))
                 {
                     Logging.warn("Cannot remove primary wallet {0}", primaryWalletAddress.ToString());
                     return false;
@@ -320,11 +334,11 @@ namespace IXICore.Meta
 
         public static bool isMyAddress(Address walletAddress)
         {
-            lock(wallets)
+            lock (wallets)
             {
                 foreach (var wallet in wallets)
                 {
-                    if(wallet.Value.isMyAddress(walletAddress))
+                    if (wallet.Value.isMyAddress(walletAddress))
                     {
                         return true;
                     }
@@ -341,19 +355,20 @@ namespace IXICore.Meta
                 foreach (var wallet in wallets)
                 {
                     var extractedAddresses = wallet.Value.extractMyAddressesFromAddressList(addressList);
-                    if(extractedAddresses != null && extractedAddresses.Count > 0)
+                    if (extractedAddresses != null && extractedAddresses.Count > 0)
                     {
-                        if(useSeedHashAsKey)
+                        if (useSeedHashAsKey)
                         {
                             addresses.Add(wallet.Value.getSeedHash(), extractedAddresses);
-                        }else
+                        }
+                        else
                         {
                             addresses.Add(wallet.Key, extractedAddresses);
                         }
                     }
                 }
             }
-            if(addresses.Count == 0)
+            if (addresses.Count == 0)
             {
                 return null;
             }
@@ -404,6 +419,18 @@ namespace IXICore.Meta
         public static string getFullPublicAddress()
         {
             return publicIP + ":" + publicPort;
+        }
+
+        public static long getTimeSinceLastBlock()
+        {
+            verifyHandler();
+            return handlerClass.getTimeSinceLastBlock();
+        }
+
+        public static void triggerSignerPowSolutionFound()
+        {
+            verifyHandler();
+            handlerClass.triggerSignerPowSolutionFound();
         }
     }
 }

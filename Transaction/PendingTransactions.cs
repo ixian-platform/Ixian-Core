@@ -12,20 +12,21 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml;
 
 namespace IXICore
 {
     public class PendingTransaction
     {
         public Transaction transaction;
+        public List<Address> relayNodeAddresses;
         public long addedTimestamp;
         public List<byte[]> confirmedNodeList = new List<byte[]>();
         public byte[] messageId;
 
-        public PendingTransaction(Transaction t, long addedTimestamp, byte[] message_id)
+        public PendingTransaction(Transaction t, List<Address> relayNodeAddresses, long addedTimestamp, byte[] message_id)
         {
             transaction = t;
+            this.relayNodeAddresses = relayNodeAddresses;
             this.addedTimestamp = addedTimestamp;
             messageId = message_id;
         }
@@ -36,20 +37,18 @@ namespace IXICore
     {
         public static List<PendingTransaction> pendingTransactions = new List<PendingTransaction>();
 
-        public static bool addPendingLocalTransaction(Transaction t, byte[] message_id = null)
+        public static bool addPendingLocalTransaction(Transaction t, List<Address> relayNodeAddresses, byte[] message_id = null)
         {
             lock (pendingTransactions)
             {
                 if (pendingTransactions.Find(x => x.transaction.id.SequenceEqual(t.id)) == null)
                 {
-                    pendingTransactions.Add(new PendingTransaction( t, Clock.getTimestamp(), message_id));
+                    pendingTransactions.Add(new PendingTransaction( t, relayNodeAddresses, Clock.getTimestamp(), message_id));
                     return true;
                 }
             }
             return false;
         }
-
-
 
         public static long pendingTransactionCount()
         {

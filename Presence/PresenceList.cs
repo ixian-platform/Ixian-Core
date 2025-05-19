@@ -49,8 +49,10 @@ namespace IXICore
 
         private static bool running = false;
 
+        private static int keepAliveInterval = CoreConfig.serverKeepAliveInterval;
+
         // Generate an initial presence list
-        public static void init(string initial_ip, int port, char type)
+        public static void init(string initial_ip, int port, char type, int keep_alive_interval)
         {
             Logging.info("Generating presence list.");
 
@@ -60,6 +62,8 @@ namespace IXICore
             // Initialize with the default presence state
             curNodePresenceAddress = new PresenceAddress(CoreConfig.device_id, _myPublicAddress, type, CoreConfig.productVersion, 0, null);
             curNodePresence = new Presence(IxianHandler.getWalletStorage().getPrimaryAddress(), IxianHandler.getWalletStorage().getPrimaryPublicKey(), null, curNodePresenceAddress);
+
+            keepAliveInterval = keep_alive_interval;
         }
 
         // Searches through the entire presence list to find a matching IP with a specific type.
@@ -168,7 +172,7 @@ namespace IXICore
 
                                     if (addr.type == 'M' || addr.type == 'H')
                                     {
-                                        PeerStorage.addPeerToPeerList(addr.address, presence.wallet, Clock.getTimestamp(), 0, 0, 0);
+                                        PeerStorage.addPeerToPeerList(addr.address, presence.wallet, addr.lastSeenTime, 0, 0, 0);
                                     }
 
                                     //Logging.info("[PL] Last time updated for {0}", addr.device);
@@ -182,7 +186,12 @@ namespace IXICore
 
                                 if (local_addr.type == 'M' || local_addr.type == 'H')
                                 {
-                                    PeerStorage.addPeerToPeerList(local_addr.address, presence.wallet, Clock.getTimestamp(), 0, 0, 0);
+                                    PeerStorage.addPeerToPeerList(local_addr.address, presence.wallet, local_addr.lastSeenTime, 0, 0, 0);
+                                }
+
+                                if (local_addr.type == 'R')
+                                {
+                                    RelaySectors.Instance.addRelayNode(pr.wallet);
                                 }
 
                                 lock (presenceCount)
@@ -213,7 +222,12 @@ namespace IXICore
                     {
                         if (pa.type == 'M' || pa.type == 'H')
                         {
-                            PeerStorage.addPeerToPeerList(pa.address, presence.wallet, Clock.getTimestamp(), 0, 0, 0);
+                            PeerStorage.addPeerToPeerList(pa.address, presence.wallet, pa.lastSeenTime, 0, 0, 0);
+                        }
+
+                        if (pa.type == 'R')
+                        {
+                            RelaySectors.Instance.addRelayNode(presence.wallet);
                         }
 
                         lock (presenceCount)
@@ -268,51 +282,12 @@ namespace IXICore
                             presences.Remove(listEntry);
                         }
 
-                        // If presence address is a relay node, remove all other presences with matching ip:port
-                        // TODO: find a better way to handle this while preventing modify-during-enumeration issues
                         if (address != null && address.type == 'R')
                         {
-                            // Retrieve the ip+port of the relay address
-                            string relay_address = address.address;
-
-                            // Store a copy of the presence list to allow safe modifications while enumerating
-                            List<Presence> safe_presences = new List<Presence>(presences);
-
-                            // Go through the entire presence list
-                            foreach (Presence pr in safe_presences)
+                            if (listEntry.addresses.Find(x => x.type == 'R') == null)
                             {
-                                // Store a list of presence addresses that correspond to the relay node we're removing
-                                List<PresenceAddress> relayClients = new List<PresenceAddress>();
-
-                                foreach (PresenceAddress pa in pr.addresses)
-                                {
-                                    if (pa.address.SequenceEqual(relay_address))
-                                    {
-                                        // Check if it's a client node
-                                        if (pa.type == 'C')
-                                        {
-                                            relayClients.Add(pa);
-                                        }
-                                    }
-                                }
-
-                                // Check if the presence contains at least one relay client
-                                if (relayClients.Count > 0)
-                                {
-                                    // Go through each relay client and safely remove it's address entry
-                                    // Note that it also propagates network messages
-                                    foreach (PresenceAddress par in relayClients)
-                                    {
-                                        removeAddressEntry(pr.wallet, par);
-                                    }
-
-                                    relayClients.Clear();
-                                }
-
+                                RelaySectors.Instance.removeRelayNode(wallet_address);
                             }
-
-                            // Clear the safe list of presences
-                            safe_presences.Clear();
                         }
 
                         return true;
@@ -464,12 +439,7 @@ namespace IXICore
                 {
                     TLC.Report();
 
-                    int keepalive_interval = CoreConfig.serverKeepAliveInterval;
-
-                    if (curNodePresenceAddress.type == 'C')
-                    {
-                        keepalive_interval = CoreConfig.clientKeepAliveInterval;
-                    }
+                    int keepalive_interval = keepAliveInterval;
 
                     // Wait x seconds before rechecking
                     for (int i = 0; i < keepalive_interval; i++)
@@ -522,15 +492,30 @@ namespace IXICore
                         Address address = null;
                         long last_seen = 0;
                         byte[] device_id = null;
+                        char node_type;
 
                         // Update self presence
-                        receiveKeepAlive(ka_bytes, out address, out last_seen, out device_id, null);
+                        receiveKeepAlive(ka_bytes, out address, out last_seen, out device_id, out node_type, null);
 
-                        // Send this keepalive to all connected non-clients
-                        CoreProtocolMessage.broadcastProtocolMessage(new char[] { 'M', 'H', 'W' }, ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                        if (node_type == 'C')
+                        {
+                            // Send this keepalive to all relay nodes
+                            CoreProtocolMessage.broadcastProtocolMessage(['R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            // Send to all stream client types
+                            StreamClientManager.broadcastData(ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                        }
+                        else
+                        {
+                            // Send this keepalive to all connected clients
+                            CoreProtocolMessage.broadcastProtocolMessage(['M', 'H', 'W', 'R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                        }
 
                         // Send this keepalive message to all connected clients
                         CoreProtocolMessage.broadcastEventDataMessage(NetworkEvents.Type.keepAlive, address.addressNoChecksum, ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                    }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
                     }
                     catch (Exception e)
                     {
@@ -551,11 +536,12 @@ namespace IXICore
         // Called when receiving a keepalive network message. The PresenceList will update the appropriate entry based on the timestamp.
         // Returns TRUE if it updated an entry in the PL
         // Sets the out address parameter to be the KA wallet's address or null if an error occurred
-        public static bool receiveKeepAlive(byte[] bytes, out Address wallet, out long last_seen, out byte[] device_id, RemoteEndpoint endpoint)
+        public static bool receiveKeepAlive(byte[] bytes, out Address wallet, out long last_seen, out byte[] device_id, out char node_type, RemoteEndpoint endpoint)
         {
             wallet = null;
             last_seen = 0;
             device_id = null;
+            node_type = (char)0;
 
             // Get the current timestamp
             long currentTime = Clock.getNetworkTimestamp();
@@ -566,6 +552,7 @@ namespace IXICore
                 wallet = ka.walletAddress;
                 last_seen = ka.timestamp;
                 device_id = ka.deviceId;
+                node_type = ka.nodeType;
 
                 if (ka.nodeType == 'C' || ka.nodeType == 'R')
                 {
@@ -743,12 +730,12 @@ namespace IXICore
                                 // Check if timestamp is older than 300 seconds
                                 if ((currentTime - pa.lastSeenTime) > expiration_time)
                                 {
-                                    Logging.info("Expired lastseen for {0} / {1}", pa.address, Crypto.hashToString(pa.device));
+                                    Logging.info("Expired lastseen for {0} / {1} / {2}", pr.wallet.ToString(), pa.address, Crypto.hashToString(pa.device));
                                     removeAddressEntry(pr.wallet, pa);
                                 }
                                 else if ((currentTime - pa.lastSeenTime) < -30) // future time + 30 seconds amortization
                                 {
-                                    Logging.info("Expired future lastseen for {0} / {1}", pa.address, Crypto.hashToString(pa.device));
+                                    Logging.info("Expired future lastseen for {0} / {1} / {2}", pr.wallet.ToString(), pa.address, Crypto.hashToString(pa.device));
                                     removeAddressEntry(pr.wallet, pa);
                                 }
                             }

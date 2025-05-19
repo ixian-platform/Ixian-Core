@@ -41,26 +41,33 @@
     <Compile Include="$(MSBuildThisFileDirectory)Meta\Platform.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Meta\ThreadLiveCheck.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Meta\UpdateVerify.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Miner\SignerPowMiner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\CoreNetworkProtocol.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\InventoryCacheClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\Messages\Rejected.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Network.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerBase.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerRandomized.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerStatic.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkEvents.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkRemoteEndpoint.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkServer.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkUtils.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\StreamClientManager.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Peer\Peer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Peer\PeerStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\NativeMethods.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pow\Argon2id.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pow\MiningUtils.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Presence\KeepAlive.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Pow\SignerPowSolution.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Presence\KeepAlive.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\Presence.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceSelector.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Presence\RelaySectors.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\IRegNamesStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\IxiNameUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\RegisteredNameDataRecord.cs" />
@@ -75,10 +82,22 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Users\BotContact.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\BotInfo.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Users\BotUsers.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\CoreStreamProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\Friend.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\OfflinePushMessages.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessageProcessor.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingRecipient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\ReactionData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiAppData.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\SpixiBotAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiMessageReaction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\LocalStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\Models\StorageTransaction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\TransactionCache.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransaction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransactionRequest.cs" />
@@ -100,10 +119,14 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\KDTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\NetDump.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Wordlist.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\WordlistSources.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Wallet\Wallet.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Wallet\WalletLib.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Wallet\WalletStorage.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="$(MSBuildThisFileDirectory)Streaming\Friends\" />
   </ItemGroup>
 </Project>

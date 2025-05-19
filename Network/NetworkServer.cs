@@ -110,12 +110,12 @@ namespace IXICore.Network
             }
             continueRunning = false;
 
+            // Close blocking socket
+            listener.Stop();
+
             netControllerThread.Interrupt();
             netControllerThread.Join();
             netControllerThread = null;
-
-            // Close blocking socket
-            listener.Stop();
 
             Logging.info("Closing network server connected clients");
             // Clear all clients
@@ -233,6 +233,10 @@ namespace IXICore.Network
                     catch (SocketException)
                     {
                         // Could be an interupt request
+                    }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
                     }
                     catch (Exception)
                     {
@@ -626,6 +630,34 @@ namespace IXICore.Network
                 }
                 return lastClient;
             }
+        }
+
+        public static RemoteEndpoint getClient(Address clientAddress, bool fullyConnected = true)
+        {
+            lock (connectedClients)
+            {
+                foreach (RemoteEndpoint c in connectedClients)
+                {
+                    if (fullyConnected)
+                    {
+                        if (!c.isConnected() || !c.helloReceived)
+                        {
+                            continue;
+                        }
+                        if (c.presenceAddress == null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (c.serverWalletAddress.SequenceEqual(clientAddress))
+                    {
+                        return c;
+                    }
+                }
+            }
+
+            return null;
         }
 
 

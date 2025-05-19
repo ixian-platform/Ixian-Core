@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -10,13 +10,10 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore;
 using IXICore.Meta;
 using IXICore.Utils;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 
 namespace IXICore
 {

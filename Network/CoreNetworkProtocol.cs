@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -14,6 +14,7 @@ using Force.Crc32;
 using IXICore.Inventory;
 using IXICore.Meta;
 using IXICore.Network;
+using IXICore.Network.Messages;
 using IXICore.RegNames;
 using IXICore.Utils;
 using System;
@@ -571,8 +572,9 @@ namespace IXICore
 
             bool c_result = NetworkClientManager.broadcastData(types, code, data, helper_data, skipEndpoint);
             bool s_result = NetworkServer.broadcastData(types, code, data, helper_data, skipEndpoint);
-
-            if (!c_result && !s_result)
+            
+            if (!c_result
+                && !s_result)
                 return false;
 
             return true;
@@ -628,7 +630,7 @@ namespace IXICore
         {
             if (data == null)
             {
-                Logging.warn(string.Format("Invalid protocol message data for {0}", code));
+                Logging.warn("Invalid protocol message data for {0}", code);
                 return false;
             }
 
@@ -734,7 +736,7 @@ namespace IXICore
         {
             // TODO TODO TODO TODO we should put this in a separate thread
             string hostname = endpoint.getFullAddress(true);
-            if (CoreNetworkUtils.PingAddressReachable(hostname) == false)
+            if (NetworkUtils.PingAddressReachable(hostname) == false)
             {
                 Logging.warn("Node {0} was not reachable on the advertised address.", hostname);
                 sendBye(endpoint, ProtocolByeCode.notConnectable, "External " + hostname + " not reachable!", "");
@@ -929,11 +931,295 @@ namespace IXICore
             }
         }
 
-        public static void sendRegisteredNameRecord(RemoteEndpoint endpoint, List<RegisteredNameDataRecord> dataRecords)
+        public static void sendRegisteredNameRecord(RemoteEndpoint endpoint, byte[] name, List<RegisteredNameDataRecord> dataRecords)
         {
-            foreach(var dataRecord in dataRecords)
+            // TODO TODO TODO extend this with proof paths, sigs and relevant data
+            using (MemoryStream mw = new MemoryStream())
             {
-                endpoint.sendData(ProtocolMessageCode.nameRecord, dataRecord.toBytes(false)); // TODO TODO TODO extend this with proof paths, sigs and relevant data, ?send all in one go?
+                using (BinaryWriter writer = new BinaryWriter(mw))
+                {
+                    writer.WriteIxiVarInt(name.Length);
+                    writer.Write(name);
+
+                    writer.WriteIxiVarInt(dataRecords.Count);
+                    foreach (var dataRecord in dataRecords)
+                    {
+                        byte[] data = dataRecord.toBytes(false);
+                        writer.WriteIxiVarInt(data.Length);
+                        writer.Write(data);
+                    }
+                }
+                endpoint.sendData(ProtocolMessageCode.nameRecord, mw.ToArray());
+            }
+        }
+
+        public static void sendSectorNodes(byte[] prefix, List<Address> relayList, RemoteEndpoint endpoint)
+        {
+            using (MemoryStream m = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(m))
+                {
+                    writer.WriteIxiVarInt(prefix.Length);
+                    writer.Write(prefix);
+
+                    writer.WriteIxiVarInt(relayList.Count);
+
+                    foreach (var relay in relayList)
+                    {
+                        var p = PresenceList.getPresenceByAddress(relay);
+                        if (p == null)
+                        {
+                            continue;
+                        }
+
+                        var pBytes = p.getBytes();
+                        writer.WriteIxiVarInt(pBytes.Length);
+                        writer.Write(pBytes);
+                    }
+                }
+
+                endpoint.sendData(ProtocolMessageCode.sectorNodes, m.ToArray(), null, 0, MessagePriority.high);
+            }
+        }
+
+        public static void broadcastGetKeepAlives(List<InventoryItemKeepAlive> ka_list, RemoteEndpoint endpoint)
+        {
+            int ka_count = ka_list.Count;
+            int max_ka_per_chunk = CoreConfig.maximumKeepAlivesPerChunk;
+            for (int i = 0; i < ka_count;)
+            {
+                using (MemoryStream mOut = new MemoryStream(max_ka_per_chunk * 570))
+                {
+                    using (BinaryWriter writer = new BinaryWriter(mOut))
+                    {
+                        int next_ka_count;
+                        if (ka_count - i > max_ka_per_chunk)
+                        {
+                            next_ka_count = max_ka_per_chunk;
+                        }
+                        else
+                        {
+                            next_ka_count = ka_count - i;
+                        }
+                        writer.WriteIxiVarInt(next_ka_count);
+
+                        for (int j = 0; j < next_ka_count && i < ka_count; j++)
+                        {
+                            InventoryItemKeepAlive ka = ka_list[i];
+                            i++;
+
+                            if (ka == null)
+                            {
+                                break;
+                            }
+
+                            long rollback_len = mOut.Length;
+
+                            writer.WriteIxiVarInt(ka.address.addressNoChecksum.Length);
+                            writer.Write(ka.address.addressNoChecksum);
+
+                            writer.WriteIxiVarInt(ka.deviceId.Length);
+                            writer.Write(ka.deviceId);
+
+                            if (mOut.Length > CoreConfig.maxMessageSize)
+                            {
+                                mOut.SetLength(rollback_len);
+                                i--;
+                                break;
+                            }
+                        }
+                    }
+                    endpoint.sendData(ProtocolMessageCode.getKeepAlives, mOut.ToArray(), null);
+                }
+            }
+        }
+
+        /// <summary>
+        ///  Determines highest network block height depending on 2/3rd of connected servers block heights.
+        /// </summary>
+        public static ulong determineHighestNetworkBlockNum()
+        {
+            List<ulong> blockHeights = NetworkClientManager.getBlockHeights();
+            blockHeights.AddRange(NetworkServer.getBlockHeights());
+
+            if (blockHeights.Count() < 1)
+            {
+                return 0;
+            }
+
+            blockHeights.Sort();
+
+            int thirdCount = (int)Math.Floor((decimal)blockHeights.Count / 3);
+
+            var blockHeightsMajority = blockHeights;
+
+            if (thirdCount >= 1 && blockHeights.Count > thirdCount)
+            {
+                blockHeightsMajority = blockHeights.Skip(thirdCount).Take(thirdCount).ToList();
+            }
+
+            ulong netBh = blockHeightsMajority.Max();
+
+            Block lastBlock = IxianHandler.getLastBlock();
+            if (lastBlock == null)
+            {
+                return netBh;
+            }
+
+            ulong maxBlocksGenerated = (ulong)(Clock.getNetworkTimestamp() - lastBlock.timestamp) / (ulong)ConsensusConfig.blockGenerationInterval;
+            ulong maxBlockHeight = lastBlock.blockNum + maxBlocksGenerated;
+            if (maxBlockHeight < netBh)
+            {
+                return maxBlockHeight;
+            }
+            return netBh;
+        }
+
+        public static void broadcastGetTransactions(List<byte[]> tx_list, long msg_id, RemoteEndpoint endpoint)
+        {
+            int tx_count = tx_list.Count;
+            int max_tx_per_chunk = CoreConfig.maximumTransactionsPerChunk;
+            for (int i = 0; i < tx_count;)
+            {
+                using (MemoryStream mOut = new MemoryStream(max_tx_per_chunk * 570))
+                {
+                    using (BinaryWriter writer = new BinaryWriter(mOut))
+                    {
+                        int next_tx_count = tx_count - i;
+                        if (next_tx_count > max_tx_per_chunk)
+                        {
+                            next_tx_count = max_tx_per_chunk;
+                        }
+                        writer.WriteIxiVarInt(msg_id);
+                        writer.WriteIxiVarInt(next_tx_count);
+
+                        for (int j = 0; j < next_tx_count && i < tx_count; j++)
+                        {
+                            long rollback_len = mOut.Length;
+
+                            writer.WriteIxiVarInt(tx_list[i].Length);
+                            writer.Write(tx_list[i]);
+
+                            i++;
+
+                            if (mOut.Length > CoreConfig.maxMessageSize)
+                            {
+                                mOut.SetLength(rollback_len);
+                                i--;
+                                break;
+                            }
+                        }
+                    }
+                    MessagePriority priority = msg_id > 0 ? MessagePriority.high : MessagePriority.auto;
+                    if (endpoint == null)
+                    {
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getTransactions2, mOut.ToArray(), 0, null);
+                    }
+                    else
+                    {
+                        endpoint.sendData(ProtocolMessageCode.getTransactions2, mOut.ToArray(), null, msg_id, priority);
+                    }
+                }
+            }
+        }
+
+        public static void processGetKeepAlives(byte[] data, RemoteEndpoint endpoint)
+        {
+            using (MemoryStream m = new MemoryStream(data))
+            {
+                using (BinaryReader reader = new BinaryReader(m))
+                {
+                    int ka_count = (int)reader.ReadIxiVarUInt();
+
+                    int max_ka_per_chunk = CoreConfig.maximumKeepAlivesPerChunk;
+
+                    for (int i = 0; i < ka_count;)
+                    {
+                        using (MemoryStream mOut = new MemoryStream(max_ka_per_chunk * 570))
+                        {
+                            using (BinaryWriter writer = new BinaryWriter(mOut))
+                            {
+                                int next_ka_count;
+                                if (ka_count - i > max_ka_per_chunk)
+                                {
+                                    next_ka_count = max_ka_per_chunk;
+                                }
+                                else
+                                {
+                                    next_ka_count = ka_count - i;
+                                }
+                                writer.WriteIxiVarInt(next_ka_count);
+
+                                for (int j = 0; j < next_ka_count && i < ka_count; j++)
+                                {
+                                    i++;
+
+                                    long in_rollback_pos = reader.BaseStream.Position;
+                                    long out_rollback_len = mOut.Length;
+
+                                    if (m.Position == m.Length)
+                                    {
+                                        break;
+                                    }
+
+                                    int address_len = (int)reader.ReadIxiVarUInt();
+                                    Address address = new Address(reader.ReadBytes(address_len));
+
+                                    int device_len = (int)reader.ReadIxiVarUInt();
+                                    byte[] device = reader.ReadBytes(device_len);
+
+                                    Presence p = PresenceList.getPresenceByAddress(address);
+                                    if (p == null)
+                                    {
+                                        Logging.info("I don't have presence: " + address.ToString());
+                                        continue;
+                                    }
+
+                                    PresenceAddress pa = p.addresses.Find(x => x.device.SequenceEqual(device));
+                                    if (pa == null)
+                                    {
+                                        Logging.info("I don't have presence address: " + address.ToString());
+                                        continue;
+                                    }
+
+                                    KeepAlive ka = pa.getKeepAlive(address, p.powSolution);
+                                    byte[] ka_bytes = ka.getBytes();
+                                    byte[] ka_len = IxiVarInt.GetIxiVarIntBytes(ka_bytes.Length);
+                                    writer.Write(ka_len);
+                                    writer.Write(ka_bytes);
+
+                                    if (mOut.Length > CoreConfig.maxMessageSize)
+                                    {
+                                        reader.BaseStream.Position = in_rollback_pos;
+                                        mOut.SetLength(out_rollback_len);
+                                        i--;
+                                        break;
+                                    }
+                                }
+                            }
+                            endpoint.sendData(ProtocolMessageCode.keepAlivesChunk, mOut.ToArray(), null);
+                        }
+                    }
+                }
+            }
+        }
+
+        public static void sendRejected(RejectedCode code, byte[] data, RemoteEndpoint endpoint)
+        {
+            endpoint.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
+        }
+
+        public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest)
+        {
+            using (MemoryStream mw = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(mw))
+                {
+                    writer.WriteIxiVarInt(address.addressNoChecksum.Length);
+                    writer.Write(address.addressNoChecksum);
+                    writer.WriteIxiVarInt(maxSectorNodesToRequest);
+                }
+                NetworkClientManager.broadcastData(['M', 'H', 'R'], ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
             }
         }
     }

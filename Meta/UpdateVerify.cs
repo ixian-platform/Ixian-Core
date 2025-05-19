@@ -121,6 +121,10 @@ namespace IXICore.Meta
                             serverVersion = version_text;
                             error = false;
                         }
+                        catch (ThreadInterruptedException)
+                        {
+                            throw;
+                        }
                         catch (Exception ex)
                         {
                             Logging.warn("Error while checking {0} for version update: {1}", updateUrl, ex.Message);
