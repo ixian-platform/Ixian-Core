@@ -309,7 +309,7 @@ namespace IXICore.Streaming
                 if (friend.relayNode != null)
                 {
                     StreamClientManager.connectTo(friend.relayNode.hostname, null); // TODO replace null with node address
-                    sent = StreamClientManager.sendToClient(friend.relayNode.hostname, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                    sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
                     if (sent && pending_message.removeAfterSending)
                     {
                         removeMessage(friend, pending_message.streamMessage.id);

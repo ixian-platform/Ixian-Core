@@ -106,7 +106,7 @@ namespace IXICore
         /// <summary>
         /// Presence list entry expiration time (in seconds) for server presences
         /// </summary>
-        public static readonly int serverPresenceExpiration = 600;
+        public static readonly int serverPresenceExpiration = 300;
 
         /// <summary>
         /// Presence list entry expiration time (in seconds) for client presences

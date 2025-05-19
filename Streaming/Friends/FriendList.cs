@@ -368,49 +368,6 @@ namespace IXICore.Streaming
             return null;
         }
 
-        // Retrieve a presence entry connected S2 node. Returns null if not found
-        public static string getRelayHostname(Address wallet_address)
-        {
-            string hostname = null;
-            Presence presence = PresenceList.getPresenceByAddress(wallet_address);
-            if (presence == null)
-            {
-                using (MemoryStream mw = new MemoryStream())
-                {
-                    using (BinaryWriter writer = new BinaryWriter(mw))
-                    {
-                        writer.WriteIxiVarInt(wallet_address.addressWithChecksum.Length);
-                        writer.Write(wallet_address.addressWithChecksum);
-
-                        CoreProtocolMessage.broadcastProtocolMessage(new char[] { 'M', 'H' }, ProtocolMessageCode.getPresence2, mw.ToArray(), null);
-                    }
-                }
-                return null;
-            }
-
-            lock (presence)
-            {
-                // Go through each presence address searching for C nodes
-                foreach (PresenceAddress addr in presence.addresses)
-                {
-                    // Only check Client nodes
-                    if (addr.type == 'C')
-                    {
-                        string[] hostname_split = addr.address.Split(':');
-
-                        if (hostname_split.Count() == 2 && NetworkUtils.validateIP(hostname_split[0]))
-                        {
-                            hostname = addr.address;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            // Finally, return the ip address of the node
-            return hostname;
-        }
-
         public static void deleteAccounts()
         {
             lock (friends)

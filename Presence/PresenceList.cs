@@ -497,15 +497,17 @@ namespace IXICore
                         // Update self presence
                         receiveKeepAlive(ka_bytes, out address, out last_seen, out device_id, out node_type, null);
 
-                        if (ka.nodeType == 'M' || ka.nodeType == 'H')
+                        if (node_type == 'C')
                         {
-                            // Send this keepalive to all connected clients
-                            CoreProtocolMessage.broadcastProtocolMessage(['M', 'H', 'W', 'R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            // Send this keepalive to all relay nodes
+                            CoreProtocolMessage.broadcastProtocolMessage(['R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            // Send to all stream client types
+                            StreamClientManager.broadcastData(ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
                         }
                         else
                         {
-                            // Send this keepalive to all connected non-clients
-                            CoreProtocolMessage.broadcastProtocolMessage(['M', 'H', 'W'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            // Send this keepalive to all connected clients
+                            CoreProtocolMessage.broadcastProtocolMessage(['M', 'H', 'W', 'R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
                         }
 
                         // Send this keepalive message to all connected clients

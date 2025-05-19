@@ -572,8 +572,9 @@ namespace IXICore
 
             bool c_result = NetworkClientManager.broadcastData(types, code, data, helper_data, skipEndpoint);
             bool s_result = NetworkServer.broadcastData(types, code, data, helper_data, skipEndpoint);
-
-            if (!c_result && !s_result)
+            
+            if (!c_result
+                && !s_result)
                 return false;
 
             return true;
@@ -1206,6 +1207,20 @@ namespace IXICore
         public static void sendRejected(RejectedCode code, byte[] data, RemoteEndpoint endpoint)
         {
             endpoint.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
+        }
+
+        public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest)
+        {
+            using (MemoryStream mw = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(mw))
+                {
+                    writer.WriteIxiVarInt(address.addressNoChecksum.Length);
+                    writer.Write(address.addressNoChecksum);
+                    writer.WriteIxiVarInt(maxSectorNodesToRequest);
+                }
+                NetworkClientManager.broadcastData(['M', 'H', 'R'], ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
+            }
         }
     }
 }

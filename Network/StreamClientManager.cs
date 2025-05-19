@@ -100,7 +100,7 @@ namespace IXICore.Network
 
         // Send data to all connected nodes
         // Returns true if the data was sent to at least one client
-        public static bool broadcastData(ProtocolMessageCode code, byte[] data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastData(ProtocolMessageCode code, byte[] data, byte[] helperData, RemoteEndpoint skipEndpoint = null)
         {
             bool result = false;
             lock (streamClients)
@@ -120,7 +120,7 @@ namespace IXICore.Network
                             continue;
                         }
 
-                        client.sendData(code, data);
+                        client.sendData(code, data, helperData);
                         result = true;
                     }
                 }
@@ -442,14 +442,14 @@ namespace IXICore.Network
             return result.ToArray();
         }
 
-        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public static bool sendToClient(List<Peer> relayNodes, ProtocolMessageCode code, byte[] data, byte[] helper_data)
         {
             NetworkClient client = null;
             lock (streamClients)
             {
                 foreach (NetworkClient c in streamClients)
                 {
-                    if (c.getFullAddress() == neighbor)
+                    if (relayNodes.Find(x => x.hostname == c.getFullAddress()) != null)
                     {
                         client = c;
                         break;
