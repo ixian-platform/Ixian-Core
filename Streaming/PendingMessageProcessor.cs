@@ -308,7 +308,7 @@ namespace IXICore.Streaming
             {
                 if (friend.relayNode != null)
                 {
-                    StreamClientManager.connectTo(friend.relayNode.hostname, null); // TODO replace null with node address
+                    StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
                     sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
                     if (sent && pending_message.removeAfterSending)
                     {
@@ -335,7 +335,15 @@ namespace IXICore.Streaming
                         pending_message.sendToServer = false;
                         // TODO set the proper channel
                         friend.setMessageSent(0, pending_message.streamMessage.id);
-                        onMessageSent(friend, 0, msg);
+
+                        try
+                        {
+                            onMessageSent(friend, 0, msg);
+                        } catch (Exception e)
+                        {
+                            Logging.error("Error in onMessageSent: " + e);
+                        }
+
                         if (add_to_pending_messages)
                         {
                             pending_message.save(storagePath);

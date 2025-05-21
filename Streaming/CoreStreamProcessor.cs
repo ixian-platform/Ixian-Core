@@ -42,7 +42,7 @@ namespace IXICore.Streaming
         }
     }
 
-    class CoreStreamProcessor
+    abstract class CoreStreamProcessor
     {
         protected bool running = false;
 
@@ -249,7 +249,7 @@ namespace IXICore.Streaming
 
 
         // Called when receiving S2 data from clients
-        public ReceiveDataResponse receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true)
+        public virtual ReceiveDataResponse receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true)
         {
             if (running == false)
             {
@@ -756,6 +756,9 @@ namespace IXICore.Streaming
                         {
                             return null;
                         }
+                        return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
+                    
+                    default:
                         return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                 }
             }
