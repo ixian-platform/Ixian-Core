@@ -83,6 +83,36 @@ namespace IXICore
         }
 
         /// <summary>
+        ///  Computes a SHA256 value of the contents of a file using a buffered stream for efficiency.
+        ///  Optimized for large files and low-memory environments.
+        /// </summary>
+        /// <param name="file_path">Path to the file to be hashed.</param>
+        /// <returns>SHA256 hash of the file contents.</returns>
+        public static string sha256(string file_path)
+        {
+            if (string.IsNullOrWhiteSpace(file_path))
+            {
+                throw new ArgumentException("file_path incorrect", nameof(file_path));
+            }
+
+            if (!File.Exists(file_path))
+            {
+                throw new FileNotFoundException("File not found", file_path);
+            }
+
+            if (sha256Engine == null)
+            {
+                sha256Engine = SHA256.Create();
+            }
+
+            using (var stream = new BufferedStream(File.OpenRead(file_path), 8192)) // 8KB
+            {
+                var hash = sha256Engine.ComputeHash(stream);
+                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        /// <summary>
         ///  Computes a SHA512 value of the given data. It is possible to calculate the hash for a subset of the input data by
         ///  using the `offset` and `count` parameters.
         /// </summary>
