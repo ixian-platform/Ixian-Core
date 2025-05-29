@@ -110,12 +110,12 @@ namespace IXICore.Network
             }
             continueRunning = false;
 
+            // Close blocking socket
+            listener.Stop();
+
             netControllerThread.Interrupt();
             netControllerThread.Join();
             netControllerThread = null;
-
-            // Close blocking socket
-            listener.Stop();
 
             Logging.info("Closing network server connected clients");
             // Clear all clients

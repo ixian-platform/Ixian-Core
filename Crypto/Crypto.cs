@@ -88,7 +88,7 @@ namespace IXICore
         /// </summary>
         /// <param name="file_path">Path to the file to be hashed.</param>
         /// <returns>SHA256 hash of the file contents.</returns>
-        public static string sha256(string file_path)
+        public static string sha256OfFile(string file_path)
         {
             if (string.IsNullOrWhiteSpace(file_path))
             {
