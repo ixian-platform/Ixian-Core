@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using System;
+using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
