@@ -2383,9 +2383,9 @@ namespace IXICore
         {
             JsonError error = null;
 
-            if (!parameters.ContainsKey("prefix"))
+            if (!parameters.ContainsKey("prefixHex"))
             {
-                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "prefix parameter is missing" };
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "prefixHex parameter is missing" };
                 return new JsonResponse { result = null, error = error };
             }
 
@@ -2396,7 +2396,7 @@ namespace IXICore
             }
 
             string prefixHex = (string)parameters["prefixHex"];
-            int maxRelayCount = (int)parameters["maxRelayCount"];
+            int maxRelayCount = int.Parse((string)parameters["maxRelayCount"]);
 
             var relayList = RelaySectors.Instance.getSectorNodes(Crypto.stringToHash(prefixHex), maxRelayCount);
 
