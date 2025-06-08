@@ -20,7 +20,7 @@ namespace IXICore
         /// <summary>
         /// Current version of IxiCore.
         /// </summary>
-        public static readonly string version = "xcore-0.9.3g";
+        public static readonly string version = "xcore-0.9.4-dev";
 
         /// <summary>
         /// Current version of the Ixian network protocol.
@@ -89,10 +89,15 @@ namespace IXICore
         public static readonly int networkClientReconnectInterval = 2 * 1000;
         
         /// <summary>
-        /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for server (M, H, R) nodes.
+        /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for server (M, H) nodes.
         /// </summary>
         public static readonly int serverKeepAliveInterval = 100;
-        
+
+        /// <summary>
+        /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for relay (R) nodes.
+        /// </summary>
+        public static readonly int relayKeepAliveInterval = 200;
+
         /// <summary>
         /// Interval (in seconds) how often to send a 'Keep-Alive' presence packet into the network for client nodes.
         /// </summary>
@@ -101,7 +106,7 @@ namespace IXICore
         /// <summary>
         /// Presence list entry expiration time (in seconds) for server presences
         /// </summary>
-        public static readonly int serverPresenceExpiration = 600;
+        public static readonly int serverPresenceExpiration = 300;
 
         /// <summary>
         /// Presence list entry expiration time (in seconds) for client presences
@@ -215,5 +220,10 @@ namespace IXICore
         /// Number of seconds to check block signature's inclusion in PL.
         /// </summary>
         public static int blockSignaturePlCheckTimeout = 450;
+
+        /// <summary>
+        /// Relay sector levels for indexing. Higher value increases performance at the cost of memory.
+        /// </summary>
+        public static int relaySectorLevels = 4;
     }
 }

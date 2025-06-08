@@ -234,6 +234,10 @@ namespace IXICore.Network
                     {
                         // Could be an interupt request
                     }
+                    catch (ThreadInterruptedException)
+                    {
+                        throw;
+                    }
                     catch (Exception)
                     {
                         if (continueRunning)
@@ -626,6 +630,34 @@ namespace IXICore.Network
                 }
                 return lastClient;
             }
+        }
+
+        public static RemoteEndpoint getClient(Address clientAddress, bool fullyConnected = true)
+        {
+            lock (connectedClients)
+            {
+                foreach (RemoteEndpoint c in connectedClients)
+                {
+                    if (fullyConnected)
+                    {
+                        if (!c.isConnected() || !c.helloReceived)
+                        {
+                            continue;
+                        }
+                        if (c.presenceAddress == null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (c.serverWalletAddress.SequenceEqual(clientAddress))
+                    {
+                        return c;
+                    }
+                }
+            }
+
+            return null;
         }
 
 

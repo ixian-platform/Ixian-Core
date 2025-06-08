@@ -46,6 +46,9 @@ namespace IXICore.Inventory
 
     abstract class InventoryCache
     {
+        public static InventoryCache Instance { get; private set; }
+
+
         protected Dictionary<InventoryItemTypes, Dictionary<byte[], PendingInventoryItem>> inventory = null;
         protected Dictionary<InventoryItemTypes, InventoryTypeOptions> typeOptions = null;
 
@@ -64,6 +67,11 @@ namespace IXICore.Inventory
             typeOptions.Add(InventoryItemTypes.blockSignature, new InventoryTypeOptions() { maxRetries = 15, timeout = 10, maxItems = 2000 });
             typeOptions.Add(InventoryItemTypes.keepAlive, new InventoryTypeOptions() { maxRetries = 2, timeout = 30, maxItems = 10000 });
             typeOptions.Add(InventoryItemTypes.transaction, new InventoryTypeOptions() { maxRetries = 5, timeout = 200, maxItems = 10000 });
+        }
+
+        public static void init(InventoryCache instance)
+        {
+            Instance = instance;
         }
 
         public PendingInventoryItem get(InventoryItemTypes type, byte[] hash)

@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -24,6 +24,12 @@ using System.Threading;
 
 namespace IXICore
 {
+    public interface TransactionInclusionCallbacks
+    {
+        public void receivedBlockHeader(Block blockHeader, bool verified);
+        public void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified);
+    }
+
     /// <summary>
     /// Caches information about received PIT data for each block we're interested in.
     /// Note: Because we may request a PIT for a subset of that block's transactions, we must also store
@@ -59,8 +65,11 @@ namespace IXICore
 
         public ulong blockHeadersToRequestInChunk = 250;
 
-        public TransactionInclusion()
+        private TransactionInclusionCallbacks transactionInclusionCallbacks = null;
+
+        public TransactionInclusion(TransactionInclusionCallbacks transactionInclusionCallbacks)
         {
+            this.transactionInclusionCallbacks = transactionInclusionCallbacks;
         }
 
         public void start(string block_header_storage_path = "", bool compacted = false, bool pruneBlocks = true)
@@ -105,6 +114,10 @@ namespace IXICore
                 try
                 {
                     BlockHeaderStorage.initCache();
+                }
+                catch (ThreadInterruptedException)
+                {
+                    throw;
                 }
                 catch (Exception e)
                 {
@@ -166,7 +179,7 @@ namespace IXICore
             tiv_thread = null;
         }
 
-        private bool updateBlockHeaders(bool force_update = false)
+        private bool updateBlockHeaders(bool force_update = false, RemoteEndpoint endpoint = null)
         {
             long currentTime = Clock.getTimestamp();
 
@@ -176,7 +189,7 @@ namespace IXICore
                 lastRequestedBlockTime = currentTime;
 
                 // request next blocks
-                requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk);
+                requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk, endpoint);
 
                 return true;
             }
@@ -254,11 +267,11 @@ namespace IXICore
                         if(bh.transactions.Contains(tx.id, new ByteArrayComparer()))
                         {
                             // valid
-                            IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, true);
+                            transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, true);
                         }else
                         {
                             // invalid
-                            IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                            transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
                         }
 
                     }
@@ -288,12 +301,12 @@ namespace IXICore
                                     if (pitCache[tx.applied].pit.contains(txid))
                                     {
                                         // valid
-                                        IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, true);
+                                        transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, true);
                                     }
                                     else
                                     {
                                         // invalid
-                                        IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                                        transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
                                     }
                                 }
                                 else
@@ -325,7 +338,7 @@ namespace IXICore
                 {
                     txQueue.Remove(tx.id);
                     // invalid
-                    IxianHandler.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                    transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
                 }
             }
         }
@@ -426,7 +439,7 @@ namespace IXICore
                 }
             }
 
-            IxianHandler.receivedBlockHeader(lastBlockHeader, true);
+            transactionInclusionCallbacks.receivedBlockHeader(lastBlockHeader, true);
 
             return true;
         }
@@ -533,7 +546,7 @@ namespace IXICore
             }
         }
 
-        private void requestBlockHeaders(ulong from, ulong count)
+        private void requestBlockHeaders(ulong from, ulong count, RemoteEndpoint endpoint = null)
         {
             Logging.info("Requesting block headers from {0} to {1}", from, from + count);
             using (MemoryStream mOut = new MemoryStream())
@@ -544,11 +557,15 @@ namespace IXICore
                     writer.WriteIxiVarInt(count);
                 }
 
-                // Request from all nodes
-                //NetworkClientManager.broadcastData(new char[] { 'M', 'H' }, ProtocolMessageCode.getBlockHeaders, mOut.ToArray(), null);
-
-                // Request from a single random node
-                CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                if (endpoint != null)
+                {
+                    endpoint.sendData(ProtocolMessageCode.getBlockHeaders3, mOut.ToArray());
+                }
+                else
+                {
+                    // Request from a single random node
+                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                }
             }
         }
 
@@ -593,7 +610,17 @@ namespace IXICore
                     pitCache.Clear();
                 }
             }
+        }
 
+        public void requestNewBlockHeaders(ulong blockNum, RemoteEndpoint endpoint)
+        {
+            if (blockNum <= lastBlockHeader.blockNum)
+            {
+                return;
+            }
+
+            updateBlockHeaders(true, endpoint);
+            verifyUnprocessedTransactions();
         }
     }
 }
