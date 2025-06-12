@@ -60,6 +60,22 @@ namespace IXICore
         /// </summary>
         public byte[] addressNoChecksum { get; private set; } = null;
 
+        private byte[] _sectorPrefix = null;
+        /// <summary>
+        ///  Byte value of the sector prefix.
+        /// </summary>
+        public byte[] sectorPrefix
+        {
+            get
+            {
+                if (_sectorPrefix == null)
+                {
+                    _sectorPrefix = CryptoManager.lib.sha3_512Trunc(addressNoChecksum, 0, 0, 10);
+                }
+                return _sectorPrefix;
+            }
+        }
+
         /// <summary>
         ///  Address nonce value. Applicable only for v1 and above.
         /// </summary>
@@ -138,6 +154,7 @@ namespace IXICore
             version = other.version;
             _addressWithChecksum = IxiUtils.copy(other._addressWithChecksum);
             addressNoChecksum = IxiUtils.copy(other.addressNoChecksum);
+            _sectorPrefix = IxiUtils.copy(other._sectorPrefix);
             nonce = IxiUtils.copy(other.nonce);
             pubKey = IxiUtils.copy(other.pubKey);
         }
@@ -152,7 +169,6 @@ namespace IXICore
             // strip checksum
             addressNoChecksum = new byte[address.Length - 3];
             Array.Copy(address, addressNoChecksum, addressNoChecksum.Length);
-
         }
 
         private byte[] constructAddress_v0(byte[] publicKeyOrAddress, byte[] addressNonce, bool verifyChecksum)

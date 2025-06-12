@@ -1213,8 +1213,8 @@ namespace IXICore
             {
                 using (BinaryWriter writer = new BinaryWriter(mw))
                 {
-                    writer.WriteIxiVarInt(address.addressNoChecksum.Length);
-                    writer.Write(address.addressNoChecksum);
+                    writer.WriteIxiVarInt(address.sectorPrefix.Length);
+                    writer.Write(address.sectorPrefix);
                     writer.WriteIxiVarInt(maxSectorNodesToRequest);
                 }
                 NetworkClientManager.broadcastData(['M', 'H', 'R'], ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
