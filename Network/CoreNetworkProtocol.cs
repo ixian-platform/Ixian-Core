@@ -962,16 +962,14 @@ namespace IXICore
                     writer.WriteIxiVarInt(prefix.Length);
                     writer.Write(prefix);
 
-                    writer.WriteIxiVarInt(relayList.Count);
+                    var relayPresences = relayList.Select(PresenceList.getPresenceByAddress)
+                     .Where(p => p != null)
+                     .ToList();
 
-                    foreach (var relay in relayList)
+                    writer.WriteIxiVarInt(relayPresences.Count);
+
+                    foreach (var p in relayPresences)
                     {
-                        var p = PresenceList.getPresenceByAddress(relay);
-                        if (p == null)
-                        {
-                            continue;
-                        }
-
                         var pBytes = p.getBytes();
                         writer.WriteIxiVarInt(pBytes.Length);
                         writer.Write(pBytes);

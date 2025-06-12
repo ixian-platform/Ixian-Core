@@ -111,7 +111,7 @@ namespace IXICore
         /// <summary>
         /// Presence list entry expiration time (in seconds) for client presences
         /// </summary>
-        public static readonly int clientPresenceExpiration = 300;
+        public static int clientPresenceExpiration = 300;
 
         /// <summary>
         /// Number of retries when connecting to a neighbor node, before giving up.

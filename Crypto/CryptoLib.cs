@@ -200,7 +200,7 @@ namespace IXICore
         ///  Computes a SHA3-256 value of the given data. It is possible to calculate the hash for a subset of the input data by
         ///  using the `offset` and `count` parameters.
         /// </summary>
-        /// <param name="data">Source data for hashing.</param>
+        /// <param name="input">Source data for hashing.</param>
         /// <param name="offset">Byte offset into the data. Default = 0</param>
         /// <param name="count">Number of bytes to use in the calculation. Default, 0, means use all available bytes.</param>
         /// <returns>SHA3-256 hash of the input data.</returns>
@@ -210,11 +210,26 @@ namespace IXICore
         ///  Computes a SHA3-512 value of the given data. It is possible to calculate the hash for a subset of the input data by
         ///  using the `offset` and `count` parameters.
         /// </summary>
-        /// <param name="data">Source data for hashing.</param>
+        /// <param name="input">Source data for hashing.</param>
         /// <param name="offset">Byte offset into the data. Default = 0</param>
         /// <param name="count">Number of bytes to use in the calculation. Default, 0, means use all available bytes.</param>
         /// <returns>SHA3-512 hash of the input data.</returns>
         byte[] sha3_512(byte[] input, int offset = 0, int count = 0);
+
+
+        /// <summary>
+        ///  Computes a trunc(N, SHA3-512) value of the given data. It is possible to calculate the hash for a subset of the input data by
+        ///  using the `offset` and `count` parameters.
+        /// </summary>
+        /// <remarks>
+        ///  The trunc(N, X) function represents taking only the first `N` bytes of the byte-field `X`.
+        /// </remarks>
+        /// <param name="input">Source data for hashing.</param>
+        /// <param name="offset">Byte offset into the data. Default = 0</param>
+        /// <param name="count">Number of bytes to use in the calculation. Default, 0, means use all available bytes.</param>
+        /// <param name="hashLength">Number of bytes to keep from the truncated hash.</param>
+        /// <returns>SHA3-512 squared and truncated hash of the input data.</returns>
+        byte[] sha3_512Trunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44);
 
         /// <summary>
         ///  Computes a (SHA3-512)^2 value of the given data. It is possible to calculate the hash for a subset of the input data by
@@ -240,7 +255,7 @@ namespace IXICore
         /// <param name="input">Source data for hashing.</param>
         /// <param name="offset">Byte offset into the data. Default = 0</param>
         /// <param name="count">Number of bytes to use in the calculation. Default, 0, means use all available bytes.</param>
-        /// <param name="hash_length">Number of bytes to keep from the truncated hash.</param>
+        /// <param name="hashLength">Number of bytes to keep from the truncated hash.</param>
         /// <returns>SHA3-512 squared and truncated hash of the input data.</returns>
         byte[] sha3_512sqTrunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44);
     }
@@ -334,6 +349,11 @@ namespace IXICore
         public byte[] sha3_512(byte[] input, int offset = 0, int count = 0)
         {
             return _cryptoLib.sha3_512(input, offset, count);
+        }
+
+        public byte[] sha3_512Trunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44)
+        {
+            return _cryptoLib.sha3_512Trunc(input, offset, count, hashLength);
         }
 
         public byte[] sha3_512sq(byte[] input, int offset = 0, int count = 0)

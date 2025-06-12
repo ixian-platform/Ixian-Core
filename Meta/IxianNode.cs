@@ -111,6 +111,7 @@ namespace IXICore.Meta
         public static bool isRegNet { get; private set; } = false;
 
         public static Address primaryWalletAddress = null;
+        public static byte[] primaryWalletAddressHashed = null;
         public static Dictionary<byte[], WalletStorage> wallets = new Dictionary<byte[], WalletStorage>(new ByteArrayComparer());
 
         public static void init(string product_version, IxianNode handler_class, NetworkType type, bool set_title = false,
@@ -309,6 +310,7 @@ namespace IXICore.Meta
                 if (wallets.Count == 0)
                 {
                     primaryWalletAddress = ws.getPrimaryAddress();
+                    primaryWalletAddressHashed = CryptoManager.lib.sha3_512Trunc(primaryWalletAddress.addressNoChecksum, 0, 0, 10);
                 }
                 if (wallets.ContainsKey(ws.getPrimaryAddress().addressNoChecksum))
                 {
