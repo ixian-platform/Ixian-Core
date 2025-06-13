@@ -2389,14 +2389,13 @@ namespace IXICore
                 return new JsonResponse { result = null, error = error };
             }
 
-            string prefixHex = (string)parameters["prefixHex"];
             int maxRelayCount = int.Parse((string)parameters["maxRelayCount"]);
 
             byte[] prefixBytes;
 
             if (parameters.ContainsKey("prefixHex"))
             {
-                prefixBytes = Crypto.stringToHash(prefixHex);
+                prefixBytes = Crypto.stringToHash((string)parameters["prefixHex"]);
             }
             else if (parameters.ContainsKey("address"))
             {
