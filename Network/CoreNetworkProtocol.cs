@@ -1209,6 +1209,7 @@ namespace IXICore
 
         public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest)
         {
+            Logging.trace("Fetching sector nodes for " + address.ToString());
             using (MemoryStream mw = new MemoryStream())
             {
                 using (BinaryWriter writer = new BinaryWriter(mw))

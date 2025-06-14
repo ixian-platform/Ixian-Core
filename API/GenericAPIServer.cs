@@ -1390,6 +1390,7 @@ namespace IXICore
 
             status.Add("Network Clients", NetworkServer.getConnectedClients());
             status.Add("Network Servers", NetworkClientManager.getConnectedClients(true));
+            status.Add("Stream Servers", StreamClientManager.getConnectedClients(true));
 
             return status;
         }
