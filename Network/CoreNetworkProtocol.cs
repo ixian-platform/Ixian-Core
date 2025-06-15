@@ -754,11 +754,6 @@ namespace IXICore
         /// <param name="endpoint">Target endpoint to verify for connectivity.</param>
         public static void subscribeToEvents(RemoteEndpoint endpoint)
         {
-            if (endpoint.presenceAddress.type != 'M' && endpoint.presenceAddress.type != 'H')
-            {
-                return;
-            }
-
             // TODO TODO TODO events can be optimized as there is no real need to subscribe them to every connected node
 
             // Subscribe to transaction events, for own addresses

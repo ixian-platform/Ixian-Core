@@ -147,8 +147,8 @@ namespace IXICore.Network
         getBlockHeaders3 = 46,
         blockHeaders3 = 47,
         getRandomPresences = 48,
-        //[Obsolete("Use getPIT2 instead")]
-        //getPIT = 49, // deprecated
+        // Temporary protocol message, until we fully enable p2p transactions
+        getRelevantBlockTransactions = 49,
         //[Obsolete("Use pitData2 instead")]
         //pitData = 50, // deprecated
         getWalletStateChunk = 51,
@@ -626,7 +626,8 @@ namespace IXICore.Network
                 NetworkQueue.reset();
             }
 
-            if (PresenceList.myPresenceType == 'W')
+            if (PresenceList.myPresenceType == 'W'
+                || PresenceList.myPresenceType == 'C')
             {
                 Logging.info("Network server is not enabled in worker mode.");
                 NetworkServer.stopNetworkOperations();
