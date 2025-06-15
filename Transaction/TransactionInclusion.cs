@@ -67,8 +67,11 @@ namespace IXICore
 
         private TransactionInclusionCallbacks transactionInclusionCallbacks = null;
 
-        public TransactionInclusion(TransactionInclusionCallbacks transactionInclusionCallbacks)
+        private bool useGetBlockHeaders = true;
+
+        public TransactionInclusion(TransactionInclusionCallbacks transactionInclusionCallbacks, bool useGetBlockHeaders)
         {
+            this.useGetBlockHeaders = useGetBlockHeaders;
             this.transactionInclusionCallbacks = transactionInclusionCallbacks;
         }
 
@@ -549,22 +552,49 @@ namespace IXICore
         private void requestBlockHeaders(ulong from, ulong count, RemoteEndpoint endpoint = null)
         {
             Logging.info("Requesting block headers from {0} to {1}", from, from + count);
-            using (MemoryStream mOut = new MemoryStream())
+            if (useGetBlockHeaders)
             {
-                using (BinaryWriter writer = new BinaryWriter(mOut))
+                using (MemoryStream mOut = new MemoryStream())
                 {
-                    writer.WriteIxiVarInt(from);
-                    writer.WriteIxiVarInt(count);
-                }
+                    using (BinaryWriter writer = new BinaryWriter(mOut))
+                    {
+                        writer.WriteIxiVarInt(from);
+                        writer.WriteIxiVarInt(count);
+                    }
 
-                if (endpoint != null)
-                {
-                    endpoint.sendData(ProtocolMessageCode.getBlockHeaders3, mOut.ToArray());
+                    if (endpoint != null)
+                    {
+                        endpoint.sendData(ProtocolMessageCode.getBlockHeaders3, mOut.ToArray());
+                    }
+                    else
+                    {
+                        // Request from a single random node
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                    }
                 }
-                else
+            } else
+            {
+                using (MemoryStream mOut = new MemoryStream())
                 {
-                    // Request from a single random node
-                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                    using (BinaryWriter writer = new BinaryWriter(mOut))
+                    {
+                        writer.WriteIxiVarInt(from);
+                        writer.WriteIxiVarInt(count);
+                        Cuckoo filter = CoreProtocolMessage.getMyAddressesCuckooFilter();
+                        byte[] filterBytes = filter.getFilterBytes();
+                        writer.WriteIxiVarInt(filterBytes.Length);
+                        writer.Write(filterBytes);
+                    }
+
+                    if (endpoint != null)
+                    {
+                        endpoint.sendData(ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray());
+                    }
+                    else
+                    {
+                        // Request from a single random node
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray(), 0);
+                    }
                 }
             }
         }

@@ -153,6 +153,7 @@ namespace IXICore.Network
                     case ProtocolMessageCode.getTransactions2:
                     case ProtocolMessageCode.getBlock3:
                     case ProtocolMessageCode.getBlockHeaders3:
+                    case ProtocolMessageCode.getRelevantBlockTransactions:
                     case ProtocolMessageCode.getSignatures2:
                     case ProtocolMessageCode.getBlockSignatures2:
                     case ProtocolMessageCode.getPIT2:
@@ -165,6 +166,7 @@ namespace IXICore.Network
                     case ProtocolMessageCode.transactionsChunk3:
                     case ProtocolMessageCode.transactionData2:
                     case ProtocolMessageCode.blockHeaders3:
+                    case ProtocolMessageCode.compactBlockHeaders1:
                     case ProtocolMessageCode.blockData2:
                     case ProtocolMessageCode.pitData2:
                     case ProtocolMessageCode.inventory2:
@@ -228,6 +230,7 @@ namespace IXICore.Network
                             case ProtocolMessageCode.getTransactions2:
                             case ProtocolMessageCode.getBlock3:
                             case ProtocolMessageCode.getBlockHeaders3:
+                            case ProtocolMessageCode.getRelevantBlockTransactions:
                             case ProtocolMessageCode.blockData2:
                             case ProtocolMessageCode.getSignatures2:
                             case ProtocolMessageCode.getBlockSignatures2:

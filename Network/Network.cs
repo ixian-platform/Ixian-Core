@@ -149,8 +149,7 @@ namespace IXICore.Network
         getRandomPresences = 48,
         // Temporary protocol message, until we fully enable p2p transactions
         getRelevantBlockTransactions = 49,
-        //[Obsolete("Use pitData2 instead")]
-        //pitData = 50, // deprecated
+        compactBlockHeaders1 = 50,
         getWalletStateChunk = 51,
         walletStateChunk = 52,
         syncWalletState = 53,
