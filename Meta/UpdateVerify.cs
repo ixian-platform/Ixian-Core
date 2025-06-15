@@ -85,8 +85,6 @@ namespace IXICore.Meta
                 return false;
             }
 
-            updateVerifyThread = null;
-
             running = false;
 
             // Force stopping of thread
