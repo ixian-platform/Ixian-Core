@@ -78,7 +78,7 @@ namespace IXICore.Meta
             return Clock.getNetworkTimestamp() - getLastBlock().timestamp;
         }
 
-        public virtual void triggerSignerPowSolutionFound() { }
+        public virtual void onSignerSolutionFound() { }
     }
 
     public static class IxianHandler
@@ -427,10 +427,10 @@ namespace IXICore.Meta
             return handlerClass.getTimeSinceLastBlock();
         }
 
-        public static void triggerSignerPowSolutionFound()
+        public static void onSignerSolutionFound()
         {
             verifyHandler();
-            handlerClass.triggerSignerPowSolutionFound();
+            handlerClass.onSignerSolutionFound();
         }
     }
 }

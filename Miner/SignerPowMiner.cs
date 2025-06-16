@@ -386,7 +386,7 @@ namespace IXICore.Miner
 
             PresenceList.setPowSolution(newSolution);
 
-            IxianHandler.triggerSignerPowSolutionFound();
+            IxianHandler.onSignerSolutionFound();
         }
     }
 }
