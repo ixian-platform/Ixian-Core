@@ -105,8 +105,12 @@ namespace IXICore
 
             try
             {
-                block_header.signatureCount = block_header.getFrozenSignatureCount();
-                block_header.totalSignerDifficulty = block_header.getTotalSignerDifficulty();
+                if (block_header.signatures.Count > 0
+                    || block_header.frozenSignatures?.Count > 0)
+                {
+                    block_header.signatureCount = block_header.getFrozenSignatureCount();
+                    block_header.totalSignerDifficulty = block_header.getTotalSignerDifficulty();
+                }
             }
             catch (Exception)
             {

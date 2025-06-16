@@ -775,7 +775,11 @@ namespace IXICore
                             if (num_signatures == 0)
                             {
                                 signatureCount = (int)reader.ReadIxiVarUInt();
-                                totalSignerDifficulty = SignerPowSolution.bitsToDifficulty(reader.ReadIxiVarUInt());
+                                ulong tmpSignerDiff = reader.ReadIxiVarUInt();
+                                if (version >= BlockVer.v10)
+                                {
+                                    totalSignerDifficulty = SignerPowSolution.bitsToDifficulty(tmpSignerDiff);
+                                }
                             }
                             else
                             {
