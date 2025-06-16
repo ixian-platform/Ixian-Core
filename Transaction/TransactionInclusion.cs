@@ -27,7 +27,7 @@ namespace IXICore
     public interface TransactionInclusionCallbacks
     {
         public void receivedBlockHeader(Block blockHeader, bool verified);
-        public void receivedTransactionInclusionVerificationResponse(byte[] txid, bool verified);
+        public void receivedTIVResponse(byte[] txid, bool verified);
     }
 
     /// <summary>
@@ -270,11 +270,11 @@ namespace IXICore
                         if(bh.transactions.Contains(tx.id, new ByteArrayComparer()))
                         {
                             // valid
-                            transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, true);
+                            transactionInclusionCallbacks.receivedTIVResponse(tx.id, true);
                         }else
                         {
                             // invalid
-                            transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                            transactionInclusionCallbacks.receivedTIVResponse(tx.id, false);
                         }
 
                     }
@@ -304,12 +304,12 @@ namespace IXICore
                                     if (pitCache[tx.applied].pit.contains(txid))
                                     {
                                         // valid
-                                        transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, true);
+                                        transactionInclusionCallbacks.receivedTIVResponse(tx.id, true);
                                     }
                                     else
                                     {
                                         // invalid
-                                        transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                                        transactionInclusionCallbacks.receivedTIVResponse(tx.id, false);
                                     }
                                 }
                                 else
@@ -341,7 +341,7 @@ namespace IXICore
                 {
                     txQueue.Remove(tx.id);
                     // invalid
-                    transactionInclusionCallbacks.receivedTransactionInclusionVerificationResponse(tx.id, false);
+                    transactionInclusionCallbacks.receivedTIVResponse(tx.id, false);
                 }
             }
         }

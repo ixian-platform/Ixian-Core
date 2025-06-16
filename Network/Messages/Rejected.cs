@@ -17,10 +17,10 @@ namespace IXICore.Network.Messages
 {
     public enum RejectedCode : byte
     {
-        TxInvalid = 0x20,
-        TxDust = 0x21,
-        TxInsufficientFee = 0x22,
-        TxDuplicate = 0x23
+        TransactionInvalid = 0x20,
+        TransactionDust = 0x21,
+        TransactionInsufficientFee = 0x22,
+        TransactionDuplicate = 0x23
     }
 
     public class Rejected
