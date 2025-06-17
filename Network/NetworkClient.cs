@@ -96,6 +96,10 @@ namespace IXICore.Network
                     running = false;
                     return false;
                 }
+
+                Logging.info("Network client connected to {0}:{1}", hostname, port);
+
+                start(tcpClient.Client);
             }
             catch (SocketException se)
             {
@@ -132,9 +136,6 @@ namespace IXICore.Network
                 return false;
             }
 
-            Logging.info("Network client connected to {0}:{1}", hostname, port);
-
-            start(tcpClient.Client);
             return true;
         }
 
