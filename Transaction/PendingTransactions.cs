@@ -87,7 +87,7 @@ namespace IXICore
                 {
                     pendingTransactions.Remove(tx);
                 }
-                return txs?.First();
+                return txs.Count > 0 ? txs.First() : null;
             }
         }
 
