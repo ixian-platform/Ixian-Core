@@ -22,13 +22,15 @@ namespace IXICore
         public long addedTimestamp;
         public List<byte[]> confirmedNodeList = new List<byte[]>();
         public byte[] messageId;
+        public Address senderAddress;
 
-        public PendingTransaction(Transaction t, List<Address> relayNodeAddresses, long addedTimestamp, byte[] message_id)
+        public PendingTransaction(Transaction t, List<Address> relayNodeAddresses, long addedTimestamp, byte[] message_id, Address senderAddress)
         {
             transaction = t;
             this.relayNodeAddresses = relayNodeAddresses;
             this.addedTimestamp = addedTimestamp;
             messageId = message_id;
+            this.senderAddress = senderAddress;
         }
     }
 
@@ -37,13 +39,13 @@ namespace IXICore
     {
         public static List<PendingTransaction> pendingTransactions = new List<PendingTransaction>();
 
-        public static bool addPendingLocalTransaction(Transaction t, List<Address> relayNodeAddresses, byte[] message_id = null)
+        public static bool addPendingLocalTransaction(Transaction t, List<Address> relayNodeAddresses, byte[] message_id = null, Address senderAddress = null)
         {
             lock (pendingTransactions)
             {
                 if (pendingTransactions.Find(x => x.transaction.id.SequenceEqual(t.id)) == null)
                 {
-                    pendingTransactions.Add(new PendingTransaction( t, relayNodeAddresses, Clock.getTimestamp(), message_id));
+                    pendingTransactions.Add(new PendingTransaction(t, relayNodeAddresses, Clock.getTimestamp(), message_id, senderAddress));
                     return true;
                 }
             }
@@ -76,11 +78,16 @@ namespace IXICore
             return amount;
         }
 
-        public static void remove(byte[] txid)
+        public static PendingTransaction remove(byte[] txid)
         {
             lock (pendingTransactions)
             {
-                pendingTransactions.RemoveAll(x => x.transaction.id.SequenceEqual(txid));
+                var txs = pendingTransactions.FindAll(x => x.transaction.id.SequenceEqual(txid));
+                foreach (var tx in txs)
+                {
+                    pendingTransactions.Remove(tx);
+                }
+                return txs?.First();
             }
         }
 
