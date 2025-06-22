@@ -801,7 +801,8 @@ namespace IXICore.Streaming
         {
             if (friend.addReaction(sender, new SpixiMessageReaction(reaction_data), channel))
             {
-                if (friend.metaData.setLastReceivedMessageIds(msg_id, channel))
+                if (!friend.bot
+                    || friend.metaData.setLastReceivedMessageIds(msg_id, channel))
                 {
                     friend.saveMetaData();
                     return true;
