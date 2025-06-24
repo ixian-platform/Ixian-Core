@@ -337,10 +337,6 @@ namespace IXICore
                     PeerStorage.updateLastConnected(endpoint.getFullAddress(true));
                 }
 
-
-                // Create a temporary presence with the client's address and device id
-                Presence presence = new Presence(addr, pubkey, null, endpoint.presenceAddress);
-
                 if (endpoint.GetType() != typeof(NetworkClient))
                 {
                     // we're the server
@@ -417,8 +413,8 @@ namespace IXICore
                 }
 
 
-                // Retrieve the final presence entry from the list (or create a fresh one)
-                endpoint.presence = PresenceList.updateEntry(presence);
+                // Create a temporary presence with the client's address and device id
+                endpoint.presence = new Presence(addr, pubkey, null, endpoint.presenceAddress);
 
             }
             catch (Exception e)
