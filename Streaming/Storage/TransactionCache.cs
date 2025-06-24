@@ -71,7 +71,7 @@ namespace IXICore.Storage
                         Address addr = tx.transaction.pubKey;
                         if (addr.SequenceEqual(IxianHandler.getWalletStorage().getPrimaryAddress()))
                         {
-                            pendingAmount += tx.transaction.amount;
+                            pendingAmount += tx.transaction.amount + tx.transaction.fee;
                         }
                     }
                 }
