@@ -51,7 +51,8 @@ namespace IXICore.Network
                         continue;
                     }
 
-                    if (clientsToConnectTo.FindIndex(x => x.walletAddress != null && x.walletAddress.SequenceEqual(nc.serverWalletAddress)) == -1)
+                    if (clientsToConnectTo.Count > 0
+                        && clientsToConnectTo.FindIndex(x => x.walletAddress != null && x.walletAddress.SequenceEqual(nc.serverWalletAddress)) == -1)
                     {
                         networkClients.Remove(nc);
                         CoreProtocolMessage.sendBye(nc, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);

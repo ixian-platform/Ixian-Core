@@ -442,24 +442,32 @@ namespace IXICore.Network
             return result.ToArray();
         }
 
-        public static bool sendToClient(List<Peer> relayNodes, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public static bool sendToClient(List<Peer> relayNodes, ProtocolMessageCode code, byte[] data, byte[] helper_data, int client_count = 1)
         {
-            NetworkClient client = null;
+            List<NetworkClient> clients = new();
             lock (streamClients)
             {
                 foreach (NetworkClient c in streamClients)
                 {
-                    if (relayNodes.Find(x => x.hostname == c.getFullAddress()) != null)
+                    if (c.isConnected()
+                        && c.helloReceived
+                        && relayNodes.Find(x => x.hostname == c.getFullAddress()) != null)
                     {
-                        client = c;
-                        break;
+                        clients.Add(c);
+                        if (clients.Count == client_count)
+                        {
+                            break;
+                        }
                     }
                 }
             }
 
-            if (client != null)
+            if (clients.Count > 0)
             {
-                client.sendData(code, data, helper_data);
+                foreach (var c in clients)
+                {
+                    c.sendData(code, data, helper_data);
+                }
                 return true;
             }
 

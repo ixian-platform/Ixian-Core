@@ -25,8 +25,8 @@ namespace IXICore
     {
         private static List<Presence> presences = new List<Presence> { }; // The presence list
 
-        private static PresenceAddress curNodePresenceAddress = null;
-        private static Presence curNodePresence = null;
+        public static PresenceAddress curNodePresenceAddress { get; private set; } = null;
+        public static Presence curNodePresence { get; private set; } = null;
 
         // private
         private static Dictionary<char, long> presenceCount = new Dictionary<char, long>() {
