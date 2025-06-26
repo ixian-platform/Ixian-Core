@@ -147,6 +147,9 @@ namespace IXICore
                                 if (local_addr.type == 'M' || local_addr.type == 'H')
                                 {
                                     interval = CoreConfig.serverKeepAliveInterval;
+                                } else if (local_addr.type == 'R')
+                                {
+                                    interval = CoreConfig.relayKeepAliveInterval;
                                 }
                                 if (addr.signature == null
                                     || addr.lastSeenTime + interval < local_addr.lastSeenTime

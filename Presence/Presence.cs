@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using IXICore.Network;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -423,6 +424,30 @@ namespace IXICore
                 if (!entry.verifySignature(wallet, pubkey, powSolution))
                 {
                     Logging.warn("Invalid presence address received in verifyPresence, signature verification failed for {0}.", wallet.ToString());
+                    continue;
+                }
+
+                try
+                {
+                    if (entry.address.Length > 21)
+                    {
+                        Address addr = new Address(entry.address);
+                    }
+                    else
+                    {
+                        if (IxianHandler.networkType != NetworkType.reg)
+                        {
+                            var ipAddrStr = entry.address.Split(":");
+                            if (!IPv4Subnet.IsPublicIP(ipAddrStr[0]))
+                            {
+                                continue;
+                            }
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logging.error("Hostname error in Presence.verify: " + e);
                     continue;
                 }
 

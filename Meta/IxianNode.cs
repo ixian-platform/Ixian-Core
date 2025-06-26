@@ -113,6 +113,7 @@ namespace IXICore.Meta
         public static Address primaryWalletAddress = null;
         public static Dictionary<byte[], WalletStorage> wallets = new Dictionary<byte[], WalletStorage>(new ByteArrayComparer());
 
+        public static bool enableNetworkServer = false;
         public static void init(string product_version, IxianNode handler_class, NetworkType type, bool set_title = false,
             byte[] checksum_lock = null)
         {

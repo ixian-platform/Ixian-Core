@@ -70,7 +70,7 @@ namespace IXICore.Network
                 PeerStorage.resetInitialConnectionCount();
             }
 
-            if (clientsToConnectTo.Count() == 0)
+            if (clientsToConnectTo.Count() <= 1)
             {
                 Peer connectToPeer = null;
                 // Find only masternodes
@@ -97,7 +97,9 @@ namespace IXICore.Network
                 }
             } else
             {
-                foreach (var p in clientsToConnectTo)
+                var tmpClients = clientsToConnectTo.ToArray();
+                Random.Shared.Shuffle(tmpClients);
+                foreach (var p in tmpClients)
                 {
                     // If the address is valid, add it to the candidates
                     if (shouldConnectToPeer(p))

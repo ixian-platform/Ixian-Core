@@ -338,6 +338,11 @@ namespace IXICore.Network
             return !unroutable;
         }
 
+        public static bool IsPublicIP(string ipAddrStr)
+        {
+            return IsPublicIP(IPAddress.Parse(ipAddrStr));
+        }
+
         /// <summary>
         ///  Checks if the given IP address is a member of this IPv4 subnet.
         /// </summary>
@@ -625,11 +630,11 @@ namespace IXICore.Network
                 NetworkQueue.reset();
             }
 
-            if (PresenceList.myPresenceType == 'W'
-                || PresenceList.myPresenceType == 'C')
+            NetworkServer.stopNetworkOperations();
+
+            if (!IxianHandler.enableNetworkServer)
             {
-                Logging.info("Network server is not enabled in worker mode.");
-                NetworkServer.stopNetworkOperations();
+                Logging.info("Network server is not enabled.");
             }
             else
             {

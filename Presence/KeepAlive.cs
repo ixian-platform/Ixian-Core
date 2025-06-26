@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using IXICore.Network;
 using IXICore.Utils;
 using System;
 using System.IO;
@@ -262,6 +263,29 @@ namespace IXICore
             {
                 Logging.warn("Invalid pow solution received in verifyPresence, verification failed for {0}.", walletAddress.ToString());
                 powSolution = null;
+                return false;
+            }
+
+            try
+            {
+                if (hostName.Length > 21)
+                {
+                    Address addr = new Address(hostName);
+                } else
+                {
+                    if (IxianHandler.networkType != NetworkType.reg)
+                    {
+                        var ipAddrStr = hostName.Split(":");
+                        if (!IPv4Subnet.IsPublicIP(ipAddrStr[0]))
+                        {
+                            return false;
+                        }
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Logging.error("Hostname error in KA.verify: " + e);
                 return false;
             }
 
