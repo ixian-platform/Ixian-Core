@@ -337,6 +337,8 @@ namespace IXICore
                     PeerStorage.updateLastConnected(endpoint.getFullAddress(true));
                 }
 
+                endpoint.serverWalletAddress = addr;
+
                 if (endpoint.GetType() != typeof(NetworkClient))
                 {
                     // we're the server
@@ -349,7 +351,7 @@ namespace IXICore
                             masterNodeCount = NetworkServer.connectedClients.Where(x => x.presenceAddress != null && (x.presenceAddress.type == 'M' || x.presenceAddress.type == 'H')).Count();
                             if (masterNodeCount > CoreConfig.maximumServerMasterNodes)
                             {
-                                sendBye(endpoint, ProtocolByeCode.rejected, "Too many master nodes already connected.", "");
+                                sendBye(endpoint, ProtocolByeCode.rejected, "Too many master nodes already connected.", "", false);
                                 return false;
                             }
                         }
@@ -360,7 +362,7 @@ namespace IXICore
                         {
                             if (NetworkServer.connectedClients.Count() - masterNodeCount > CoreConfig.maximumServerClients)
                             {
-                                sendBye(endpoint, ProtocolByeCode.rejected, "Too many clients already connected.", "");
+                                sendBye(endpoint, ProtocolByeCode.rejected, "Too many clients already connected.", "", false);
                                 return false;
                             }
                         }
@@ -421,7 +423,7 @@ namespace IXICore
             {
                 // Disconnect the node in case of any reading errors
                 Logging.warn("Hello: Exception occurred in Hello Message {0}", e.ToString());
-                sendBye(endpoint, ProtocolByeCode.deprecated, "Something went wrong during hello, make sure you're running the latest version of Ixian DLT.", "");
+                sendBye(endpoint, ProtocolByeCode.deprecated, "Something went wrong during hello, make sure you're running the latest version of Ixian DLT.", "", true);
                 return false;
             }
 
@@ -505,7 +507,7 @@ namespace IXICore
                         if (block == null)
                         {
                             Logging.warn("Clients are connecting, but we have no blocks yet to send them!");
-                            sendBye(endpoint, ProtocolByeCode.notReady, string.Format("The node isn't ready yet, please try again later."), "", true);
+                            sendBye(endpoint, ProtocolByeCode.notReady, string.Format("The node isn't ready yet, please try again later."), "", false);
                             return;
                         }
 
@@ -735,7 +737,7 @@ namespace IXICore
             if (NetworkUtils.PingAddressReachable(hostname) == false)
             {
                 Logging.warn("Node {0} was not reachable on the advertised address.", hostname);
-                sendBye(endpoint, ProtocolByeCode.notConnectable, "External " + hostname + " not reachable!", "");
+                sendBye(endpoint, ProtocolByeCode.notConnectable, "External " + hostname + " not reachable!", "", true);
                 return false;
             }
             return true;

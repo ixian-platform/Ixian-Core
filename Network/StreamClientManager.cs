@@ -133,6 +133,7 @@ namespace IXICore.Network
         {
             // TODO TODO TODO TODO improve this
             string neighbor = null;
+            Address neighbor_address = null;
 
             try
             {
@@ -146,6 +147,7 @@ namespace IXICore.Network
                     lock(p)
                     {
                         neighbor = p.addresses.Find(x => x.type == 'R').address;
+                        neighbor_address = p.wallet;
                     }
                 }
             }
@@ -158,7 +160,7 @@ namespace IXICore.Network
             if (neighbor != null)
             {
                 Logging.info("Attempting to add new stream node: {0}", neighbor);
-                connectTo(neighbor, null);
+                connectTo(neighbor, neighbor_address);
             }
             else
             {
@@ -442,6 +444,35 @@ namespace IXICore.Network
             return result.ToArray();
         }
 
+        public static NetworkClient getClient(Address clientAddress, bool fullyConnected = true)
+        {
+            lock (streamClients)
+            {
+                foreach (NetworkClient c in streamClients)
+                {
+                    if (fullyConnected)
+                    {
+                        if (!c.isConnected() || !c.helloReceived)
+                        {
+                            continue;
+                        }
+                        if (c.presenceAddress == null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (c.serverWalletAddress != null
+                        && c.serverWalletAddress.SequenceEqual(clientAddress))
+                    {
+                        return c;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public static bool sendToClient(List<Peer> relayNodes, ProtocolMessageCode code, byte[] data, byte[] helper_data, int client_count = 1)
         {
             List<NetworkClient> clients = new();
@@ -468,6 +499,19 @@ namespace IXICore.Network
                 {
                     c.sendData(code, data, helper_data);
                 }
+                return true;
+            }
+
+            return false;
+        }
+
+        public static bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        {
+            NetworkClient client = getClient(neighbor, true);
+
+            if (client != null)
+            {
+                client.sendData(code, data, helper_data);
                 return true;
             }
 

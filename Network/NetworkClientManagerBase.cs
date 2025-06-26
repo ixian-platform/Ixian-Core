@@ -428,7 +428,7 @@ namespace IXICore.Network
             return result;
         }
 
-        public RemoteEndpoint getClient(Address clientAddress, bool fullyConnected = true)
+        public NetworkClient getClient(Address clientAddress, bool fullyConnected = true)
         {
             lock (networkClients)
             {
@@ -446,7 +446,8 @@ namespace IXICore.Network
                         }
                     }
 
-                    if (c.serverWalletAddress.SequenceEqual(clientAddress))
+                    if (c.serverWalletAddress != null
+                        && c.serverWalletAddress.SequenceEqual(clientAddress))
                     {
                         return c;
                     }
@@ -458,18 +459,7 @@ namespace IXICore.Network
 
         public bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
         {
-            NetworkClient client = null;
-            lock (networkClients)
-            {
-                foreach (NetworkClient c in networkClients)
-                {
-                    if (c.serverWalletAddress.SequenceEqual(neighbor))
-                    {
-                        client = c;
-                        break;
-                    }
-                }
-            }
+            NetworkClient client = getClient(neighbor, true);
 
             if (client != null)
             {

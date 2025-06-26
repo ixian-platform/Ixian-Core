@@ -650,7 +650,8 @@ namespace IXICore.Network
                         }
                     }
 
-                    if (c.serverWalletAddress.SequenceEqual(clientAddress))
+                    if (c.serverWalletAddress != null
+                        && c.serverWalletAddress.SequenceEqual(clientAddress))
                     {
                         return c;
                     }
