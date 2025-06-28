@@ -531,7 +531,8 @@ namespace IXICore.Network
             {
                 CoreProtocolMessage.sendBye(clientSocket, ProtocolByeCode.notReady, string.Format("The node isn't ready yet, please try again later."), "");
                 clientSocket.Shutdown(SocketShutdown.Both);
-                clientSocket.Disconnect(true);
+                clientSocket.Disconnect(false);
+                clientSocket.Close();
                 return;
             }
 
@@ -550,7 +551,8 @@ namespace IXICore.Network
                         clientEndpoint.Address.ToString(), clientEndpoint.Port);
                     CoreProtocolMessage.sendBye(clientSocket, ProtocolByeCode.rejected, "Too many clients already connected.", "");
                     clientSocket.Shutdown(SocketShutdown.Both);
-                    clientSocket.Disconnect(true);
+                    clientSocket.Disconnect(false);
+                    clientSocket.Close();
                     return;
                 }
 
@@ -561,7 +563,8 @@ namespace IXICore.Network
                         clientEndpoint.Address.ToString(), clientEndpoint.Port, existing_clients.First().ToString());
                     CoreProtocolMessage.sendBye(clientSocket, ProtocolByeCode.rejected, "You are already connected.", "");
                     clientSocket.Shutdown(SocketShutdown.Both);
-                    clientSocket.Disconnect(true);
+                    clientSocket.Disconnect(false);
+                    clientSocket.Close();
                     return;
                 }
 

@@ -610,7 +610,8 @@ namespace IXICore.Network
                 connected = temp.Client.Connected;
                 CoreProtocolMessage.sendBye(temp.Client, ProtocolByeCode.bye, "Test OK", "");
                 temp.Client.Shutdown(SocketShutdown.Both);
-                temp.Client.Disconnect(true);
+                temp.Client.Disconnect(false);
+                temp.Client.Close();
                 temp.Close();
                 temp.Dispose();
             }

@@ -164,14 +164,13 @@ namespace IXICore.Network
         }
 
         // Receive thread
-        protected override void recvLoop()
+        protected override void onInitialized()
         {
+            base.onInitialized();
             try
             {
                 Random rnd = new Random();
                 CoreProtocolMessage.sendHelloMessageV6(this, false, rnd.Next());
-
-                base.recvLoop();
             }catch(Exception e)
             {
                 if (running)

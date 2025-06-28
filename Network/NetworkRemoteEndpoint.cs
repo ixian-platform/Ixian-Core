@@ -291,7 +291,7 @@ namespace IXICore.Network
         }
 
         // Receive thread
-        protected virtual void recvLoop()
+        protected void recvLoop()
         {
             try
             {
@@ -405,6 +405,7 @@ namespace IXICore.Network
             try
             {
                 clientSocket.Shutdown(SocketShutdown.Both);
+                clientSocket.Disconnect(false);
                 clientSocket.Close();
                 clientSocket = null;
             }
@@ -439,10 +440,16 @@ namespace IXICore.Network
             }
         }
 
+        protected virtual void onInitialized()
+        {
+
+        }
 
         // Send thread
         protected void sendLoop()
         {
+            Thread.CurrentThread.IsBackground = true;
+
             try
             {
                 // Prepare an special message object to use while sending, without locking up the queue messages
@@ -459,6 +466,8 @@ namespace IXICore.Network
 
                 lastDataReceivedTime = Clock.getTimestamp();
                 lastDataSentTime = Clock.getTimestamp();
+
+                onInitialized();
 
                 while (running)
                 {
@@ -637,6 +646,8 @@ namespace IXICore.Network
         // Parse thread
         protected void parseLoop()
         {
+            Thread.CurrentThread.IsBackground = true;
+
             // Prepare an special message object to use while sending, without locking up the queue messages
             QueueMessageRaw active_message = new QueueMessageRaw();
 
