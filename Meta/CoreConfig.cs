@@ -20,7 +20,7 @@ namespace IXICore
         /// <summary>
         /// Current version of IxiCore.
         /// </summary>
-        public static readonly string version = "xcore-0.9.4a";
+        public static readonly string version = "xcore-0.9.4b-dev";
 
         /// <summary>
         /// Current version of the Ixian network protocol.
@@ -32,13 +32,13 @@ namespace IXICore
         /// Useful for optimized block header sync
         /// Note: Always round last block height to 1000 and subtract 1 (i.e. if last block height is 33234, the correct value is 32999)
         /// </summary>
-        public static ulong bakedBlockHeight = 5065999;
+        public static ulong bakedBlockHeight = 5083999;
 
         /// <summary>
         /// Mainnet block checksum (paired with bakedBlockHeight) of bakedBlockHeight
         /// Useful for optimized block header sync
         /// </summary>
-        public static byte[] bakedBlockChecksum = Crypto.stringToHash("94625ec48df019db972ce393d473fbab3e7fdbed72a30b3ca314aaa8215b46fe17ebca4062bfd4231689a2c28622bb027db0bb11418b259a3a4fda653abd077d");
+        public static byte[] bakedBlockChecksum = Crypto.stringToHash("1c811d9c8e466113c00fe4d9b02e12f72ad4ff51d99a3ca7970a84a5bf4995c6f5c46a70b93823257ee8aa6b52e74a0f6db559d672fa9c9c402948cea9807731");
 
         /// <summary>
         /// Number of wallets to send in each chunk of data when synchronizing new Master Nodes.
@@ -225,5 +225,9 @@ namespace IXICore
         /// Relay sector levels for indexing. Higher value increases performance at the cost of memory.
         /// </summary>
         public static int relaySectorLevels = 4;
+
+        public static int maxRelaySectorNodesToRequest = 6;
+        public static int contactSectorNodeIntervalSeconds = clientPresenceExpiration / 2;
+        public static int requestPresenceTimeout = 30;
     }
 }

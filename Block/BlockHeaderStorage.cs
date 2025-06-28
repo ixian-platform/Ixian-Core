@@ -233,6 +233,12 @@ namespace IXICore
 
                     string db_path = path + Path.DirectorySeparatorChar + "0000" + Path.DirectorySeparatorChar + file_block_num + ".dat";
 
+                    if (!File.Exists(db_path))
+                    {
+                        Logging.warn("Reached end of file while getting block header #{0} from local storage.", block_num);
+                        return null;
+                    }
+
                     FileStream fs = getStorageFile(db_path, true); //File.Open(db_path, FileMode.OpenOrCreate, FileAccess.Read, FileShare.None);
 
                     fs.Seek(0, SeekOrigin.Begin);

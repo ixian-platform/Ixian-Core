@@ -306,7 +306,8 @@ namespace IXICore.Streaming
             bool sent = false;
             if (friend.online)
             {
-                if (friend.relayNode != null)
+                if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
+                    && friend.relayNode != null)
                 {
                     StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
                     sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
@@ -316,7 +317,10 @@ namespace IXICore.Streaming
                     }
                 }
             }
-
+            if (!sent)
+            {
+                CoreStreamProcessor.fetchFriendsPresence(friend);
+            }
             if (friend.forcePush || !friend.online || !sent)
             {
                 if (send_to_server)

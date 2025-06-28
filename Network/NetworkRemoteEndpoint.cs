@@ -111,6 +111,8 @@ namespace IXICore.Network
 
         public int version = 6;
 
+        public bool reconnectOnFailure = true;
+
         protected void prepareSocket(Socket socket)
         {
             // The socket will linger for 3 seconds after 

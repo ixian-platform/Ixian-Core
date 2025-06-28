@@ -249,7 +249,12 @@ namespace IXICore.Network
                     continue;
                 }
                 // Check if we exceeded the maximum reconnect count
-                if (client.getTotalReconnectsCount() >= CoreConfig.maximumNeighborReconnectCount || client.fullyStopped)
+                if (!client.reconnectOnFailure)
+                {
+                    failed_clients.Add(client);
+                }
+                else if (client.getTotalReconnectsCount() >= CoreConfig.maximumNeighborReconnectCount
+                         || client.fullyStopped)
                 {
                     // Remove this client so we can search for a new neighbor
                     failed_clients.Add(client);

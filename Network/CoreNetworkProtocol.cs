@@ -51,7 +51,10 @@ namespace IXICore
 #if TRACE_MEMSTREAM_SIZES
                     Logging.info(String.Format("CoreProtocolMessage::sendBye: {0}", m2.Length));
 #endif
-
+                    if (code == ProtocolByeCode.bye)
+                    {
+                        endpoint.reconnectOnFailure = false;
+                    }
                     endpoint.sendData(ProtocolMessageCode.bye, m2.ToArray());
                     Logging.info("Sending bye to {0} with message '{1}' and data '{2}'", endpoint.getFullAddress(), message, data);
                 }
@@ -861,6 +864,7 @@ namespace IXICore
                         switch (byeCode)
                         {
                             case ProtocolByeCode.bye: // all good
+                                endpoint.reconnectOnFailure = false;
                                 break;
 
                             case ProtocolByeCode.incorrectIp: // incorrect IP

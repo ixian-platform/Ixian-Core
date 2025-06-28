@@ -201,6 +201,7 @@ namespace IXICore.Streaming
         public long updatedSectorNodes = 0;
         public List<Peer> sectorNodes = new();
 
+        public long requestedPresence = 0;
         public long updatedStreamingNodes = 0;
         public Peer relayNode = null;
 
@@ -563,6 +564,7 @@ namespace IXICore.Streaming
             {
                 if (!msg.read)
                 {
+                    msg.confirmed = true;
                     msg.read = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
                 }
