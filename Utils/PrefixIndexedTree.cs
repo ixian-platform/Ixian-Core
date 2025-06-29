@@ -48,14 +48,75 @@ namespace IXICore.Utils
             MaxLevels = maxLevels;
         }
 
+
+        private bool getClosestPreviousKey(PrefixIndexedTreeNode<T> currentNode, byte targetKey, out byte previousKey)
+        {
+            previousKey = targetKey;
+            for (int i = targetKey; i >= 0; i--)
+            {
+                if (currentNode.Children.ContainsKey((byte)i))
+                {
+                    previousKey = (byte)i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool getClosestKey(PrefixIndexedTreeNode<T> currentNode, byte targetKey, out int direction, out byte closestKey)
+        {
+            direction = 0;
+            closestKey = targetKey;
+            for (int i = 1; i <= 255; i++)
+            {
+                if (targetKey >= i
+                    && currentNode.Children.ContainsKey((byte)(targetKey - i)))
+                {
+                    closestKey = (byte)(targetKey - i);
+                    direction = -1;
+                    return true;
+                }
+                if (i + targetKey <= 255
+                    && currentNode.Children.ContainsKey((byte)(targetKey + i)))
+                {
+                    closestKey = (byte)(targetKey + i);
+                    direction = 1;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private bool getClosestNextKey(PrefixIndexedTreeNode<T> currentNode, byte targetKey, out byte nextKey)
+        {
+            nextKey = targetKey;
+            for (int i = targetKey; i <= 255; i++)
+            {
+                if (currentNode.Children.ContainsKey((byte)i))
+                {
+                    nextKey = (byte)i;
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private PrefixIndexedTreeNode<T> FindPrefixNode(byte[] key, bool closestNode, bool create)
         {
+            if (!create
+                && Root.Children.Count == 0)
+            {
+                return null;
+            }
+
             var currentNode = Root;
             int level = 0;
+            int direction = 0;
             foreach (var b in key)
             {
                 level++;
 
+                var closestKey = b;
                 if (!currentNode.Children.ContainsKey(b))
                 {
                     if (create)
@@ -66,22 +127,20 @@ namespace IXICore.Utils
                     {
                         return null;
                     }
-                }
-
-                var closestKey = b;
-                for (byte i = 0; i <= 255; i++)
-                {
-                    if (b - i >= 0
-                        && currentNode.Children.ContainsKey((byte)(b - i)))
+                    else
                     {
-                        closestKey = (byte)(b - i);
-                        break;
-                    }
-                    if (b + i <= 255
-                        && currentNode.Children.ContainsKey((byte)(b + i)))
-                    {
-                        closestKey = (byte)(b + i);
-                        break;
+                        if (direction == -1)
+                        {
+                            getClosestPreviousKey(currentNode, 255, out closestKey);
+                        }
+                        else if (direction == 0)
+                        {
+                            getClosestKey(currentNode, b, out direction, out closestKey);
+                        }
+                        else if (direction == 1)
+                        {
+                            getClosestNextKey(currentNode, 0, out closestKey);
+                        }
                     }
                 }
 
@@ -102,6 +161,10 @@ namespace IXICore.Utils
 
         public bool Add(byte[] key, T value)
         {
+            if (key.Length < MaxLevels)
+            {
+                throw new ArgumentOutOfRangeException("Invalid key length, should be at least as long as Max Levels");
+            }
             var prefixNode = FindPrefixNode(key, false, true);
 
             if (!prefixNode.Values.ContainsKey(key))
@@ -365,6 +428,11 @@ namespace IXICore.Utils
             }
 
             var prefixNode = FindPrefixNode(prefix, true, false);
+            if (prefixNode == null)
+            {
+                return new();
+            }
+
             return CollectItems(prefix, prefixNode, maxItemsCount);
         }
 
