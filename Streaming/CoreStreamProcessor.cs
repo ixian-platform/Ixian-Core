@@ -757,6 +757,11 @@ namespace IXICore.Streaming
                         if (friend.pendingDeletion)
                         {
                             FriendList.removeFriend(friend);
+                            var client = StreamClientManager.getClient(friend.walletAddress, false);
+                            if (client != null)
+                            {
+                                CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "", "", false);
+                            }
                             return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                         }
                         break;
@@ -1359,6 +1364,11 @@ namespace IXICore.Streaming
             if (!bot.bot)
             {
                 Logging.warn("Received onBotAction for a non-bot");
+                return false;
+            }
+            if (bot.pendingDeletion)
+            {
+                Logging.warn("Received onBotAction for a bot pending deletion");
                 return false;
             }
             SpixiBotAction sba = new SpixiBotAction(action_data);
