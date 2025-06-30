@@ -374,13 +374,20 @@ namespace IXICore
                         w.WriteIxiVarInt(filter_bytes.Length);
                         w.Write(filter_bytes);
                     }
-                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getPIT2, m.ToArray(), 0);
-                    PITCacheItem ci = new PITCacheItem()
+
+                    char[] node_types = new char[] { 'M', 'H' };
+                    if (PresenceList.myPresenceType == 'C')
                     {
-                        pit = null,
-                        requestedForTXIDs = txids,
-                        requestSent = Clock.getTimestamp()
-                    };
+                        node_types = new char[] { 'M', 'H', 'R' };
+                    }
+                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getPIT2, m.ToArray(), 0);
+
+                    PITCacheItem ci = new PITCacheItem()
+                        {
+                            pit = null,
+                            requestedForTXIDs = txids,
+                            requestSent = Clock.getTimestamp()
+                        };
                     pitCache.AddOrReplace(block_num, ci);
                 }
             }
@@ -569,7 +576,13 @@ namespace IXICore
                     else
                     {
                         // Request from a single random node
-                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+                        char[] node_types = new char[] { 'M', 'H' };
+                        if (PresenceList.myPresenceType == 'C')
+                        {
+                            node_types = new char[] { 'M', 'H', 'R' };
+                        }
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
+
                     }
                 }
             } else
@@ -593,7 +606,12 @@ namespace IXICore
                     else
                     {
                         // Request from a single random node
-                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H', 'R' }, ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray(), 0);
+                        char[] node_types = new char[] { 'M', 'H' };
+                        if (PresenceList.myPresenceType == 'C')
+                        {
+                            node_types = new char[] { 'M', 'H', 'R' };
+                        }
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray(), 0);
                     }
                 }
             }

@@ -804,13 +804,18 @@ namespace IXICore
                         }
                     }
                     // TODO TODO TODO TODO TODO determine if historic transaction and send to 'H' instead of 'M'
+                    char[] node_types = new char[] { 'M', 'H' };
+                    if (PresenceList.myPresenceType == 'C')
+                    {
+                        node_types = new char[] { 'M', 'H', 'R' };
+                    }
                     if (broadcast_to_single_node)
                     {
-                        return broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getTransaction3, mw.ToArray(), block_num);
+                        return broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getTransaction3, mw.ToArray(), block_num);
                     }
                     else
                     {
-                        return broadcastProtocolMessage(new char[] { 'M', 'H' }, ProtocolMessageCode.getTransaction3, mw.ToArray(), null);
+                        return broadcastProtocolMessage(node_types, ProtocolMessageCode.getTransaction3, mw.ToArray(), null);
                     }
                 }
             }
@@ -831,7 +836,12 @@ namespace IXICore
                     }
                     else
                     {
-                        broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'R', 'H' }, ProtocolMessageCode.getPresence2, mw.ToArray(), 0, null, address);
+                        char[] node_types = new char[] { 'M', 'H' };
+                        if (PresenceList.myPresenceType == 'C')
+                        {
+                            node_types = new char[] { 'M', 'H', 'R' };
+                        }
+                        broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getPresence2, mw.ToArray(), 0, null, address);
                     }
                 }
             }
@@ -930,7 +940,12 @@ namespace IXICore
                 }
                 else
                 {
-                    broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'R', 'H' }, ProtocolMessageCode.getNameRecord, mw.ToArray(), 0, null, name);
+                    char[] node_types = new char[] { 'M', 'H' };
+                    if (PresenceList.myPresenceType == 'C')
+                    {
+                        node_types = new char[] { 'M', 'H', 'R' };
+                    }
+                    broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getNameRecord, mw.ToArray(), 0, null, name);
                 }
             }
         }
@@ -1115,7 +1130,12 @@ namespace IXICore
                     MessagePriority priority = msg_id > 0 ? MessagePriority.high : MessagePriority.auto;
                     if (endpoint == null)
                     {
-                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(new char[] { 'M', 'H' }, ProtocolMessageCode.getTransactions2, mOut.ToArray(), 0, null);
+                        char[] node_types = new char[] { 'M', 'H' };
+                        if (PresenceList.myPresenceType == 'C')
+                        {
+                            node_types = new char[] { 'M', 'H', 'R' };
+                        }
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getTransactions2, mOut.ToArray(), 0, null);
                     }
                     else
                     {
