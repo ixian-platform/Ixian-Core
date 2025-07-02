@@ -807,8 +807,8 @@ namespace IXICore.Streaming
                 if (friend.metaData.setLastReceivedMessageIds(msg_id, channel))
                 {
                     friend.saveMetaData();
-                    return true;
                 }
+                return true;
             }
             return false;
         }
@@ -816,12 +816,11 @@ namespace IXICore.Streaming
         {
             if (friend.addReaction(sender, new SpixiMessageReaction(reaction_data), channel))
             {
-                if (!friend.bot
-                    || friend.metaData.setLastReceivedMessageIds(msg_id, channel))
+                if (friend.metaData.setLastReceivedMessageIds(msg_id, channel))
                 {
                     friend.saveMetaData();
-                    return true;
                 }
+                return true;
             }
             return false;
         }
