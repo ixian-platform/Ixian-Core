@@ -26,14 +26,6 @@ namespace IXICore
         data        // Paid, transaction-based type
     }
 
-    // The encryption message codes available in S2.
-    public enum StreamMessageEncryptionCode
-    {
-        none,
-        rsa,
-        spixi1
-    }
-
     public class StreamMessage
     {
         public int version { get; private set; } = 0;                 // Stream Message version
@@ -391,7 +383,7 @@ namespace IXICore
             {
                 return true;
             }
-            byte[] encrypted_data = _encrypt(data, public_key, aes_password, chacha_key);
+            byte[] encrypted_data = MessageCrypto.encrypt(encryptionType, data, public_key, aes_password, chacha_key);
             if(encrypted_data != null)
             {
                 data = encrypted_data;
@@ -407,7 +399,7 @@ namespace IXICore
             {
                 return true;
             }
-            byte[] decrypted_data = _decrypt(data, private_key, aes_key, chacha_key);
+            byte[] decrypted_data = MessageCrypto.decrypt(encryptionType, data, private_key, aes_key, chacha_key);
             if (decrypted_data != null)
             {
                 originalData = data;
@@ -448,78 +440,5 @@ namespace IXICore
             }
             return CryptoManager.lib.verifySignature(checksum, public_key, signature);
         }
-
-        private byte[] _encrypt(byte[] data_to_encrypt, byte[] public_key, byte[] aes_key, byte[] chacha_key)
-        {
-            if (encryptionType == StreamMessageEncryptionCode.spixi1)
-            {
-                if (aes_key != null && chacha_key != null)
-                {
-                    byte[] aes_encrypted = CryptoManager.lib.encryptWithAES(data_to_encrypt, aes_key, true);
-                    if (aes_encrypted != null)
-                    {
-                        byte[] chacha_encrypted = CryptoManager.lib.encryptWithChacha(aes_encrypted, chacha_key);
-                        return chacha_encrypted;
-                    }
-                    return null;
-                }
-                else
-                {
-                    Logging.error("Cannot encrypt message, no AES and CHACHA keys were provided.");
-                }
-            }
-            else if (encryptionType == StreamMessageEncryptionCode.rsa)
-            {
-                if (public_key != null)
-                {
-                    return CryptoManager.lib.encryptWithRSA(data_to_encrypt, public_key);
-                }
-                else
-                {
-                    Logging.error("Cannot encrypt message, no RSA key was provided.");
-                }
-            }
-            else
-            {
-                Logging.error("Cannot encrypt message, invalid encryption type {0} was specified.", encryptionType);
-            }
-            return null;
-        }
-
-        private byte[] _decrypt(byte[] data_to_decrypt, byte[] private_key, byte[] aes_key, byte[] chacha_key)
-        {
-            if(encryptionType == StreamMessageEncryptionCode.spixi1)
-            {
-                if (aes_key != null && chacha_key != null)
-                {
-                    byte[] chacha_decrypted = CryptoManager.lib.decryptWithChacha(data_to_decrypt, chacha_key);
-                    if (chacha_decrypted != null)
-                    {
-                        byte[] aes_decrypted = CryptoManager.lib.decryptWithAES(chacha_decrypted, aes_key, true);
-                        return aes_decrypted;
-                    }
-                    return null;
-                }else
-                {
-                    Logging.error("Cannot decrypt message, no AES and CHACHA keys were provided.");
-                }
-            }
-            else if (encryptionType == StreamMessageEncryptionCode.rsa)
-            {
-                if(private_key != null)
-                {
-                    return CryptoManager.lib.decryptWithRSA(data_to_decrypt, private_key);
-                }else
-                {
-                    Logging.error("Cannot decrypt message, no RSA key was provided.");
-                }
-            }
-            else
-            {
-                Logging.error("Cannot decrypt message, invalid decryption type {0} was specified.", encryptionType);
-            }
-            return null;
-        }
-
     }
 }
