@@ -37,7 +37,7 @@ namespace IXICore
 
             return CryptoManager.lib.encryptWithRSA(data_to_encrypt, public_key);
         }
-        public static byte[] encryptRSA2(byte[] data_to_encrypt, byte[] public_key)
+        public static byte[] encryptRSA2(byte[] data_to_encrypt, byte[] public_key, byte[] aad)
         {
             if (public_key == null)
             {
@@ -48,11 +48,14 @@ namespace IXICore
             // Generate temporary keys and encrypt data with them
             byte[] tmp_aes_key = CryptoManager.lib.getSecureRandomBytes(32);
             byte[] tmp_chacha_key = CryptoManager.lib.getSecureRandomBytes(32);
-            byte[] encrypted_data = encryptSpixi2(data_to_encrypt, tmp_aes_key, tmp_chacha_key);
+            byte[] encrypted_data = encryptSpixi2(data_to_encrypt, tmp_aes_key, tmp_chacha_key, aad).GetIxiBytes();
 
-            byte[] combined_key = new byte[tmp_aes_key.Length + tmp_chacha_key.Length];
-            Buffer.BlockCopy(tmp_aes_key, 0, combined_key, 0, tmp_aes_key.Length);
-            Buffer.BlockCopy(tmp_chacha_key, 0, combined_key, tmp_aes_key.Length, tmp_chacha_key.Length);
+            byte[] tmp_aes_key_ixi_bytes = tmp_aes_key.GetIxiBytes();
+            byte[] tmp_chacha_key_ixi_bytes = tmp_chacha_key.GetIxiBytes();
+
+            byte[] combined_key = new byte[tmp_aes_key_ixi_bytes.Length + tmp_chacha_key_ixi_bytes.Length];
+            Buffer.BlockCopy(tmp_aes_key_ixi_bytes, 0, combined_key, 0, tmp_aes_key_ixi_bytes.Length);
+            Buffer.BlockCopy(tmp_chacha_key_ixi_bytes, 0, combined_key, tmp_aes_key_ixi_bytes.Length, tmp_chacha_key_ixi_bytes.Length);
             
             // Encrypt temporary keys with recipient's public key
             byte[] encrypted_key = CryptoManager.lib.encryptWithRSA(combined_key, public_key).GetIxiBytes();
@@ -83,7 +86,7 @@ namespace IXICore
             return null;
         }
 
-        public static byte[] encryptSpixi2(byte[] data_to_encrypt, byte[] aes_key, byte[] chacha_key)
+        public static byte[] encryptSpixi2(byte[] data_to_encrypt, byte[] aes_key, byte[] chacha_key, byte[] aad)
         {
             if (aes_key == null
                 || chacha_key == null)
@@ -92,24 +95,24 @@ namespace IXICore
                 return null;
             }
 
-            byte[] message_nonce = CryptoManager.lib.getSecureRandomBytes(aes_key.Length);
+            byte[] message_nonce = CryptoManager.lib.getSecureRandomBytes(64);
             var derived_aes_secret = deriveKeyAndIv(message_nonce, aes_key, 12);
             byte[] aes_encrypted = CryptoManager.lib.encryptWithAES(data_to_encrypt, derived_aes_secret.iv, derived_aes_secret.key, true);
             if (aes_encrypted != null)
             {
-                var derived_chacha_secret = deriveKeyAndIv(message_nonce, chacha_key, 8);
-                byte[] chacha_encrypted = CryptoManager.lib.encryptWithChacha(aes_encrypted, derived_chacha_secret.iv, derived_chacha_secret.key);
+                var derived_chacha_secret = deriveKeyAndIv(message_nonce, chacha_key, 12);
+                byte[] chacha_encrypted_ixi_bytes = CryptoManager.lib.encryptWithChachaPoly1305(aes_encrypted, derived_chacha_secret.iv, derived_chacha_secret.key, aad).GetIxiBytes();
                 byte[] message_nonce_ixi_bytes = message_nonce.GetIxiBytes();
-                byte[] iv_with_encrypted = new byte[message_nonce_ixi_bytes.Length + chacha_encrypted.Length];
+                byte[] iv_with_encrypted = new byte[message_nonce_ixi_bytes.Length + chacha_encrypted_ixi_bytes.Length];
                 Buffer.BlockCopy(message_nonce_ixi_bytes, 0, iv_with_encrypted, 0, message_nonce_ixi_bytes.Length);
-                Buffer.BlockCopy(chacha_encrypted, 0, iv_with_encrypted, message_nonce_ixi_bytes.Length, chacha_encrypted.Length);
+                Buffer.BlockCopy(chacha_encrypted_ixi_bytes, 0, iv_with_encrypted, message_nonce_ixi_bytes.Length, chacha_encrypted_ixi_bytes.Length);
 
-                return chacha_encrypted;
+                return iv_with_encrypted;
             }
             return null;
         }
 
-        public static byte[] encrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_encrypt, byte[] public_key, byte[] aes_key, byte[] chacha_key)
+        public static byte[] encrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_encrypt, byte[] public_key, byte[] aes_key, byte[] chacha_key, byte[] aad)
         {
             switch (encryption_type)
             {
@@ -122,7 +125,7 @@ namespace IXICore
                     break;
 
                 case StreamMessageEncryptionCode.rsa2:
-                    return encryptRSA2(data_to_encrypt, public_key);
+                    return encryptRSA2(data_to_encrypt, public_key, aad);
                     break;
 
                 case StreamMessageEncryptionCode.spixi1:
@@ -130,7 +133,7 @@ namespace IXICore
                     break;
 
                 case StreamMessageEncryptionCode.spixi2:
-                    return encryptSpixi2(data_to_encrypt, aes_key, chacha_key);
+                    return encryptSpixi2(data_to_encrypt, aes_key, chacha_key, aad);
                     break;
 
                 default:
@@ -176,7 +179,7 @@ namespace IXICore
             return (derived_key, iv);
         }
 
-        public static byte[] decryptSpixi2(byte[] data_to_decrypt, byte[] aes_key, byte[] chacha_key, int inOffset = 0)
+        public static byte[] decryptSpixi2(byte[] data_to_decrypt, byte[] aes_key, byte[] chacha_key, byte[] aad, int offset = 0)
         {
             if (aes_key == null
                 || chacha_key == null)
@@ -185,9 +188,13 @@ namespace IXICore
                 return null;
             }
 
-            var message_nonce = data_to_decrypt.ReadIxiBytes(inOffset);
-            var derived_chacha_secret = deriveKeyAndIv(message_nonce.bytes, chacha_key, 8);
-            byte[] chacha_decrypted = CryptoManager.lib.decryptWithChacha(data_to_decrypt, derived_chacha_secret.iv, derived_chacha_secret.key, inOffset + message_nonce.bytesRead);
+            var message_nonce = data_to_decrypt.ReadIxiBytes(offset);
+            offset += message_nonce.bytesRead;
+            var dataLen = data_to_decrypt.GetIxiVarUInt(offset);
+            offset += dataLen.bytesRead;
+            
+            var derived_chacha_secret = deriveKeyAndIv(message_nonce.bytes, chacha_key, 12);
+            byte[] chacha_decrypted = CryptoManager.lib.decryptWithChachaPoly1305(data_to_decrypt, derived_chacha_secret.iv, derived_chacha_secret.key, aad, offset);
             if (chacha_decrypted != null)
             {
                 var derived_aes_secret = deriveKeyAndIv(message_nonce.bytes, aes_key, 12);
@@ -208,7 +215,7 @@ namespace IXICore
             return CryptoManager.lib.decryptWithRSA(data_to_decrypt, private_key);
         }
 
-        public static byte[] decryptRSA2(byte[] data_to_decrypt, byte[] private_key)
+        public static byte[] decryptRSA2(byte[] data_to_decrypt, byte[] private_key, byte[] aad)
         {
             if (private_key == null)
             {
@@ -217,21 +224,23 @@ namespace IXICore
             }
 
             int offset = 0;
-            var bwo = data_to_decrypt.ReadIxiBytes(offset);
-            offset += bwo.bytesRead;
+            var encrypted_key = data_to_decrypt.ReadIxiBytes(offset);
+            offset += encrypted_key.bytesRead;
+            var encrypted_data_len = data_to_decrypt.GetIxiVarUInt(offset);
+            offset += encrypted_data_len.bytesRead;
 
-            byte[] combined_keys = CryptoManager.lib.decryptWithRSA(data_to_decrypt, private_key);
+            byte[] combined_keys = CryptoManager.lib.decryptWithRSA(encrypted_key.bytes, private_key);
 
-            var aes_key = new byte[32];
-            Buffer.BlockCopy(combined_keys, 0, aes_key, 0, aes_key.Length);
+            var bwo = combined_keys.ReadIxiBytes(0);
+            var aes_key = bwo.bytes;
 
-            var chacha_key = new byte[32];
-            Buffer.BlockCopy(combined_keys, 32, chacha_key, 0, chacha_key.Length);
+            bwo = combined_keys.ReadIxiBytes(bwo.bytesRead);
+            var chacha_key = bwo.bytes;
 
-            return decryptSpixi2(data_to_decrypt, aes_key, chacha_key, offset);
+            return decryptSpixi2(data_to_decrypt, aes_key, chacha_key, aad, offset);
         }
 
-        public static byte[] decrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_decrypt, byte[] private_key, byte[] aes_key, byte[] chacha_key)
+        public static byte[] decrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_decrypt, byte[] private_key, byte[] aes_key, byte[] chacha_key, byte[] aad)
         {
             switch (encryption_type)
             {
@@ -244,7 +253,7 @@ namespace IXICore
                     break;
 
                 case StreamMessageEncryptionCode.rsa2:
-                    return decryptRSA2(data_to_decrypt, private_key);
+                    return decryptRSA2(data_to_decrypt, private_key, aad);
                     break;
 
                 case StreamMessageEncryptionCode.spixi1:
@@ -252,7 +261,7 @@ namespace IXICore
                     break;
 
                 case StreamMessageEncryptionCode.spixi2:
-                    return decryptSpixi2(data_to_decrypt, aes_key, chacha_key);
+                    return decryptSpixi2(data_to_decrypt, aes_key, chacha_key, aad);
                     break;
 
                 default:

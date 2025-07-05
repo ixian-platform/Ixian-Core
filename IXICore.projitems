@@ -86,6 +86,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\Friend.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)streaming\MessageCrypto.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\OfflinePushMessages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessageProcessor.cs" />

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2022 Ixian OU
+// Copyright (C) 2017-2025 Ixian OU
 // This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -17,11 +17,9 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using ChaCha20Poly1305 = Org.BouncyCastle.Crypto.Modes.ChaCha20Poly1305;
 
 namespace IXICore
 {
@@ -431,8 +429,8 @@ namespace IXICore
         /// <summary>
         /// Encrypt the given data using the Chacha engine.
         /// </summary>
-        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="input">Cleartext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="key">Chacha encryption key.</param>
         /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
         public byte[] encryptWithChacha(byte[] input, byte[] nonce, byte[] key)
@@ -458,14 +456,43 @@ namespace IXICore
                 return null;
             }
 
-            // Encrypt the input data while maintaing an 8 byte offset at the start
-            chacha.ProcessBytes(input, 0, input.Length, outData, 8);
-
-            // Copy the 8 byte nonce to the start of outData buffer
-            Buffer.BlockCopy(nonce, 0, outData, 0, 8);
+            chacha.ProcessBytes(input, 0, input.Length, outData, 0);
 
             // Return the encrypted data buffer
             return outData;
+        }
+
+
+        /// <summary>
+        /// Encrypt the given data using the Chacha engine.
+        /// </summary>
+        /// <param name="input">Cleartext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="key">Chacha encryption key.</param>
+        /// <param name="aad">Additional data.</param>
+        /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
+        public byte[] encryptWithChachaPoly1305(byte[] input, byte[] nonce, byte[] key, byte[] aad)
+        {
+            try
+            {
+                var cipher = new ChaCha20Poly1305();
+                var parameters = new AeadParameters(new KeyParameter(key), 128, nonce, aad);
+
+                cipher.Init(true, parameters);
+
+                byte[] output = new byte[cipher.GetOutputSize(input.Length)];
+
+                int len = cipher.ProcessBytes(input, 0, input.Length, output, 0);
+                cipher.DoFinal(output, len);
+
+                return output;
+            }
+            catch (Exception e)
+            {
+                Logging.error("Error in chacha encryption. {0}", e.ToString());
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -484,9 +511,10 @@ namespace IXICore
         /// <summary>
         /// Decrypt the given data using the Chacha engine.
         /// </summary>
-        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="input">Ciphertext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="key">Chacha decryption key.</param>
+        /// <param name="inOffset">Offset of input bytes.</param>
         /// <returns>Decrypted (cleartext) data or null in the event of a failure.</returns>
         public byte[] decryptWithChacha(byte[] input, byte[] nonce, byte[] key, int inOffset = 0)
         {
@@ -515,6 +543,39 @@ namespace IXICore
 
             // Return the decrypted data buffer
             return outData;
+        }
+
+        /// <summary>
+        /// Decrypt the given data using the Chacha engine.
+        /// </summary>
+        /// <param name="input">Ciphertext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="key">Chacha decryption key.</param>
+        /// <param name="aad">Additional data.</param>
+        /// <param name="inOffset">Offset of input bytes.</param>
+        /// <returns>Decrypted (cleartext) data or null in the event of a failure.</returns>
+        public byte[] decryptWithChachaPoly1305(byte[] input, byte[] nonce, byte[] key, byte[] aad, int inOffset = 0)
+        {
+            try
+            {
+                var cipher = new ChaCha20Poly1305();
+                var parameters = new AeadParameters(new KeyParameter(key), 128, nonce, aad);
+
+                cipher.Init(false, parameters);
+
+                byte[] output = new byte[cipher.GetOutputSize(input.Length - inOffset)];
+
+                int len = cipher.ProcessBytes(input, inOffset, input.Length - inOffset, output, 0);
+
+                cipher.DoFinal(output, len);
+
+                return output;
+            }
+            catch (Exception e)
+            {
+                Logging.error("Error in chacha decryption. {0}", e.ToString());
+            }
+            return null;
         }
 
         public byte[] generateChildKey(byte[] parentKey, int version, int seed = 0)

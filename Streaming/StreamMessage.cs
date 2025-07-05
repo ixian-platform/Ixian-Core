@@ -48,11 +48,11 @@ namespace IXICore
 
         public bool encrypted = false; // used locally to avoid double encryption of data
 
-        public byte[] id;                      // Message unique id
+        public byte[] id;                      // Message unique id - TODO Can probably be removed and a hash used instead
 
-        public long timestamp = 0;
+        public long timestamp = 0; // TODO Can probably be moved to SpixiMessage
 
-        public bool requireRcvConfirmation = true;
+        public bool requireRcvConfirmation = true; // TODO Can probably be removed
 
         public StreamMessage()
         {
@@ -376,6 +376,20 @@ namespace IXICore
             }
         }
 
+        private byte[] getAdditionalData()
+        {
+            using (MemoryStream m = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(m))
+                {
+                    writer.Write(id);
+                    writer.WriteIxiVarInt((int)type);
+                    writer.WriteIxiVarInt(timestamp);
+                }
+                return m.ToArray();
+            }
+        }
+
         // Encrypts a provided message with aes, then chacha based on the keys provided
         public bool encrypt(byte[] public_key, byte[] aes_password, byte[] chacha_key)
         {
@@ -383,7 +397,7 @@ namespace IXICore
             {
                 return true;
             }
-            byte[] encrypted_data = MessageCrypto.encrypt(encryptionType, data, public_key, aes_password, chacha_key);
+            byte[] encrypted_data = MessageCrypto.encrypt(encryptionType, data, public_key, aes_password, chacha_key, getAdditionalData());
             if(encrypted_data != null)
             {
                 data = encrypted_data;
@@ -399,7 +413,7 @@ namespace IXICore
             {
                 return true;
             }
-            byte[] decrypted_data = MessageCrypto.decrypt(encryptionType, data, private_key, aes_key, chacha_key);
+            byte[] decrypted_data = MessageCrypto.decrypt(encryptionType, data, private_key, aes_key, chacha_key, getAdditionalData());
             if (decrypted_data != null)
             {
                 originalData = data;

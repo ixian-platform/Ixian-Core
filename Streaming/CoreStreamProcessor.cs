@@ -363,6 +363,7 @@ namespace IXICore.Streaming
                             {
                                 case SpixiMessageCode.msgReceived:
                                 case SpixiMessageCode.requestAdd:
+                                case SpixiMessageCode.requestAdd2:
                                 case SpixiMessageCode.acceptAddBot:
                                     break;
                                 default:
@@ -604,7 +605,30 @@ namespace IXICore.Streaming
                             }
                             else
                             {
-                                if (!handleRequestAdd(message.id, sender_address, spixi_message.data, message.timestamp))
+                                if (!handleRequestAdd(message.id, sender_address, spixi_message.data, message.timestamp, false))
+                                {
+                                    return null;
+                                }
+                                else
+                                {
+                                    friend = FriendList.getFriend(sender_address);
+                                    return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
+                                }
+                            }
+                        }
+                        break;
+
+                    case SpixiMessageCode.requestAdd2:
+                        {
+                            // Friend request
+                            if (!new Address(spixi_message.data).SequenceEqual(sender_address) || !message.verifySignature(spixi_message.data))
+                            {
+                                Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type.ToString(), Crypto.hashToString(message.id), sender_address.ToString());
+                                return null;
+                            }
+                            else
+                            {
+                                if (!handleRequestAdd(message.id, sender_address, spixi_message.data, message.timestamp, true))
                                 {
                                     return null;
                                 }
@@ -637,6 +661,41 @@ namespace IXICore.Streaming
                                 {
                                     friend.lastReceivedHandshakeMessageTimestamp = message.timestamp;
                                     if (!handleAcceptAdd(sender_address, spixi_message.data))
+                                    {
+                                        return null;
+                                    }
+                                    else
+                                    {
+                                        return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
+                                    }
+                                }
+                            }
+                        }
+                        break;
+
+                    case SpixiMessageCode.acceptAdd2:
+                        {
+                            // Friend accepted request
+                            var bwo = spixi_message.data.ReadIxiBytes(0);
+                            byte[] pub_key = bwo.bytes;
+                            bwo = spixi_message.data.ReadIxiBytes(bwo.bytesRead);
+                            byte[] new_aes_key = bwo.bytes;
+                            if (!new Address(pub_key).SequenceEqual(message.sender))
+                            {
+                                Logging.error("Invalid public key in accept add2.", friend.walletAddress.ToString());
+                                return null;
+                            }
+                            if (!message.verifySignature(pub_key))
+                            {
+                                Logging.error("Unable to verify signature for message type: {0}, id: {1}, from: {2}.", spixi_message.type.ToString(), Crypto.hashToString(message.id), sender_address.ToString());
+                                return null;
+                            }
+                            else
+                            {
+                                if (friend.lastReceivedHandshakeMessageTimestamp < message.timestamp)
+                                {
+                                    friend.lastReceivedHandshakeMessageTimestamp = message.timestamp;
+                                    if (!handleAcceptAdd(sender_address, new_aes_key))
                                     {
                                         return null;
                                     }
@@ -873,7 +932,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        protected bool handleRequestAdd(byte[] id, Address sender_wallet, byte[] pub_key, long received_timestamp)
+        protected bool handleRequestAdd(byte[] id, Address sender_wallet, byte[] pub_key, long received_timestamp, bool useSpixi2)
         {
             // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
 
@@ -893,6 +952,10 @@ namespace IXICore.Streaming
                 {
                     return false;
                 }
+                if (useSpixi2)
+                {
+                    new_friend.clientEncryptionVersion = 1;
+                }
                 new_friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 new_friend.handshakeStatus = 1;
                 new_friend.saveMetaData();
@@ -905,6 +968,11 @@ namespace IXICore.Streaming
                 if (friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
                 {
                     return false;
+                }
+                if (useSpixi2)
+                {
+                    friend.clientEncryptionVersion = 1;
+                    friend.saveMetaData();
                 }
                 friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 bool reset_keys = true;
@@ -1066,6 +1134,15 @@ namespace IXICore.Streaming
             friend.state = FriendState.Approved;
 
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.acceptAdd, friend.aesKey);
+            if (friend.clientEncryptionVersion == 1)
+            {
+                byte[] aes_key_ixi_bytes = friend.aesKey.GetIxiBytes();
+                byte[] pub_key_bytes = IxianHandler.getWalletStorage().getPrimaryPublicKey().GetIxiBytes();
+                byte[] accept_add_msg = new byte[aes_key_ixi_bytes.Length + pub_key_bytes.Length];
+                Buffer.BlockCopy(pub_key_bytes, 0, accept_add_msg, 0, pub_key_bytes.Length);
+                Buffer.BlockCopy(aes_key_ixi_bytes, 0, accept_add_msg, pub_key_bytes.Length, aes_key_ixi_bytes.Length);
+                spixi_message = new SpixiMessage(SpixiMessageCode.acceptAdd2, accept_add_msg);
+            }
 
             StreamMessage message = new StreamMessage();
             message.type = StreamMessageCode.info;
@@ -1073,6 +1150,10 @@ namespace IXICore.Streaming
             message.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
             message.data = spixi_message.getBytes();
             message.encryptionType = StreamMessageEncryptionCode.rsa;
+            if (friend.clientEncryptionVersion == 1)
+            {
+                message.encryptionType = StreamMessageEncryptionCode.rsa2;
+            }
             message.id = new byte[] { 1 };
 
             sendMessage(friend, message);
@@ -1103,6 +1184,10 @@ namespace IXICore.Streaming
             else if (friend.aesKey == null || friend.chachaKey == null)
             {
                 reply_message.encryptionType = StreamMessageEncryptionCode.rsa;
+                if (friend.clientEncryptionVersion == 1)
+                {
+                    reply_message.encryptionType = StreamMessageEncryptionCode.rsa2;
+                }
             }
 
             sendMessage(friend, reply_message, true, true, false);
@@ -1153,6 +1238,10 @@ namespace IXICore.Streaming
             if (friend.aesKey == null || friend.chachaKey == null)
             {
                 message.encryptionType = StreamMessageEncryptionCode.rsa;
+                if (friend.clientEncryptionVersion == 1)
+                {
+                    message.encryptionType = StreamMessageEncryptionCode.rsa2;
+                }
             }
 
             sendMessage(friend, message, false, true, false);
@@ -1188,6 +1277,10 @@ namespace IXICore.Streaming
             if (friend.aesKey == null || friend.chachaKey == null)
             {
                 message.encryptionType = StreamMessageEncryptionCode.rsa;
+                if (friend.clientEncryptionVersion == 1)
+                {
+                    message.encryptionType = StreamMessageEncryptionCode.rsa2;
+                }
             }
 
             sendMessage(friend, message, true, true, false);
@@ -1218,6 +1311,10 @@ namespace IXICore.Streaming
             if (friend.aesKey == null || friend.chachaKey == null)
             {
                 message.encryptionType = StreamMessageEncryptionCode.rsa;
+                if (friend.clientEncryptionVersion == 1)
+                {
+                    message.encryptionType = StreamMessageEncryptionCode.rsa2;
+                }
             }
 
             sendMessage(friend, message, true, true, false);
@@ -1243,7 +1340,7 @@ namespace IXICore.Streaming
             sendMessage(friend, message, false);
         }
 
-        public static void sendContactRequest(Friend friend)
+        public static void sendContactRequest_old(Friend friend)
         {
             Logging.info("Sending contact request");
 
@@ -1251,6 +1348,29 @@ namespace IXICore.Streaming
             // Send the message to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.requestAdd, IxianHandler.getWalletStorage().getPrimaryPublicKey());
 
+
+            StreamMessage message = new StreamMessage();
+            message.type = StreamMessageCode.info;
+            message.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            message.recipient = friend.walletAddress;
+            message.data = spixi_message.getBytes();
+            message.encryptionType = StreamMessageEncryptionCode.none;
+            message.id = new byte[] { 0 };
+
+            message.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
+
+            sendMessage(friend, message);
+        }
+
+        public static void sendContactRequest(Friend friend)
+        {
+            Logging.info("Sending contact request2");
+
+            friend.clientEncryptionVersion = 1;
+            friend.saveMetaData();
+
+            // Send the message to the S2 nodes
+            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.requestAdd2, IxianHandler.getWalletStorage().getPrimaryPublicKey());
 
             StreamMessage message = new StreamMessage();
             message.type = StreamMessageCode.info;
