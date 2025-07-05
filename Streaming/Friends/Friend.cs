@@ -204,6 +204,7 @@ namespace IXICore.Streaming
         public long requestedPresence = 0;
         public long updatedStreamingNodes = 0;
         public Peer relayNode = null;
+        public int clientEncryptionVersion = 0; // TODO upgrade this to "client protocol version"
 
         public Friend(FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
         {
@@ -310,6 +311,11 @@ namespace IXICore.Streaming
                             state = FriendState.Approved;
                     }
 
+                    if (version >= 7)
+                    {
+                        clientEncryptionVersion = reader.ReadInt32();
+                    }
+
                 }
             }
         }
@@ -320,7 +326,7 @@ namespace IXICore.Streaming
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    writer.Write(6);
+                    writer.Write(7);
 
                     writer.Write(walletAddress.addressNoChecksum.Length);
                     writer.Write(walletAddress.addressNoChecksum);
@@ -376,6 +382,7 @@ namespace IXICore.Streaming
 
                     writer.Write((int)state); // current FriendState
 
+                    writer.Write((int)clientEncryptionVersion);
                 }
                 return m.ToArray();
             }
@@ -479,6 +486,10 @@ namespace IXICore.Streaming
                         sm.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
                         sm.data = spixi_message.getBytes();
                         sm.encryptionType = StreamMessageEncryptionCode.rsa;
+                        if (clientEncryptionVersion == 1)
+                        {
+                            sm.encryptionType = StreamMessageEncryptionCode.rsa2;
+                        }
                         sm.id = new byte[] { 2 };
 
                         CoreStreamProcessor.sendMessage(this, sm);

@@ -251,7 +251,7 @@ namespace IXICore.Streaming
             bool send_push_notification = pending_message.sendPushNotification;
 
             // TODO this function has to be improved and node's wallet address has to be added
-            if (friend.publicKey != null || (msg.encryptionType != StreamMessageEncryptionCode.rsa && friend.aesKey != null && friend.chachaKey != null))
+            if (friend.publicKey != null || ((msg.encryptionType != StreamMessageEncryptionCode.rsa && msg.encryptionType != StreamMessageEncryptionCode.rsa2) && friend.aesKey != null && friend.chachaKey != null))
             {
                 if(msg.encryptionType == StreamMessageEncryptionCode.none)
                 {
@@ -264,11 +264,15 @@ namespace IXICore.Streaming
                     {
                         // upgrade encryption type
                         msg.encryptionType = StreamMessageEncryptionCode.rsa;
+                        if (friend.clientEncryptionVersion == 1)
+                        {
+                            msg.encryptionType = StreamMessageEncryptionCode.rsa2;
+                        }
                     }
                 }
                 if(msg.encryptionType != StreamMessageEncryptionCode.none)
                 {
-                    if (msg.version == 0 && msg.encryptionType == StreamMessageEncryptionCode.rsa && !msg.encrypted)
+                    if (msg.version == 0 && (msg.encryptionType == StreamMessageEncryptionCode.rsa || msg.encryptionType == StreamMessageEncryptionCode.rsa2) && !msg.encrypted)
                     {
                         msg.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
                     }
@@ -277,7 +281,7 @@ namespace IXICore.Streaming
                         Logging.warn("Could not encrypt message for {0}!", msg.recipient.ToString());
                         return false;
                     }
-                    if (msg.version > 0 && msg.encryptionType == StreamMessageEncryptionCode.rsa)
+                    if (msg.version > 0 && (msg.encryptionType == StreamMessageEncryptionCode.rsa || msg.encryptionType == StreamMessageEncryptionCode.rsa2))
                     {
                         msg.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
                     }
@@ -285,11 +289,6 @@ namespace IXICore.Streaming
             }
             else if (msg.encryptionType != StreamMessageEncryptionCode.none)
             {
-                if (friend.publicKey == null)
-                {
-                    byte[] pub_k = FriendList.findContactPubkey(friend.walletAddress);
-                    friend.setPublicKey(pub_k);
-                }
                 if(!friend.bot)
                 {
                     Logging.warn("Could not send message to {0}, due to missing encryption keys!", msg.recipient.ToString());

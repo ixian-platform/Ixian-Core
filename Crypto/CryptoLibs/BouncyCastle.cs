@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2022 Ixian OU
+// Copyright (C) 2017-2025 Ixian OU
 // This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -17,11 +17,9 @@ using Org.BouncyCastle.Crypto.Generators;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using ChaCha20Poly1305 = Org.BouncyCastle.Crypto.Modes.ChaCha20Poly1305;
 
 namespace IXICore
 {
@@ -280,95 +278,95 @@ namespace IXICore
             }
             byte[] salt = getSecureRandomBytes(salt_size);
 
-            byte[] bytes = null;
-
-            ParametersWithIV withIV = new ParametersWithIV(new KeyParameter(key), salt);
-            try
+            byte[] encrypted_data = encryptWithAES(input, salt, key, use_GCM);
+            if (encrypted_data != null)
             {
-                outCipher.Init(true, withIV);
-                byte[] encrypted_data = outCipher.DoFinal(input);
-
-                bytes = new byte[salt.Length + encrypted_data.Length];
+                byte[] bytes = new byte[salt.Length + encrypted_data.Length];
                 Array.Copy(salt, bytes, salt.Length);
                 Array.Copy(encrypted_data, 0, bytes, salt.Length, encrypted_data.Length);
+
+                return bytes;
+            }
+
+            return null;
+        }
+
+        public byte[] encryptWithAES(byte[] input, byte[] iv, byte[] key, bool use_GCM)
+        {
+            try
+            {
+                string algo = AES_algorithm;
+                if (use_GCM)
+                {
+                    algo = AES_GCM_algorithm;
+                }
+
+                IBufferedCipher outCipher = CipherUtilities.GetCipher(algo);
+
+                ParametersWithIV withIV = new ParametersWithIV(new KeyParameter(key), iv);
+
+                outCipher.Init(true, withIV);
+                return outCipher.DoFinal(input);
+
             }
             catch (Exception e)
             {
                 Logging.error("Error initializing encryption. {0}", e.ToString());
-                return null;
             }
 
-            return bytes;
+            return null;
         }
 
         // Decrypt data using AES
         public byte[] decryptWithAES(byte[] input, byte[] key, bool use_GCM, int inOffset = 0)
         {
-            string algo = AES_algorithm;
+            byte[] bytes = null;
+
             if (use_GCM)
             {
-                algo = AES_GCM_algorithm;
+                // GCM mode requires 12 bytes salt
+                int salt_size = 12;
+                byte[] gcm_salt = new byte[salt_size];
+
+                Array.Copy(input, inOffset, gcm_salt, 0, gcm_salt.Length);
+                byte[] decrypted = decryptWithAES(input, gcm_salt, key, use_GCM, inOffset + salt_size);
+                if (decrypted != null)
+                {
+                    return decrypted;
+                } // else try again using normal salt - backwards compatibility, TODO TODO can be removed later
             }
 
-            IBufferedCipher inCipher = CipherUtilities.GetCipher(algo);
+            string algo = AES_algorithm;
 
-            byte[] bytes = null;
+            IBufferedCipher inCipher = CipherUtilities.GetCipher(algo);
+            int block_size = inCipher.GetBlockSize();
+            byte[] salt = new byte[block_size];
+
+            Array.Copy(input, inOffset, salt, 0, salt.Length);
+            return decryptWithAES(input, salt, key, use_GCM, inOffset + block_size);
+        }
+
+        public byte[] decryptWithAES(byte[] input, byte[] iv, byte[] key, bool use_GCM, int inOffset = 0)
+        {
             try
             {
-                try
+                string algo = AES_algorithm;
+                if (use_GCM)
                 {
-                    if (use_GCM)
-                    {
-                        // GCM mode requires 12 bytes salt
-                        int salt_size = 12;
-                        byte[] salt = new byte[salt_size];
-
-                        Array.Copy(input, inOffset, salt, 0, salt.Length);
-
-                        ParametersWithIV withIV = new ParametersWithIV(new KeyParameter(key), salt);
-                        inCipher.Init(false, withIV);
-                        bytes = inCipher.DoFinal(input, inOffset + salt_size, input.Length - inOffset - salt_size);
-                    }
-                    else
-                    {
-                        int block_size = inCipher.GetBlockSize();
-                        byte[] salt = new byte[block_size];
-
-                        Array.Copy(input, inOffset, salt, 0, salt.Length);
-
-                        ParametersWithIV withIV = new ParametersWithIV(new KeyParameter(key), salt);
-                        inCipher.Init(false, withIV);
-                        bytes = inCipher.DoFinal(input, inOffset + block_size, input.Length - inOffset - block_size);
-                    }
+                    algo = AES_GCM_algorithm;
                 }
-                catch (Exception)
-                {
-                    // try again using normal salt - backwards compatibility, TODO TODO can be removed later
-                    if (use_GCM)
-                    {
-                        int block_size = inCipher.GetBlockSize();
-                        byte[] salt = new byte[block_size];
 
-                        Array.Copy(input, inOffset, salt, 0, salt.Length);
-
-                        ParametersWithIV withIV = new ParametersWithIV(new KeyParameter(key), salt);
-                        inCipher.Init(false, withIV);
-                        bytes = inCipher.DoFinal(input, inOffset + block_size, input.Length - inOffset - block_size);
-                    }
-                    else
-                    {
-                        bytes = null;
-                        throw;
-                    }
-                }
+                IBufferedCipher inCipher = CipherUtilities.GetCipher(algo);
+                ParametersWithIV withIV = new ParametersWithIV(new KeyParameter(key), iv);
+                inCipher.Init(false, withIV);
+                return inCipher.DoFinal(input, inOffset, input.Length - inOffset);
             }
             catch (Exception e)
             {
-                bytes = null;
                 Logging.error("Error initializing decryption. {0}", e.ToString());
             }
 
-            return bytes;
+            return null;
         }
 
         private static byte[] getPbkdf2BytesFromPassphrase(string password, byte[] salt, int iterations, int byteCount)
@@ -412,20 +410,42 @@ namespace IXICore
         /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
         public byte[] encryptWithChacha(byte[] input, byte[] key)
         {
-            // Create a buffer that will contain the encrypted output and an 8 byte nonce
-            byte[] outData = new byte[input.Length + 8];
-
             // Generate the 8 byte nonce
             byte[] nonce = getSecureRandomBytes(8);
+            byte[] encrypted_data = encryptWithChacha(input, nonce, key);
+            if (encrypted_data != null)
+            {
+                byte[] bytes = new byte[nonce.Length + encrypted_data.Length];
+                Array.Copy(nonce, bytes, nonce.Length);
+                Array.Copy(encrypted_data, 0, bytes, nonce.Length, encrypted_data.Length);
+
+                return bytes;
+            }
+
+            return null;
+        }
+
+
+        /// <summary>
+        /// Encrypt the given data using the Chacha engine.
+        /// </summary>
+        /// <param name="input">Cleartext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="key">Chacha encryption key.</param>
+        /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
+        public byte[] encryptWithChacha(byte[] input, byte[] nonce, byte[] key)
+        {
+            // Create a buffer that will contain the encrypted output and an 8 byte nonce
+            byte[] outData = new byte[input.Length];
 
             // Prevent leading 0 to avoid edge cases
             if (nonce[0] == 0)
                 nonce[0] = 1;
-            
+
             // Generate the Chacha engine
             var parms = new ParametersWithIV(new KeyParameter(key), nonce);
             var chacha = new ChaChaEngine(chacha_rounds);
-            
+
             try
             {
                 chacha.Init(true, parms);
@@ -436,14 +456,43 @@ namespace IXICore
                 return null;
             }
 
-            // Encrypt the input data while maintaing an 8 byte offset at the start
-            chacha.ProcessBytes(input, 0, input.Length, outData, 8);
-
-            // Copy the 8 byte nonce to the start of outData buffer
-            Buffer.BlockCopy(nonce, 0, outData, 0, 8);
+            chacha.ProcessBytes(input, 0, input.Length, outData, 0);
 
             // Return the encrypted data buffer
             return outData;
+        }
+
+
+        /// <summary>
+        /// Encrypt the given data using the Chacha engine.
+        /// </summary>
+        /// <param name="input">Cleartext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="key">Chacha encryption key.</param>
+        /// <param name="aad">Additional data.</param>
+        /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
+        public byte[] encryptWithChachaPoly1305(byte[] input, byte[] nonce, byte[] key, byte[] aad)
+        {
+            try
+            {
+                var cipher = new ChaCha20Poly1305();
+                var parameters = new AeadParameters(new KeyParameter(key), 128, nonce, aad);
+
+                cipher.Init(true, parameters);
+
+                byte[] output = new byte[cipher.GetOutputSize(input.Length)];
+
+                int len = cipher.ProcessBytes(input, 0, input.Length, output, 0);
+                cipher.DoFinal(output, len);
+
+                return output;
+            }
+            catch (Exception e)
+            {
+                Logging.error("Error in chacha encryption. {0}", e.ToString());
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -456,6 +505,22 @@ namespace IXICore
         {
             // Extract the nonce from the input
             byte[] nonce = input.Take(8).ToArray();
+            return decryptWithChacha(input, nonce, key, 8);
+        }
+
+        /// <summary>
+        /// Decrypt the given data using the Chacha engine.
+        /// </summary>
+        /// <param name="input">Ciphertext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="key">Chacha decryption key.</param>
+        /// <param name="inOffset">Offset of input bytes.</param>
+        /// <returns>Decrypted (cleartext) data or null in the event of a failure.</returns>
+        public byte[] decryptWithChacha(byte[] input, byte[] nonce, byte[] key, int inOffset = 0)
+        {
+            // Prevent leading 0 to avoid edge cases
+            if (nonce[0] == 0)
+                nonce[0] = 1;
 
             // Generate the Chacha engine
             var parms = new ParametersWithIV(new KeyParameter(key), nonce);
@@ -471,13 +536,46 @@ namespace IXICore
             }
 
             // Create a buffer that will contain the decrypted output
-            byte[] outData = new byte[input.Length - 8];
+            byte[] outData = new byte[input.Length - inOffset];
 
             // Decrypt the input data
-            chacha.ProcessBytes(input, 8, input.Length - 8, outData, 0);
+            chacha.ProcessBytes(input, inOffset, input.Length - inOffset, outData, 0);
 
             // Return the decrypted data buffer
             return outData;
+        }
+
+        /// <summary>
+        /// Decrypt the given data using the Chacha engine.
+        /// </summary>
+        /// <param name="input">Ciphertext data.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="key">Chacha decryption key.</param>
+        /// <param name="aad">Additional data.</param>
+        /// <param name="inOffset">Offset of input bytes.</param>
+        /// <returns>Decrypted (cleartext) data or null in the event of a failure.</returns>
+        public byte[] decryptWithChachaPoly1305(byte[] input, byte[] nonce, byte[] key, byte[] aad, int inOffset = 0)
+        {
+            try
+            {
+                var cipher = new ChaCha20Poly1305();
+                var parameters = new AeadParameters(new KeyParameter(key), 128, nonce, aad);
+
+                cipher.Init(false, parameters);
+
+                byte[] output = new byte[cipher.GetOutputSize(input.Length - inOffset)];
+
+                int len = cipher.ProcessBytes(input, inOffset, input.Length - inOffset, output, 0);
+
+                cipher.DoFinal(output, len);
+
+                return output;
+            }
+            catch (Exception e)
+            {
+                Logging.error("Error in chacha decryption. {0}", e.ToString());
+            }
+            return null;
         }
 
         public byte[] generateChildKey(byte[] parentKey, int version, int seed = 0)
@@ -643,6 +741,5 @@ namespace IXICore
             Array.Copy(sha3_512sq(input, offset, count), shaTrunc, hashLength);
             return shaTrunc;
         }
-
     }
 }
