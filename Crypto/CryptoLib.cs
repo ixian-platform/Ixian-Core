@@ -336,6 +336,19 @@ namespace IXICore
         /// <param name="hashLength">Number of bytes to keep from the truncated hash.</param>
         /// <returns>SHA3-512 squared and truncated hash of the input data.</returns>
         byte[] sha3_512sqTrunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44);
+
+
+        byte[] deriveSymmetricKey(byte[] shared_secret, int derived_key_length, byte[] salt = null, byte[] info = null);
+
+        (byte[] publicKey, byte[] privateKey) generateECDHKeyPair();
+
+        byte[] deriveECDHSharedKey(byte[] private_key_bytes, byte[] peer_public_key_bytes);
+
+        (byte[] publicKey, byte[] privateKey) generateMLKemKeyPair();
+
+        (byte[] ciphertext, byte[] sharedSecret) encapsulateMLKem(byte[] peer_public_key_bytes);
+
+        byte[] decapsulateMLKem(byte[] private_key_bytes, byte[] ciphertext);
     }
 
 
@@ -471,6 +484,37 @@ namespace IXICore
         public byte[] sha3_512sqTrunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44)
         {
             return _cryptoLib.sha3_512sqTrunc(input, offset, count, hashLength);
+        }
+
+
+        public byte[] deriveSymmetricKey(byte[] shared_secret, int derived_key_length, byte[] salt = null, byte[] info = null)
+        {
+            return _cryptoLib.deriveSymmetricKey(shared_secret, derived_key_length, salt, info);
+        }
+
+        public (byte[] publicKey, byte[] privateKey) generateECDHKeyPair()
+        {
+            return _cryptoLib.generateECDHKeyPair();
+        }
+
+        public byte[] deriveECDHSharedKey(byte[] private_key_bytes, byte[] peer_public_key_bytes)
+        {
+            return _cryptoLib.deriveECDHSharedKey(private_key_bytes, peer_public_key_bytes);
+        }
+
+        public (byte[] publicKey, byte[] privateKey) generateMLKemKeyPair()
+        {
+            return _cryptoLib.generateMLKemKeyPair();
+        }
+
+        public (byte[] ciphertext, byte[] sharedSecret) encapsulateMLKem(byte[] peer_public_key_bytes)
+        {
+            return _cryptoLib.encapsulateMLKem(peer_public_key_bytes);
+        }
+
+        public byte[] decapsulateMLKem(byte[] private_key_bytes, byte[] ciphertext)
+        {
+            return _cryptoLib.decapsulateMLKem(private_key_bytes, ciphertext);
         }
     }
 }

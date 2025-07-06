@@ -54,14 +54,21 @@ namespace IXICore
 
         public bool requireRcvConfirmation = true; // TODO Can probably be removed
 
-        public StreamMessage()
+        public StreamMessage(int version = 0)
         {
+            this.version = version;
             id = Guid.NewGuid().ToByteArray(); // Generate a new unique id
             type = StreamMessageCode.info;
             sender = null;
             recipient = null;
             data = null;
-            encryptionType = StreamMessageEncryptionCode.spixi1;
+            if (version == 0)
+            {
+                encryptionType = StreamMessageEncryptionCode.spixi1;
+            } else if (version > 0)
+            {
+                encryptionType = StreamMessageEncryptionCode.spixi2;
+            }
             timestamp = Clock.getNetworkTimestamp();
         }
 
@@ -426,8 +433,14 @@ namespace IXICore
 
         public byte[] calculateChecksum()
         {
-            // TODO TODO Omega upgrade to sha3
-            return Crypto.sha512(getBytes(true));
+            if (version == 0)
+            {
+                return Crypto.sha512(getBytes(true));
+            }
+            else
+            {
+                return CryptoManager.lib.sha3_512(getBytes(true));
+            }
         }
 
         public bool sign(byte[] private_key)

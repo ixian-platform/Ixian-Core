@@ -87,6 +87,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)streaming\MessageCrypto.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)streaming\models\AcceptAdd2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)streaming\models\Keys2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\OfflinePushMessages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessageProcessor.cs" />
@@ -129,5 +131,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)Streaming\Friends\" />
+    <Folder Include="$(MSBuildThisFileDirectory)Streaming\Models\" />
   </ItemGroup>
 </Project>

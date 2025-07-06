@@ -168,7 +168,7 @@ namespace IXICore
             Buffer.BlockCopy(base_key, 0, preimage, 0, base_key.Length);
             Buffer.BlockCopy(message_nonce, 0, preimage, base_key.Length, message_nonce.Length);
 
-            byte[] secret_hash = CryptoManager.lib.sha3_512(preimage);
+            byte[] secret_hash = CryptoManager.lib.sha3_512sq(preimage);
 
             byte[] derived_key = new byte[base_key.Length];
             Buffer.BlockCopy(secret_hash, 0, derived_key, 0, derived_key.Length);

@@ -204,7 +204,10 @@ namespace IXICore.Streaming
         public long requestedPresence = 0;
         public long updatedStreamingNodes = 0;
         public Peer relayNode = null;
-        public int clientEncryptionVersion = 0; // TODO upgrade this to "client protocol version"
+        public int protocolVersion = 0;
+        public byte[] ecdhPrivateKey = null;
+        public byte[] mlKemPrivateKey = null;
+        public byte[] aesSalt = null;
 
         public Friend(FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
         {
@@ -311,11 +314,34 @@ namespace IXICore.Streaming
                             state = FriendState.Approved;
                     }
 
-                    if (version >= 7)
+                    try
                     {
-                        clientEncryptionVersion = reader.ReadInt32();
-                    }
+                        if (version >= 7)
+                        {
+                            protocolVersion = reader.ReadInt32();
 
+                            int ecdh_private_key_len = reader.ReadInt32();
+                            if (ecdh_private_key_len > 0)
+                            {
+                                ecdhPrivateKey = reader.ReadBytes(ecdh_private_key_len);
+                            }
+
+                            int mlkem_private_key_len = reader.ReadInt32();
+                            if (mlkem_private_key_len > 0)
+                            {
+                                mlKemPrivateKey = reader.ReadBytes(mlkem_private_key_len);
+                            }
+
+                            int aes_salt_len = reader.ReadInt32();
+                            if (aes_salt_len > 0)
+                            {
+                                aesSalt = reader.ReadBytes(aes_salt_len);
+                            }
+                        }
+                    } catch (Exception e)
+                    {
+                        Logging.error("Exception in Friend deserialization: " + e);
+                    }
                 }
             }
         }
@@ -382,7 +408,37 @@ namespace IXICore.Streaming
 
                     writer.Write((int)state); // current FriendState
 
-                    writer.Write((int)clientEncryptionVersion);
+                    writer.Write(protocolVersion);
+
+                    if (ecdhPrivateKey != null)
+                    {
+                        writer.Write(ecdhPrivateKey.Length);
+                        writer.Write(ecdhPrivateKey);
+                    }
+                    else
+                    {
+                        writer.Write((int)0);
+                    }
+
+                    if (mlKemPrivateKey != null)
+                    {
+                        writer.Write(mlKemPrivateKey.Length);
+                        writer.Write(mlKemPrivateKey);
+                    }
+                    else
+                    {
+                        writer.Write((int)0);
+                    }
+
+                    if (aesSalt != null)
+                    {
+                        writer.Write(aesSalt.Length);
+                        writer.Write(aesSalt);
+                    }
+                    else
+                    {
+                        writer.Write((int)0);
+                    }
                 }
                 return m.ToArray();
             }
@@ -480,16 +536,12 @@ namespace IXICore.Streaming
                         SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.keys, m.ToArray());
 
                         // Send the key to the recipient
-                        StreamMessage sm = new StreamMessage();
+                        StreamMessage sm = new StreamMessage(protocolVersion);
                         sm.type = StreamMessageCode.info;
                         sm.recipient = walletAddress;
                         sm.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
                         sm.data = spixi_message.getBytes();
                         sm.encryptionType = StreamMessageEncryptionCode.rsa;
-                        if (clientEncryptionVersion == 1)
-                        {
-                            sm.encryptionType = StreamMessageEncryptionCode.rsa2;
-                        }
                         sm.id = new byte[] { 2 };
 
                         CoreStreamProcessor.sendMessage(this, sm);

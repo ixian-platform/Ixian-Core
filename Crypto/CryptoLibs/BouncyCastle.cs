@@ -11,9 +11,13 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using Org.BouncyCastle.Asn1.Sec;
+using Org.BouncyCastle.Asn1.X9;
 using Org.BouncyCastle.Crypto;
 using Org.BouncyCastle.Crypto.Engines;
 using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Kems;
+using Org.BouncyCastle.Crypto.Digests;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Math;
 using Org.BouncyCastle.Security;
@@ -38,6 +42,8 @@ namespace IXICore
         // Private variables used for SHA-3
         [ThreadStatic]
         static Org.BouncyCastle.Crypto.Digests.Sha3Digest sha3Algorithm512 = null;
+
+        static readonly MLKemParameters MLKem_parameters = MLKemParameters.ml_kem_1024;
 
         public BouncyCastle()
         {
@@ -740,6 +746,104 @@ namespace IXICore
             byte[] shaTrunc = new byte[hashLength];
             Array.Copy(sha3_512sq(input, offset, count), shaTrunc, hashLength);
             return shaTrunc;
+        }
+
+        public byte[] deriveSymmetricKey(byte[] shared_secret, int derived_key_length, byte[] salt = null, byte[] info = null)
+        {
+            var hkdf = new HkdfBytesGenerator(new Sha3Digest(512));
+            hkdf.Init(new HkdfParameters(shared_secret, salt, info));
+            byte[] derived_key = new byte[derived_key_length];
+            hkdf.GenerateBytes(derived_key, 0, derived_key_length);
+            return derived_key;
+        }
+
+        public (byte[] publicKey, byte[] privateKey) generateECDHKeyPair()
+        {
+            // Get the curve
+            X9ECParameters curve = SecNamedCurves.GetByName("secp521r1");
+            ECDomainParameters domain = new ECDomainParameters(curve);
+
+            // Generate key pair
+            ECKeyPairGenerator keyGen = new ECKeyPairGenerator();
+            keyGen.Init(new ECKeyGenerationParameters(domain, new SecureRandom()));
+            AsymmetricCipherKeyPair keyPair = keyGen.GenerateKeyPair();
+
+            // Get keys
+            var private_key_params = (ECPrivateKeyParameters)keyPair.Private;
+            var public_key_params = (ECPublicKeyParameters)keyPair.Public;
+
+            // Encode keys
+            byte[] private_key_bytes = private_key_params.D.ToByteArrayUnsigned();
+            byte[] public_key_bytes = public_key_params.Q.GetEncoded(false); // Uncompressed
+
+            return (public_key_bytes, private_key_bytes);
+        }
+
+        public byte[] deriveECDHSharedKey(byte[] private_key_bytes, byte[] peer_public_key_bytes)
+        {
+            X9ECParameters curve = SecNamedCurves.GetByName("secp521r1");
+            ECDomainParameters domain = new ECDomainParameters(curve);
+
+            // Rebuild private key
+            var private_key = new ECPrivateKeyParameters(
+                new Org.BouncyCastle.Math.BigInteger(1, private_key_bytes),
+                domain
+            );
+
+            // Rebuild peer public key
+            var q = curve.Curve.DecodePoint(peer_public_key_bytes);
+            var peer_public_key = new ECPublicKeyParameters(q, domain);
+
+            // Perform key agreement
+            IBasicAgreement agreement = AgreementUtilities.GetBasicAgreement("ECDH");
+            agreement.Init(private_key);
+            Org.BouncyCastle.Math.BigInteger shared_secret = agreement.CalculateAgreement(peer_public_key);
+
+            // Return the shared secret bytes (derive with a KDF!)
+            return shared_secret.ToByteArrayUnsigned();
+        }
+
+        public (byte[] publicKey, byte[] privateKey) generateMLKemKeyPair()
+        {
+            var kg_params = new MLKemKeyGenerationParameters(new SecureRandom(), MLKem_parameters);
+
+            var kg = new MLKemKeyPairGenerator();
+            kg.Init(kg_params);
+
+            var kp = kg.GenerateKeyPair();
+
+            byte[] pub_key_bytes = ((MLKemPublicKeyParameters)kp.Public).GetEncoded();
+            byte[] private_key_bytes = ((MLKemPrivateKeyParameters)kp.Private).GetEncoded();
+
+            return (pub_key_bytes, private_key_bytes);
+        }
+
+        public (byte[] ciphertext, byte[] sharedSecret) encapsulateMLKem(byte[] peer_public_key_bytes)
+        {
+            var public_key = MLKemPublicKeyParameters.FromEncoding(MLKem_parameters, peer_public_key_bytes);
+
+            var kem = new MLKemEncapsulator(MLKem_parameters);
+            kem.Init(public_key);
+
+            byte[] ciphertext = new byte[kem.EncapsulationLength];
+            byte[] shared_secret = new byte[kem.SecretLength];
+
+            kem.Encapsulate(ciphertext, shared_secret);
+
+            return (ciphertext, shared_secret);
+        }
+
+        public byte[] decapsulateMLKem(byte[] private_key_bytes, byte[] ciphertext)
+        {
+            var private_key = MLKemPrivateKeyParameters.FromEncoding(MLKem_parameters, private_key_bytes);
+
+            var kem = new MLKemDecapsulator(MLKem_parameters);
+            kem.Init(private_key);
+
+            byte[] shared_secret = new byte[kem.SecretLength];
+            kem.Decapsulate(ciphertext, shared_secret);
+
+            return shared_secret;
         }
     }
 }

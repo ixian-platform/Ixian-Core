@@ -60,6 +60,7 @@ namespace IXICore
         msgReport,
         requestAdd2,
         acceptAdd2,
+        keys2
     }
 
     // TODO TODO TODO add checksum from StreamMessage/parent message to SpixiMessage when encrypted and when StreamMessage isn't signed and compare the checksums, to make sure StreamMessage hasn't been tampered with

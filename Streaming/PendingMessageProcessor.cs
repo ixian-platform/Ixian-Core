@@ -259,12 +259,16 @@ namespace IXICore.Streaming
                     {
                         // upgrade encryption type
                         msg.encryptionType = StreamMessageEncryptionCode.spixi1;
+                        if (friend.protocolVersion >= 1)
+                        {
+                            msg.encryptionType = StreamMessageEncryptionCode.spixi2;
+                        }
                     }
                     else if (!friend.bot)
                     {
                         // upgrade encryption type
                         msg.encryptionType = StreamMessageEncryptionCode.rsa;
-                        if (friend.clientEncryptionVersion == 1)
+                        if (friend.protocolVersion >= 1)
                         {
                             msg.encryptionType = StreamMessageEncryptionCode.rsa2;
                         }
