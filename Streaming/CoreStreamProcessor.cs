@@ -1048,6 +1048,11 @@ namespace IXICore.Streaming
             else
             {
                 Friend friend = FriendList.getFriend(sender_wallet);
+                if (friend.protocolVersion > 0)
+                {
+                    Logging.error("Client {0}, tried downgrading to {1} from {2}.", sender_wallet, 0, friend.protocolVersion);
+                    return false;
+                }
                 if (friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
                 {
                     return false;
@@ -1092,11 +1097,11 @@ namespace IXICore.Streaming
 
             if (new_friend != null)
             {
+                new_friend.protocolVersion = version;
                 if (new_friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
                 {
                     return false;
                 }
-                new_friend.protocolVersion = version;
                 new_friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 new_friend.handshakeStatus = 1;
                 new_friend.saveMetaData();
@@ -1107,16 +1112,17 @@ namespace IXICore.Streaming
             {
                 // TODO - think about this section, perhaps user should be notified in this case
                 Friend friend = FriendList.getFriend(sender_wallet);
-                if (friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
-                {
-                    return false;
-                }
                 if (friend.protocolVersion > version)
                 {
                     Logging.error("Client {0}, tried downgrading to {1} from {2}.", sender_wallet, version, friend.protocolVersion);
                     return false;
                 }
                 friend.protocolVersion = version;
+                if (friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
+                {
+                    return false;
+                }
+
                 friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 friend.setPublicKey(pub_key);
                 friend.saveMetaData();
@@ -1604,7 +1610,7 @@ namespace IXICore.Streaming
 
         public static void sendContactRequest_old(Friend friend)
         {
-            Logging.info("Sending contact request");
+            Logging.info("Sending contact request old");
 
 
             // Send the message to the S2 nodes
@@ -1628,13 +1634,10 @@ namespace IXICore.Streaming
         {
             Logging.info("Sending contact request");
 
-            friend.protocolVersion = 1;
-            friend.save();
-
             byte[] my_pub_key_ixi_bytes = IxianHandler.getWalletStorage().getPrimaryPublicKey().GetIxiBytes();
             byte[] contact_request_bytes = new byte[1 + my_pub_key_ixi_bytes.Length];
-            contact_request_bytes[0] = (byte)friend.protocolVersion; // version
-            Buffer.BlockCopy(my_pub_key_ixi_bytes, 0, contact_request_bytes, 1, contact_request_bytes.Length - 1);
+            contact_request_bytes[0] = (byte)1; // version
+            Buffer.BlockCopy(my_pub_key_ixi_bytes, 0, contact_request_bytes, 1, my_pub_key_ixi_bytes.Length);
 
             // Send the message to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.requestAdd2, contact_request_bytes);
