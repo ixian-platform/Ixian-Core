@@ -10,7 +10,6 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using CommunityToolkit.Maui.Converters;
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.SpixiBot;
@@ -1634,15 +1633,18 @@ namespace IXICore.Streaming
         {
             Logging.info("Sending contact request");
 
+            int min_protocol_version = 1;
+            int max_protocol_version = 1;
+
             byte[] my_pub_key_ixi_bytes = IxianHandler.getWalletStorage().getPrimaryPublicKey().GetIxiBytes();
             byte[] contact_request_bytes = new byte[1 + my_pub_key_ixi_bytes.Length];
-            contact_request_bytes[0] = (byte)1; // version
+            contact_request_bytes[0] = (byte)max_protocol_version;
             Buffer.BlockCopy(my_pub_key_ixi_bytes, 0, contact_request_bytes, 1, my_pub_key_ixi_bytes.Length);
 
             // Send the message to the S2 nodes
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.requestAdd2, contact_request_bytes);
 
-            StreamMessage message = new StreamMessage(friend.protocolVersion);
+            StreamMessage message = new StreamMessage(min_protocol_version);
             message.type = StreamMessageCode.info;
             message.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
             message.recipient = friend.walletAddress;
