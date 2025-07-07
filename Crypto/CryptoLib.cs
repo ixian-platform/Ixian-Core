@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
+﻿// Copyright (C) 2017-2025 Ixian OU
 // This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -9,8 +9,6 @@
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
-
-using System.Diagnostics;
 
 namespace IXICore
 {
@@ -68,6 +66,7 @@ namespace IXICore
         /// <param name="privateKey">Private key for signing the data in Ixian serialized format.</param>
         /// <returns>Signature of the given data with the given key in a byte-field format.</returns>
         byte[] getSignature(byte[] input, byte[] privateKey);
+
         /// <summary>
         ///  Verifies that the given signature correctly signs the data with the given public key.
         ///  See the class `IxianKeyPair` and the function `generateKeys()` for information about how to obtain a serialized RSA key.
@@ -87,6 +86,7 @@ namespace IXICore
         /// <param name="publicKey">RSA public key in the Ixian serialized format.</param>
         /// <returns>Encrypted data (Ciphertext), using RSA cryptography.</returns>
         byte[] encryptWithRSA(byte[] input, byte[] publicKey);
+
         /// <summary>
         ///  Decrypts the data using RSA cryptography and using the provided private key in the Ixian serialized format.
         ///  See the class `IxianKeyPair` and the function `generateKeys()` for information about how to obtain a serialized RSA key.
@@ -98,7 +98,7 @@ namespace IXICore
         byte[] decryptWithRSA(byte[] input, byte[] privateKey);
 
         /// <summary>
-        ///  Encrpyts the provided data with a variant of the AES algorithm and using the provided symmetrical encryption key.
+        ///  Encrypts the provided data with a variant of the AES algorithm and using the provided symmetrical encryption key.
         /// </summary>
         /// <remarks>
         ///  For best results, the key should be as random as possible. The function also generates a random salt value to increase the security of
@@ -110,6 +110,22 @@ namespace IXICore
         /// <param name="use_GCM">Uses GCM mode.</param>
         /// <returns>AES-Encrypted data (Ciphertext) and the random salt value used in encryption.</returns>
         byte[] encryptWithAES(byte[] input, byte[] key, bool use_GCM);
+
+        /// <summary>
+        ///  Encrypts the provided data with a variant of the AES algorithm and using the provided symmetrical encryption key.
+        /// </summary>
+        /// <remarks>
+        ///  For best results, the key should be as random as possible. The function also generates a random salt value to increase the security of
+        ///  encryption. Because the salt value is needed for decryption, it is returned together with the ciphertext.
+        ///  The exact algorithm used for encryption is "AES/CBC/PKCS7Padding"
+        /// </remarks>
+        /// <param name="input">Cleartext data.</param>
+        /// <param name="key">Encryption key.</param>
+        /// <param name="iv">AES Initialization Vector</param>
+        /// <param name="use_GCM">Uses GCM mode.</param>
+        /// <returns>AES-Encrypted data (Ciphertext) and the random salt value used in encryption.</returns>
+        byte[] encryptWithAES(byte[] input, byte[] key, byte[] iv, bool use_GCM);
+
         /// <summary>
         ///  Decrypts the provided block of data with a variant of the AES algorithm and using the provided symmetrical encryption key.
         /// </summary>
@@ -126,6 +142,22 @@ namespace IXICore
         byte[] decryptWithAES(byte[] input, byte[] key, bool use_GCM, int offset = 0);
 
         /// <summary>
+        ///  Decrypts the provided block of data with a variant of the AES algorithm and using the provided symmetrical encryption key and IV.
+        /// </summary>
+        /// <remarks>
+        ///  This function mirrors `encryptDataAES()`, so the input data should also contain the random salt value used in encryption.
+        ///  The function allows processing encrypted data from a larger byte buffer by specifying the offset at which the data starts.
+        ///  For most use cases, `offset` should be set to 0.
+        /// </remarks>
+        /// <param name="input">Ciphertext data to decrypt</param>
+        /// <param name="key">Decryption key.</param>
+        /// <param name="iv">AES Initialization Vector</param>
+        /// <param name="use_GCM">Uses GCM mode.</param>
+        /// <param name="offset">Offset of the encrypted data in the byte-field. This is usually 0.</param>
+        /// <returns></returns>
+        byte[] decryptWithAES(byte[] input, byte[] key, byte[] iv, bool use_GCM, int offset = 0);
+
+        /// <summary>
         ///  Encrypts the provided data with the given password. This function uses `encryptWithAES()` as the internal encryption primitive, but
         ///  abstracts away some of the detail around key and salt generation.
         /// </summary>
@@ -138,6 +170,7 @@ namespace IXICore
         /// <param name="use_GCM">Uses GCM mode.</param>
         /// <returns>Ciphertext data with a random salt value.</returns>
         byte[] encryptWithPassword(byte[] data, string password, bool use_GCM);
+
         /// <summary>
         ///  Encrypts the provided data with the given password. This function uses `decryptWithAES()` as the internal encryption primitive, but
         ///  abstracts away some of the detail around key and salt processing.
@@ -162,6 +195,27 @@ namespace IXICore
         byte[] encryptWithChacha(byte[] input, byte[] key);
 
         /// <summary>
+        ///  Encrypts the provided data with the given password. This function uses Bouncy Castle's 'ChaCha' method as the internal encryption primitive, but
+        ///  abstracts away some of the detail around key processing.
+        /// </summary>
+        /// <param name="input">Cleartext data.</param>
+        /// <param name="key">Encryption password.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <returns>Ciphertext data.</returns>
+        byte[] encryptWithChacha(byte[] input, byte[] key, byte[] nonce);
+
+        /// <summary>
+        ///  Encrypts the provided data with the given password. This function uses Bouncy Castle's 'ChaCha' method as the internal encryption primitive, but
+        ///  abstracts away some of the detail around key processing.
+        /// </summary>
+        /// <param name="input">Cleartext data.</param>
+        /// <param name="key">Encryption password.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="aad">Associated data.</param>
+        /// <returns>Ciphertext data.</returns>
+        byte[] encryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad);
+
+        /// <summary>
         ///  Decrypts the provided data with the given password. This function uses Bouncy Castle's 'ChaCha' method as the internal encryption primitive, but
         ///  abstracts away some of the detail around key processing.
         /// </summary>
@@ -169,6 +223,29 @@ namespace IXICore
         /// <param name="key">Decryption password.</param>
         /// <returns>Cleartext data.</returns>
         byte[] decryptWithChacha(byte[] input, byte[] key);
+
+        /// <summary>
+        ///  Decrypts the provided data with the given password. This function uses Bouncy Castle's 'ChaCha' method as the internal encryption primitive, but
+        ///  abstracts away some of the detail around key processing.
+        /// </summary>
+        /// <param name="input">Ciphertext data.</param>
+        /// <param name="key">Decryption password.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="offset">Offset of the encrypted data in the byte-field. This is usually 0.</param>
+        /// <returns>Cleartext data.</returns>
+        byte[] decryptWithChacha(byte[] input, byte[] key, byte[] nonce, int offset);
+
+        /// <summary>
+        ///  Decrypts the provided data with the given password. This function uses Bouncy Castle's 'ChaCha' method as the internal encryption primitive, but
+        ///  abstracts away some of the detail around key processing.
+        /// </summary>
+        /// <param name="input">Ciphertext data.</param>
+        /// <param name="key">Decryption password.</param>
+        /// <param name="nonce">Chacha nonce.</param>
+        /// <param name="aad">Associated data.</param>
+        /// <param name="offset">Offset of the encrypted data in the byte-field. This is usually 0.</param>
+        /// <returns>Cleartext data.</returns>
+        byte[] decryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad, int offset);
 
         /// <summary>
         ///  Generates a child RSA key from the given parent RSA key, so that the process may be repeated in the future. This function
@@ -216,7 +293,6 @@ namespace IXICore
         /// <returns>SHA3-512 hash of the input data.</returns>
         byte[] sha3_512(byte[] input, int offset = 0, int count = 0);
 
-
         /// <summary>
         ///  Computes a trunc(N, SHA3-512) value of the given data. It is possible to calculate the hash for a subset of the input data by
         ///  using the `offset` and `count` parameters.
@@ -258,6 +334,19 @@ namespace IXICore
         /// <param name="hashLength">Number of bytes to keep from the truncated hash.</param>
         /// <returns>SHA3-512 squared and truncated hash of the input data.</returns>
         byte[] sha3_512sqTrunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44);
+
+
+        byte[] deriveSymmetricKey(byte[] shared_secret, int derived_key_length, byte[] salt = null, byte[] info = null);
+
+        (byte[] publicKey, byte[] privateKey) generateECDHKeyPair();
+
+        byte[] deriveECDHSharedKey(byte[] private_key_bytes, byte[] peer_public_key_bytes);
+
+        (byte[] publicKey, byte[] privateKey) generateMLKemKeyPair();
+
+        (byte[] ciphertext, byte[] sharedSecret) encapsulateMLKem(byte[] peer_public_key_bytes);
+
+        byte[] decapsulateMLKem(byte[] private_key_bytes, byte[] ciphertext);
     }
 
 
@@ -272,7 +361,6 @@ namespace IXICore
 
         public IxianKeyPair generateKeys(int keySize, int addressVersion)
         {
-            Trace.Assert(_cryptoLib != null);
             return _cryptoLib.generateKeys(keySize, addressVersion);
         }
 
@@ -301,9 +389,19 @@ namespace IXICore
             return _cryptoLib.encryptWithAES(input, key, use_GCM);
         }
 
+        public byte[] encryptWithAES(byte[] input, byte[] key, byte[] iv, bool use_GCM)
+        {
+            return _cryptoLib.encryptWithAES(input, key, iv, use_GCM);
+        }
+
         public byte[] decryptWithAES(byte[] input, byte[] key, bool use_GCM, int offset = 0)
         {
             return _cryptoLib.decryptWithAES(input, key, use_GCM, offset);
+        }
+
+        public byte[] decryptWithAES(byte[] input, byte[] key, byte[] iv, bool use_GCM, int offset = 0)
+        {
+            return _cryptoLib.decryptWithAES(input, key, iv, use_GCM, offset);
         }
 
         public byte[] encryptWithPassword(byte[] data, string password, bool use_GCM)
@@ -320,10 +418,29 @@ namespace IXICore
         {
             return _cryptoLib.encryptWithChacha(input, key);
         }
+        public byte[] encryptWithChacha(byte[] input, byte[] key, byte[] nonce)
+        {
+            return _cryptoLib.encryptWithChacha(input, key, nonce);
+        }
+
+        public byte[] encryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad)
+        {
+            return _cryptoLib.encryptWithChachaPoly1305(input, key, nonce, aad);
+        }
 
         public byte[] decryptWithChacha(byte[] input, byte[] key)
         {
             return _cryptoLib.decryptWithChacha(input, key);
+        }
+
+        public byte[] decryptWithChacha(byte[] input, byte[] key, byte[] nonce, int inOffset)
+        {
+            return _cryptoLib.decryptWithChacha(input, key, nonce, inOffset);
+        }
+
+        public byte[] decryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad, int inOffset)
+        {
+            return _cryptoLib.decryptWithChachaPoly1305(input, key, nonce, aad, inOffset);
         }
 
         public byte[] generateChildKey(byte[] parentKey, int version, int seed)
@@ -364,6 +481,37 @@ namespace IXICore
         public byte[] sha3_512sqTrunc(byte[] input, int offset = 0, int count = 0, int hashLength = 44)
         {
             return _cryptoLib.sha3_512sqTrunc(input, offset, count, hashLength);
+        }
+
+
+        public byte[] deriveSymmetricKey(byte[] shared_secret, int derived_key_length, byte[] salt = null, byte[] info = null)
+        {
+            return _cryptoLib.deriveSymmetricKey(shared_secret, derived_key_length, salt, info);
+        }
+
+        public (byte[] publicKey, byte[] privateKey) generateECDHKeyPair()
+        {
+            return _cryptoLib.generateECDHKeyPair();
+        }
+
+        public byte[] deriveECDHSharedKey(byte[] private_key_bytes, byte[] peer_public_key_bytes)
+        {
+            return _cryptoLib.deriveECDHSharedKey(private_key_bytes, peer_public_key_bytes);
+        }
+
+        public (byte[] publicKey, byte[] privateKey) generateMLKemKeyPair()
+        {
+            return _cryptoLib.generateMLKemKeyPair();
+        }
+
+        public (byte[] ciphertext, byte[] sharedSecret) encapsulateMLKem(byte[] peer_public_key_bytes)
+        {
+            return _cryptoLib.encapsulateMLKem(peer_public_key_bytes);
+        }
+
+        public byte[] decapsulateMLKem(byte[] private_key_bytes, byte[] ciphertext)
+        {
+            return _cryptoLib.decapsulateMLKem(private_key_bytes, ciphertext);
         }
     }
 }
