@@ -97,11 +97,11 @@ namespace IXICore
 
             byte[] message_nonce = CryptoManager.lib.getSecureRandomBytes(64);
             var derived_aes_secret = deriveKeyAndIv(message_nonce, aes_key, 12);
-            byte[] aes_encrypted = CryptoManager.lib.encryptWithAES(data_to_encrypt, derived_aes_secret.iv, derived_aes_secret.key, true);
+            byte[] aes_encrypted = CryptoManager.lib.encryptWithAES(data_to_encrypt, derived_aes_secret.key, derived_aes_secret.iv, true);
             if (aes_encrypted != null)
             {
                 var derived_chacha_secret = deriveKeyAndIv(message_nonce, chacha_key, 12);
-                byte[] chacha_encrypted_ixi_bytes = CryptoManager.lib.encryptWithChachaPoly1305(aes_encrypted, derived_chacha_secret.iv, derived_chacha_secret.key, aad).GetIxiBytes();
+                byte[] chacha_encrypted_ixi_bytes = CryptoManager.lib.encryptWithChachaPoly1305(aes_encrypted, derived_chacha_secret.key, derived_chacha_secret.iv, aad).GetIxiBytes();
                 byte[] message_nonce_ixi_bytes = message_nonce.GetIxiBytes();
                 byte[] iv_with_encrypted = new byte[message_nonce_ixi_bytes.Length + chacha_encrypted_ixi_bytes.Length];
                 Buffer.BlockCopy(message_nonce_ixi_bytes, 0, iv_with_encrypted, 0, message_nonce_ixi_bytes.Length);
@@ -194,11 +194,11 @@ namespace IXICore
             offset += dataLen.bytesRead;
             
             var derived_chacha_secret = deriveKeyAndIv(message_nonce.bytes, chacha_key, 12);
-            byte[] chacha_decrypted = CryptoManager.lib.decryptWithChachaPoly1305(data_to_decrypt, derived_chacha_secret.iv, derived_chacha_secret.key, aad, offset);
+            byte[] chacha_decrypted = CryptoManager.lib.decryptWithChachaPoly1305(data_to_decrypt, derived_chacha_secret.key, derived_chacha_secret.iv, aad, offset);
             if (chacha_decrypted != null)
             {
                 var derived_aes_secret = deriveKeyAndIv(message_nonce.bytes, aes_key, 12);
-                byte[] aes_decrypted = CryptoManager.lib.decryptWithAES(chacha_decrypted, derived_aes_secret.iv, derived_aes_secret.key, true);
+                byte[] aes_decrypted = CryptoManager.lib.decryptWithAES(chacha_decrypted, derived_aes_secret.key, derived_aes_secret.iv, true);
                 return aes_decrypted;
             }
             return null;

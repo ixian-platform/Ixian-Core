@@ -284,7 +284,7 @@ namespace IXICore
             }
             byte[] salt = getSecureRandomBytes(salt_size);
 
-            byte[] encrypted_data = encryptWithAES(input, salt, key, use_GCM);
+            byte[] encrypted_data = encryptWithAES(input, key, salt, use_GCM);
             if (encrypted_data != null)
             {
                 byte[] bytes = new byte[salt.Length + encrypted_data.Length];
@@ -297,7 +297,7 @@ namespace IXICore
             return null;
         }
 
-        public byte[] encryptWithAES(byte[] input, byte[] iv, byte[] key, bool use_GCM)
+        public byte[] encryptWithAES(byte[] input, byte[] key, byte[] iv, bool use_GCM)
         {
             try
             {
@@ -335,7 +335,7 @@ namespace IXICore
                 byte[] gcm_salt = new byte[salt_size];
 
                 Array.Copy(input, inOffset, gcm_salt, 0, gcm_salt.Length);
-                byte[] decrypted = decryptWithAES(input, gcm_salt, key, use_GCM, inOffset + salt_size);
+                byte[] decrypted = decryptWithAES(input, key, gcm_salt, use_GCM, inOffset + salt_size);
                 if (decrypted != null)
                 {
                     return decrypted;
@@ -349,10 +349,10 @@ namespace IXICore
             byte[] salt = new byte[block_size];
 
             Array.Copy(input, inOffset, salt, 0, salt.Length);
-            return decryptWithAES(input, salt, key, use_GCM, inOffset + block_size);
+            return decryptWithAES(input, key, salt, use_GCM, inOffset + block_size);
         }
 
-        public byte[] decryptWithAES(byte[] input, byte[] iv, byte[] key, bool use_GCM, int inOffset = 0)
+        public byte[] decryptWithAES(byte[] input, byte[] key, byte[] iv, bool use_GCM, int inOffset = 0)
         {
             try
             {
@@ -418,7 +418,7 @@ namespace IXICore
         {
             // Generate the 8 byte nonce
             byte[] nonce = getSecureRandomBytes(8);
-            byte[] encrypted_data = encryptWithChacha(input, nonce, key);
+            byte[] encrypted_data = encryptWithChacha(input, key, nonce);
             if (encrypted_data != null)
             {
                 byte[] bytes = new byte[nonce.Length + encrypted_data.Length];
@@ -436,10 +436,10 @@ namespace IXICore
         /// Encrypt the given data using the Chacha engine.
         /// </summary>
         /// <param name="input">Cleartext data.</param>
-        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="key">Chacha encryption key.</param>
+        /// <param name="nonce">Chacha nonce.</param>
         /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
-        public byte[] encryptWithChacha(byte[] input, byte[] nonce, byte[] key)
+        public byte[] encryptWithChacha(byte[] input, byte[] key, byte[] nonce)
         {
             // Create a buffer that will contain the encrypted output and an 8 byte nonce
             byte[] outData = new byte[input.Length];
@@ -473,11 +473,11 @@ namespace IXICore
         /// Encrypt the given data using the Chacha engine.
         /// </summary>
         /// <param name="input">Cleartext data.</param>
-        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="key">Chacha encryption key.</param>
+        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="aad">Additional data.</param>
         /// <returns>Encrypted (ciphertext) data or null in the event of a failure.</returns>
-        public byte[] encryptWithChachaPoly1305(byte[] input, byte[] nonce, byte[] key, byte[] aad)
+        public byte[] encryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad)
         {
             try
             {
@@ -511,18 +511,18 @@ namespace IXICore
         {
             // Extract the nonce from the input
             byte[] nonce = input.Take(8).ToArray();
-            return decryptWithChacha(input, nonce, key, 8);
+            return decryptWithChacha(input, key, nonce, 8);
         }
 
         /// <summary>
         /// Decrypt the given data using the Chacha engine.
         /// </summary>
         /// <param name="input">Ciphertext data.</param>
-        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="key">Chacha decryption key.</param>
+        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="inOffset">Offset of input bytes.</param>
         /// <returns>Decrypted (cleartext) data or null in the event of a failure.</returns>
-        public byte[] decryptWithChacha(byte[] input, byte[] nonce, byte[] key, int inOffset = 0)
+        public byte[] decryptWithChacha(byte[] input, byte[] key, byte[] nonce, int inOffset = 0)
         {
             // Prevent leading 0 to avoid edge cases
             if (nonce[0] == 0)
@@ -555,12 +555,12 @@ namespace IXICore
         /// Decrypt the given data using the Chacha engine.
         /// </summary>
         /// <param name="input">Ciphertext data.</param>
-        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="key">Chacha decryption key.</param>
+        /// <param name="nonce">Chacha nonce.</param>
         /// <param name="aad">Additional data.</param>
         /// <param name="inOffset">Offset of input bytes.</param>
         /// <returns>Decrypted (cleartext) data or null in the event of a failure.</returns>
-        public byte[] decryptWithChachaPoly1305(byte[] input, byte[] nonce, byte[] key, byte[] aad, int inOffset = 0)
+        public byte[] decryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad, int inOffset = 0)
         {
             try
             {
@@ -774,7 +774,7 @@ namespace IXICore
 
             // Encode keys
             byte[] private_key_bytes = private_key_params.D.ToByteArrayUnsigned();
-            byte[] public_key_bytes = public_key_params.Q.GetEncoded(false); // Uncompressed
+            byte[] public_key_bytes = public_key_params.Q.GetEncoded(true);
 
             return (public_key_bytes, private_key_bytes);
         }

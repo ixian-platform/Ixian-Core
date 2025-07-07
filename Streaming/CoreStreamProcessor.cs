@@ -108,8 +108,6 @@ namespace IXICore.Streaming
         // Called when receiving encryption keys from the S2 node
         protected bool handleReceivedKeys(Address sender, byte[] data)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             Friend friend = FriendList.getFriend(sender);
             if (friend != null)
             {
@@ -149,8 +147,6 @@ namespace IXICore.Streaming
         // Called when receiving encryption keys from the S2 node
         protected bool handleReceivedKeys2(Address sender, Keys2 data)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             Friend friend = FriendList.getFriend(sender);
             if (friend != null)
             {
@@ -1020,8 +1016,6 @@ namespace IXICore.Streaming
 
         protected bool handleRequestAdd(byte[] id, Address sender_wallet, byte[] pub_key, long received_timestamp)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             if (!(new Address(pub_key)).SequenceEqual(sender_wallet))
             {
                 Logging.error("Received invalid pubkey in handleRequestAdd for {0}", sender_wallet.ToString());
@@ -1074,7 +1068,6 @@ namespace IXICore.Streaming
 
         protected bool handleRequestAdd2(byte[] id, Address sender_wallet, byte[] data, long received_timestamp)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
             var version_with_offset = data.GetIxiVarUInt(0);
             int version = (int)version_with_offset.num;
             if (version > 1)
@@ -1111,12 +1104,11 @@ namespace IXICore.Streaming
             {
                 // TODO - think about this section, perhaps user should be notified in this case
                 Friend friend = FriendList.getFriend(sender_wallet);
-                if (friend.protocolVersion > version)
+                if (friend.protocolVersion < version)
                 {
-                    Logging.error("Client {0}, tried downgrading to {1} from {2}.", sender_wallet, version, friend.protocolVersion);
-                    return false;
+                    // upgrade version
+                    friend.protocolVersion = version;
                 }
-                friend.protocolVersion = version;
                 if (friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
                 {
                     return false;
@@ -1141,8 +1133,6 @@ namespace IXICore.Streaming
 
         protected bool handleAcceptAdd(Address sender_wallet, byte[] aes_key)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
             if (friend == null)
@@ -1151,9 +1141,9 @@ namespace IXICore.Streaming
                 return false;
             }
 
-            if (friend.protocolVersion == 1)
+            if (friend.protocolVersion > 0)
             {
-                Logging.error("Received accept add but client encryption version is 1.");
+                Logging.error("Client {0}, tried downgrading to {1} from {2}.", sender_wallet, 0, friend.protocolVersion);
                 return false;
             }
 
@@ -1182,8 +1172,6 @@ namespace IXICore.Streaming
 
         protected bool handleAcceptAdd2(Address sender_wallet, AcceptAdd2 data)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
             if (friend == null)
@@ -1194,6 +1182,12 @@ namespace IXICore.Streaming
 
             if (friend.handshakeStatus > 1)
             {
+                return false;
+            }
+
+            if (friend.protocolVersion > data.version)
+            {
+                Logging.error("Client {0}, tried downgrading to {1} from {2}.", sender_wallet, data.version, friend.protocolVersion);
                 return false;
             }
 
@@ -1323,14 +1317,12 @@ namespace IXICore.Streaming
 
         public static bool sendAcceptAdd(Friend friend, bool reset_keys)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             if (friend.handshakeStatus > 1)
             {
                 return false;
             }
 
-            if (friend.protocolVersion >= 1)
+            if (friend.protocolVersion > 0)
             {
                 return sendAcceptAdd2(friend, reset_keys);
             }
@@ -1365,8 +1357,6 @@ namespace IXICore.Streaming
 
         public static bool sendAcceptAdd2(Friend friend, bool reset_keys)
         {
-            // TODO TODO secure this function to prevent "downgrade"; possibly other handshake functions need securing
-
             if (friend.handshakeStatus > 1)
             {
                 return false;
