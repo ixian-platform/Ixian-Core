@@ -12,6 +12,7 @@
 
 using IXICore.Meta;
 using IXICore.Utils;
+using System;
 
 namespace IXICore
 {

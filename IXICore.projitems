@@ -86,9 +86,9 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\Friend.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)streaming\MessageCrypto.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)streaming\models\AcceptAdd2.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)streaming\models\Keys2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\MessageCrypto.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptAdd2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\Keys2.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\OfflinePushMessages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessageProcessor.cs" />

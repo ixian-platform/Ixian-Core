@@ -24,6 +24,9 @@ using Org.BouncyCastle.Security;
 using System.Security.Cryptography;
 using System.Text;
 using ChaCha20Poly1305 = Org.BouncyCastle.Crypto.Modes.ChaCha20Poly1305;
+using System;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace IXICore
 {

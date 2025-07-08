@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Utils;
+using System;
 
 namespace IXICore.Streaming.Models
 {
