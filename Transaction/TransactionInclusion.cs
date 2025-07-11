@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Inventory;
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Utils;
@@ -527,6 +528,12 @@ namespace IXICore
 
                             // Create the blockheader from the data and process it
                             Block header = new Block(header_bytes, true);
+
+                            if (InventoryCache.Instance != null)
+                            {
+                                InventoryCache.Instance.setProcessedFlag(InventoryItemTypes.block, header.blockChecksum, true);
+                            }
+
                             if (lastBlockHeader != null && header.blockNum <= lastBlockHeader.blockNum)
                             {
                                 continue;

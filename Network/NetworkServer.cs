@@ -782,7 +782,7 @@ namespace IXICore.Network
                         {
                             continue;
                         }
-                        if (client.presenceAddress.type == 'C')
+                        if (client.presenceAddress.type != 'C')
                         {
                             continue;
                         }
