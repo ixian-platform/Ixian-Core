@@ -12,11 +12,48 @@
 
 using IXICore.Meta;
 using IXICore.Utils;
+using Newtonsoft.Json;
 using System;
 using System.IO;
 
 namespace IXICore
 {
+    class SpixiMessageInternal
+    {
+        public SpixiMessageCode type;
+        public int channel;
+        public object data;
+    }
+    public class StreamMessageDataConverter : JsonConverter<byte[]>
+    {
+        public override void WriteJson(JsonWriter writer, byte[] value, JsonSerializer serializer)
+        {
+            var sm = new SpixiMessage(value);
+
+            var smi = new SpixiMessageInternal()
+            {
+                type = sm.type,
+                channel = sm.channel
+            };
+
+            var data = SpixiMessageObjectMap.MapTypeToModel(sm.type, sm.data);
+            if (data == null)
+            {
+                data = sm.data;
+            }
+
+            smi.data = data;
+
+            serializer.Serialize(writer, smi);
+        }
+
+        public override byte[]? ReadJson(JsonReader reader, Type objectType, byte[]? existingValue, bool hasExistingValue, JsonSerializer serializer)
+        {
+            return JsonConvert.DeserializeObject<SpixiMessage>((string)reader.Value).getBytes();
+        }
+    }
+
+
     // The message codes available in S2.
     // Error and Info are free, while data requires a transaction
     public enum StreamMessageCode
@@ -24,6 +61,13 @@ namespace IXICore
         error,      // Reserved for S2 nodes only
         info,       // Free, limited message type
         data        // Paid, transaction-based type
+    }
+
+    public enum StreamMessageSerializationType
+    {
+        network = 0,
+        checksum = 1,
+        storage = 2
     }
 
     public class StreamMessage
@@ -36,6 +80,8 @@ namespace IXICore
         public Address recipient = null;         // Recipient wallet 
 
         private byte[] transaction = null;       // Unsigned transaction - obsolete, will be removed with v1
+
+        [JsonConverter(typeof(StreamMessageDataConverter))]
         public byte[] data = null;              // Actual message data, encrypted or decrypted
         private byte[] sigdata = null;           // Signature data (for S2), encrypted - obsolete, will be removed with v1
 
@@ -65,21 +111,23 @@ namespace IXICore
             if (version == 0)
             {
                 encryptionType = StreamMessageEncryptionCode.spixi1;
-            } else if (version > 0)
+            }
+            else if (version > 0)
             {
                 encryptionType = StreamMessageEncryptionCode.spixi2;
             }
             timestamp = Clock.getNetworkTimestamp();
         }
 
-        public StreamMessage(byte[] bytes)
+        public StreamMessage(byte[] bytes, StreamMessageSerializationType serializationType = StreamMessageSerializationType.network)
         {
-            if(bytes[0] == 0)
+            if (bytes[0] == 0)
             {
                 fromBytes_v0(bytes);
-            }else
+            }
+            else
             {
-                fromBytes_v1(bytes);
+                fromBytes_v1(bytes, serializationType);
             }
         }
 
@@ -137,7 +185,8 @@ namespace IXICore
                         if (reader.BaseStream.Length - reader.BaseStream.Position > 0)
                         {
                             requireRcvConfirmation = reader.ReadBoolean();
-                        }else
+                        }
+                        else
                         {
                             requireRcvConfirmation = true;
                         }
@@ -147,10 +196,11 @@ namespace IXICore
             catch (Exception e)
             {
                 Logging.error("Exception occurred while trying to construct StreamMessage from bytes: " + e);
+                throw;
             }
         }
 
-        private void fromBytes_v1(byte[] bytes)
+        private void fromBytes_v1(byte[] bytes, StreamMessageSerializationType serializationType)
         {
             try
             {
@@ -191,27 +241,34 @@ namespace IXICore
                             signature = reader.ReadBytes(sig_length);
 
                         requireRcvConfirmation = reader.ReadBoolean();
+
+                        if (serializationType == StreamMessageSerializationType.storage)
+                        {
+                            encrypted = reader.ReadBoolean();
+                        }
                     }
                 }
             }
             catch (Exception e)
             {
                 Logging.error("Exception occurred while trying to construct StreamMessage from bytes: " + e);
+                throw;
             }
         }
 
-        public byte[] getBytes(bool for_checksum = false)
+        public byte[] getBytes(StreamMessageSerializationType serializationType = StreamMessageSerializationType.network)
         {
-            if(version == 0)
+            if (version == 0)
             {
-                return getBytes_v0(for_checksum);
-            }else
+                return getBytes_v0(serializationType);
+            }
+            else
             {
-                return getBytes_v1(for_checksum);
+                return getBytes_v1(serializationType);
             }
         }
 
-        public byte[] getBytes_v0(bool for_checksum = false)
+        public byte[] getBytes_v0(StreamMessageSerializationType serializationType)
         {
             using (MemoryStream m = new MemoryStream())
             {
@@ -285,7 +342,7 @@ namespace IXICore
                         writer.Write(0);
                     }
 
-                    if (!for_checksum)
+                    if (serializationType != StreamMessageSerializationType.checksum)
                     {
                         // TODO this likely doesn't have to be transmitted over network - it's more of a local helper
                         writer.Write(encrypted);
@@ -293,7 +350,8 @@ namespace IXICore
                     }
 
                     // Write the sig
-                    if (!for_checksum && signature != null)
+                    if (serializationType != StreamMessageSerializationType.checksum
+                        && signature != null)
                     {
                         writer.Write(signature.Length);
                         writer.Write(signature);
@@ -310,7 +368,7 @@ namespace IXICore
                 return m.ToArray();
             }
         }
-        public byte[] getBytes_v1(bool for_checksum = false)
+        public byte[] getBytes_v1(StreamMessageSerializationType serializationType)
         {
             using (MemoryStream m = new MemoryStream())
             {
@@ -363,7 +421,7 @@ namespace IXICore
 
                     writer.WriteIxiVarInt(timestamp);
 
-                    if (!for_checksum)
+                    if (serializationType != StreamMessageSerializationType.checksum)
                     {
                         // Write the sig
                         if (signature != null)
@@ -377,6 +435,11 @@ namespace IXICore
                         }
 
                         writer.Write(requireRcvConfirmation);
+
+                        if (serializationType == StreamMessageSerializationType.storage)
+                        {
+                            writer.Write(encrypted);
+                        }
                     }
                 }
                 return m.ToArray();
@@ -400,12 +463,13 @@ namespace IXICore
         // Encrypts a provided message with aes, then chacha based on the keys provided
         public bool encrypt(byte[] public_key, byte[] aes_password, byte[] chacha_key)
         {
-            if(encrypted)
+            if (encrypted)
             {
                 return true;
             }
+
             byte[] encrypted_data = MessageCrypto.encrypt(encryptionType, data, public_key, aes_password, chacha_key, getAdditionalData());
-            if(encrypted_data != null)
+            if (encrypted_data != null)
             {
                 data = encrypted_data;
                 encrypted = true;
@@ -416,7 +480,7 @@ namespace IXICore
 
         public bool decrypt(byte[] private_key, byte[] aes_key, byte[] chacha_key)
         {
-            if(originalData != null)
+            if (originalData != null)
             {
                 return true;
             }
@@ -435,11 +499,11 @@ namespace IXICore
         {
             if (version == 0)
             {
-                return Crypto.sha512(getBytes(true));
+                return Crypto.sha512(getBytes(StreamMessageSerializationType.checksum));
             }
             else
             {
-                return CryptoManager.lib.sha3_512(getBytes(true));
+                return CryptoManager.lib.sha3_512(getBytes(StreamMessageSerializationType.checksum));
             }
         }
 

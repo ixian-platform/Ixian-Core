@@ -15,23 +15,26 @@ using System;
 
 namespace IXICore.Streaming.Models
 {
-    public class AcceptAdd2
+    public class AcceptAdd2Message
     {
         public int version { get; set; }
         public byte[] rsaPubKey { get; set; }
         public byte[] ecdhPubKey { get; set; }
         public byte[] mlkemPubKey { get; set; }
         public byte[] aesSalt { get; set; }
-        public AcceptAdd2(int version, byte[] rsaPubKey, byte[] ecdhPubKey, byte[] mlkemPubKey, byte[] aesSalt)
+        public StreamCapabilities capabilities { get; set; }
+
+        public AcceptAdd2Message(int version, byte[] rsaPubKey, byte[] ecdhPubKey, byte[] mlkemPubKey, byte[] aesSalt, StreamCapabilities capabilities)
         {
             this.version = version;
             this.rsaPubKey = rsaPubKey;
             this.ecdhPubKey = ecdhPubKey;
             this.mlkemPubKey = mlkemPubKey;
             this.aesSalt = aesSalt;
+            this.capabilities = capabilities;
         }
 
-        public AcceptAdd2(byte[] data)
+        public AcceptAdd2Message(byte[] data)
         {
             int offset = 0;
             var version = data.GetIxiVarUInt(offset);
@@ -53,6 +56,16 @@ namespace IXICore.Streaming.Models
             bwo = data.ReadIxiBytes(offset);
             offset += bwo.bytesRead;
             aesSalt = bwo.bytes;
+
+            if (data.Length > offset)
+            {
+                var ivio = data.GetIxiVarUInt(offset);
+                offset += ivio.bytesRead;
+                capabilities = (StreamCapabilities)ivio.num;
+            } else
+            {
+                capabilities = StreamCapabilities.Incoming | StreamCapabilities.Outgoing | StreamCapabilities.IPN | StreamCapabilities.Apps;
+            }
         }
 
         public byte[] getBytes()
@@ -61,12 +74,14 @@ namespace IXICore.Streaming.Models
             byte[] ecdhPubkeyIxiBytes = ecdhPubKey.GetIxiBytes();
             byte[] mlkemPubkeyIxiBytes = mlkemPubKey.GetIxiBytes();
             byte[] aesSaltIxiBytes = aesSalt.GetIxiBytes();
-            byte[] acceptAddMsg = new byte[1 + pubKeyIxiBytes.Length + ecdhPubkeyIxiBytes.Length + mlkemPubkeyIxiBytes.Length + aesSaltIxiBytes.Length];
+            byte[] capabilitiesBytes = ((int)capabilities).GetIxiVarIntBytes();
+            byte[] acceptAddMsg = new byte[1 + pubKeyIxiBytes.Length + ecdhPubkeyIxiBytes.Length + mlkemPubkeyIxiBytes.Length + aesSaltIxiBytes.Length + capabilitiesBytes.Length];
             acceptAddMsg[0] = (byte)version;
             Buffer.BlockCopy(pubKeyIxiBytes, 0, acceptAddMsg, 1, pubKeyIxiBytes.Length);
             Buffer.BlockCopy(ecdhPubkeyIxiBytes, 0, acceptAddMsg, 1 + pubKeyIxiBytes.Length, ecdhPubkeyIxiBytes.Length);
             Buffer.BlockCopy(mlkemPubkeyIxiBytes, 0, acceptAddMsg, 1 + pubKeyIxiBytes.Length + ecdhPubkeyIxiBytes.Length, mlkemPubkeyIxiBytes.Length);
             Buffer.BlockCopy(aesSaltIxiBytes, 0, acceptAddMsg, 1 + pubKeyIxiBytes.Length + ecdhPubkeyIxiBytes.Length + mlkemPubkeyIxiBytes.Length, aesSaltIxiBytes.Length);
+            Buffer.BlockCopy(capabilitiesBytes, 0, acceptAddMsg, 1 + pubKeyIxiBytes.Length + ecdhPubkeyIxiBytes.Length + mlkemPubkeyIxiBytes.Length + aesSaltIxiBytes.Length, capabilitiesBytes.Length);
 
             return acceptAddMsg;
         }

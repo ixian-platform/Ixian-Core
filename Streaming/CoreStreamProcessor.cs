@@ -26,6 +26,26 @@ using static IXICore.Transaction;
 
 namespace IXICore.Streaming
 {
+    public enum StreamCapabilities
+    {
+        // Supports incoming connections - if missing, it indicates to contacts, not to look for it
+        Incoming = 1,
+        // Supports outgoing connections - if missing, it indicates to contacts that they should periodically query it
+        Outgoing = 2,
+        // Supports IPN - if missing, it indicates to contacts not to send offline/pending messages over IPN
+        IPN = 4,
+        // Supports Apps
+        Apps = 8,
+        // Supports App Protocols
+        AppProtocols = 16
+        /* TODO
+        // Supports multiple channels
+        Channels = 32,
+        // Supports sharing user list and bot actions
+        GroupCapabilites = 64
+        */
+    }
+
     class ReceiveDataResponse
     {
         public SpixiMessage spixiMessage { get; private set; }
@@ -52,13 +72,17 @@ namespace IXICore.Streaming
         protected bool running = false;
 
         protected static PendingMessageProcessor pendingMessageProcessor = null;
+        protected static StreamCapabilities streamCapabilities;
 
         protected List<Timer> _typingTimers = new();
 
+
         // Initialize the global stream processor
-        public CoreStreamProcessor(PendingMessageProcessor pendingMessageProcessor)
+        public CoreStreamProcessor(PendingMessageProcessor pendingMessageProcessor, StreamCapabilities streamCapabilities)
         {
             CoreStreamProcessor.pendingMessageProcessor = pendingMessageProcessor;
+            CoreStreamProcessor.streamCapabilities = streamCapabilities;
+
             pendingMessageProcessor.start();
 
             running = true;
@@ -92,16 +116,36 @@ namespace IXICore.Streaming
                     add_to_pending_messages = false;
                 }
             }
-            if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
-                && friend.relayNode != null)
+            if (NetworkServer.getClient(friend.walletAddress) == null)
             {
-                StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
-            }
-            else
-            {
-                fetchFriendsPresence(friend);
+                if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
+                    && friend.relayNode != null)
+                {
+                    StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
+                }
+                else
+                {
+                    fetchFriendsPresence(friend);
+                }
             }
             pendingMessageProcessor.sendMessage(friend, msg, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
+        }
+
+        public static void sendSpixiMessage(Friend friend, SpixiMessage spixi_message, byte[] id = null, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false)
+        {
+            byte[] spixi_msg_bytes = spixi_message.getBytes();
+
+            StreamMessage message = new StreamMessage(friend.protocolVersion);
+            message.type = StreamMessageCode.data;
+            message.recipient = friend.walletAddress;
+            message.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            message.data = spixi_msg_bytes;
+            if (id != null)
+            {
+                message.id = id;
+            }
+
+            sendMessage(friend, message, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
         }
 
 
@@ -145,7 +189,7 @@ namespace IXICore.Streaming
 
 
         // Called when receiving encryption keys from the S2 node
-        protected bool handleReceivedKeys2(Address sender, Keys2 data)
+        protected bool handleReceivedKeys2(Address sender, Keys2Message data)
         {
             Friend friend = FriendList.getFriend(sender);
             if (friend != null)
@@ -155,7 +199,7 @@ namespace IXICore.Streaming
                     return false;
                 }
 
-                Logging.info("In received keys");
+                Logging.info("In received keys2");
 
                 var ecdh_shared_key = CryptoManager.lib.deriveECDHSharedKey(friend.ecdhPrivateKey, data.ecdhPubKey);
                 var mlkem_secret = CryptoManager.lib.decapsulateMLKem(friend.mlKemPrivateKey, data.mlkemCiphertext);
@@ -170,6 +214,8 @@ namespace IXICore.Streaming
                 friend.ecdhPrivateKey = null;
                 friend.mlKemPrivateKey = null;
                 friend.handshakeStatus = 3;
+                friend.streamCapabilities = data.capabilities;
+                friend.save();
 
                 sendNickname(friend);
 
@@ -733,7 +779,7 @@ namespace IXICore.Streaming
                     case SpixiMessageCode.acceptAdd2:
                         {
                             // Friend accepted request
-                            var accept_add_2 = new AcceptAdd2(spixi_message.data);
+                            var accept_add_2 = new AcceptAdd2Message(spixi_message.data);
 
                             if (!new Address(accept_add_2.rsaPubKey).SequenceEqual(message.sender))
                             {
@@ -801,7 +847,7 @@ namespace IXICore.Streaming
                                 if (friend.lastReceivedHandshakeMessageTimestamp < message.timestamp)
                                 {
                                     friend.lastReceivedHandshakeMessageTimestamp = message.timestamp;
-                                    if (!handleReceivedKeys2(sender_address, new Keys2(spixi_message.data)))
+                                    if (!handleReceivedKeys2(sender_address, new Keys2Message(spixi_message.data)))
                                     {
                                         return null;
                                     }
@@ -914,6 +960,11 @@ namespace IXICore.Streaming
                         }
                         return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                     
+                    case SpixiMessageCode.getAppProtocols:
+                        {
+                            return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
+                        }
+                        break;
                     default:
                         return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                 }
@@ -955,7 +1006,7 @@ namespace IXICore.Streaming
         }
         protected bool handleMsgReaction(Friend friend, Address sender, byte[] msg_id, byte[] reaction_data, int channel)
         {
-            if (friend.addReaction(sender, new SpixiMessageReaction(reaction_data), channel))
+            if (friend.addReaction(sender, new ReactionMessage(reaction_data), channel))
             {
                 if (friend.metaData.setLastReceivedMessageIds(msg_id, channel))
                 {
@@ -1034,7 +1085,7 @@ namespace IXICore.Streaming
                 }
                 new_friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 new_friend.handshakeStatus = 1;
-                new_friend.saveMetaData();
+                new_friend.save();
                 requestNickname(new_friend);
                 return true;
             }
@@ -1057,6 +1108,7 @@ namespace IXICore.Streaming
                     reset_keys = false;
                 }
                 friend.handshakeStatus = 1;
+                friend.save();
                 if (friend.approved)
                 {
                     return sendAcceptAdd(friend, reset_keys);
@@ -1079,11 +1131,11 @@ namespace IXICore.Streaming
             var pub_key = pub_key_with_offset.bytes;
             if (!(new Address(pub_key)).SequenceEqual(sender_wallet))
             {
-                Logging.error("Received invalid pubkey in handleRequestAdd for {0}", sender_wallet.ToString());
+                Logging.error("Received invalid pubkey in handleRequestAdd2 for {0}", sender_wallet.ToString());
                 return false;
             }
 
-            Logging.info("In handle request add");
+            Logging.info("In handle request add2");
 
             Friend new_friend = FriendList.addFriend(FriendState.RequestReceived, sender_wallet, pub_key, sender_wallet.ToString(), null, null, 0, false);
 
@@ -1096,7 +1148,7 @@ namespace IXICore.Streaming
                 }
                 new_friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 new_friend.handshakeStatus = 1;
-                new_friend.saveMetaData();
+                new_friend.save();
                 requestNickname(new_friend);
                 return true;
             }
@@ -1116,7 +1168,7 @@ namespace IXICore.Streaming
 
                 friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 friend.setPublicKey(pub_key);
-                friend.saveMetaData();
+                friend.save();
                 bool reset_keys = true;
                 if (friend.handshakeStatus > 0 && friend.handshakeStatus < 3)
                 {
@@ -1170,7 +1222,7 @@ namespace IXICore.Streaming
         }
 
 
-        protected bool handleAcceptAdd2(Address sender_wallet, AcceptAdd2 data)
+        protected bool handleAcceptAdd2(Address sender_wallet, AcceptAdd2Message data)
         {
             // Retrieve the corresponding contact
             Friend friend = FriendList.getFriend(sender_wallet);
@@ -1191,7 +1243,7 @@ namespace IXICore.Streaming
                 return false;
             }
 
-            Logging.info("In handle accept add");
+            Logging.info("In handle accept add2");
 
             var ecdh_keypair = CryptoManager.lib.generateECDHKeyPair();
             var mlkem_keypair = CryptoManager.lib.generateMLKemKeyPair();
@@ -1215,6 +1267,9 @@ namespace IXICore.Streaming
             friend.protocolVersion = data.version;
             friend.state = FriendState.Approved;
             friend.handshakeStatus = 2;
+
+            friend.streamCapabilities = data.capabilities;
+            friend.save();
 
             sendKeys2(friend, ecdh_keypair.publicKey, mlkem_secret.ciphertext, chacha_salt);
 
@@ -1355,6 +1410,30 @@ namespace IXICore.Streaming
             return true;
         }
 
+
+        public static bool sendChatMessage(Friend friend, FriendMessage friend_message, int channel)
+        {
+            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.chat, Encoding.UTF8.GetBytes(friend_message.message), channel);
+            byte[] spixi_msg_bytes = spixi_message.getBytes();
+
+            StreamMessage message = new StreamMessage(friend.protocolVersion);
+            message.type = StreamMessageCode.data;
+            message.recipient = friend.walletAddress;
+            message.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            message.data = spixi_msg_bytes;
+            message.id = friend_message.id;
+
+            if (friend.bot)
+            {
+                message.encryptionType = StreamMessageEncryptionCode.none;
+                message.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
+            }
+
+            sendMessage(friend, message);
+
+            return true;
+        }
+
         public static bool sendAcceptAdd2(Friend friend, bool reset_keys)
         {
             if (friend.handshakeStatus > 1)
@@ -1381,7 +1460,7 @@ namespace IXICore.Streaming
             friend.mlKemPrivateKey = mlkem_keypair.privateKey;
             friend.aesSalt = CryptoManager.lib.getSecureRandomBytes(32);
 
-            var accept_add_msg = new AcceptAdd2(friend.protocolVersion, IxianHandler.getWalletStorage().getPrimaryPublicKey(), ecdh_keypair.publicKey, mlkem_keypair.publicKey, friend.aesSalt);
+            var accept_add_msg = new AcceptAdd2Message(friend.protocolVersion, IxianHandler.getWalletStorage().getPrimaryPublicKey(), ecdh_keypair.publicKey, mlkem_keypair.publicKey, friend.aesSalt, streamCapabilities);
 
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.acceptAdd2, accept_add_msg.getBytes());
 
@@ -1403,7 +1482,7 @@ namespace IXICore.Streaming
 
         public static bool sendKeys2(Friend friend, byte[] ecdh_pubkey, byte[] mlkem_ciphertext, byte[] chacha_salt)
         {
-            Keys2 keys2_msg = new Keys2(ecdh_pubkey, mlkem_ciphertext, chacha_salt);
+            Keys2Message keys2_msg = new Keys2Message(ecdh_pubkey, mlkem_ciphertext, chacha_salt, streamCapabilities);
 
             SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.keys2, keys2_msg.getBytes());
 
@@ -1990,7 +2069,7 @@ namespace IXICore.Streaming
         public static void sendReaction(Friend friend, byte[] msg_id, string reaction, int channel = 0)
         {
             // Prepare the message and send to the S2 nodes
-            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgReaction, new SpixiMessageReaction(msg_id, reaction).getBytes(), channel);
+            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.msgReaction, new ReactionMessage(msg_id, reaction).getBytes(), channel);
 
             StreamMessage message = new StreamMessage(friend.protocolVersion);
             message.type = StreamMessageCode.data;
@@ -2118,6 +2197,7 @@ namespace IXICore.Streaming
 
         public static void fetchFriendsPresence(Friend friend)
         {
+            // TODO don't fetch user's presence if they're directly connected; also set online indicator to true if directly connected; it has to go both ways - for incoming and outgoing connections
             if (Clock.getTimestamp() - friend.requestedPresence < CoreConfig.requestPresenceTimeout)
             {
                 return;
@@ -2167,6 +2247,139 @@ namespace IXICore.Streaming
                     friend.requestedPresence = Clock.getTimestamp();
                 }
             }
+        }
+
+
+        public static StreamMessage sendAppRequest(Friend friend, string app_id, byte[] session_id, byte[] data, string app_info)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appRequest;
+            spixi_msg.data = new AppDataMessage(session_id, data, app_info).getBytes();
+
+            StreamMessage new_msg = new StreamMessage(friend.protocolVersion);
+            new_msg.type = StreamMessageCode.data;
+            new_msg.recipient = friend.walletAddress;
+            new_msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            new_msg.data = spixi_msg.getBytes();
+
+            CoreStreamProcessor.sendMessage(friend, new_msg);
+
+            return new_msg;
+        }
+
+        public static void sendAppRequestAccept(Friend friend, byte[] session_id, byte[] data = null)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appRequestAccept;
+            spixi_msg.data = new AppDataMessage(session_id, data).getBytes();
+
+            StreamMessage new_msg = new StreamMessage(friend.protocolVersion);
+            new_msg.type = StreamMessageCode.data;
+            new_msg.recipient = friend.walletAddress;
+            new_msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            new_msg.data = spixi_msg.getBytes();
+
+            CoreStreamProcessor.sendMessage(friend, new_msg, true, false, false);
+        }
+
+        public static void sendAppRequestReject(Friend friend, byte[] session_id, byte[] data = null)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appRequestReject;
+            spixi_msg.data = new AppDataMessage(session_id, data).getBytes();
+
+            StreamMessage new_msg = new StreamMessage(friend.protocolVersion);
+            new_msg.type = StreamMessageCode.data;
+            new_msg.recipient = friend.walletAddress;
+            new_msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            new_msg.data = spixi_msg.getBytes();
+
+            CoreStreamProcessor.sendMessage(friend, new_msg);
+        }
+
+        public static void sendAppData(Friend friend, byte[] session_id, byte[] data)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appData;
+            spixi_msg.data = (new AppDataMessage(session_id, data)).getBytes();
+
+            StreamMessage msg = new StreamMessage(friend.protocolVersion);
+            msg.type = StreamMessageCode.data;
+            msg.recipient = friend.walletAddress;
+            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            msg.data = spixi_msg.getBytes();
+
+            CoreStreamProcessor.sendMessage(friend, msg, false, false, false);
+        }
+
+        public static void sendAppEndSession(Friend friend, byte[] session_id, byte[] data = null)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appEndSession;
+            spixi_msg.data = (new AppDataMessage(session_id, data)).getBytes();
+
+            if (friend == null)
+            {
+                return;
+            }
+
+            StreamMessage msg = new StreamMessage(friend.protocolVersion);
+            msg.type = StreamMessageCode.data;
+            msg.recipient = friend.walletAddress;
+            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            msg.data = spixi_msg.getBytes();
+
+            sendMessage(friend, msg, true, true, false, false);
+        }
+
+        public static void sendGetAppProtocols(Friend friend)
+        {
+            SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.getAppProtocols, null);
+
+            StreamMessage msg = new StreamMessage(friend.protocolVersion);
+            msg.type = StreamMessageCode.info;
+            msg.recipient = friend.walletAddress;
+            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            msg.data = spixi_msg.getBytes();
+
+            sendMessage(friend, msg, true, false, false, false);
+        }
+
+        public static void sendAppProtocols(Friend friend, List<byte[]> protocol_ids)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appProtocols;
+            spixi_msg.data = (new AppProtocolsMessage(protocol_ids)).getBytes();
+
+            StreamMessage msg = new StreamMessage(friend.protocolVersion);
+            msg.type = StreamMessageCode.info;
+            msg.recipient = friend.walletAddress;
+            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            msg.data = spixi_msg.getBytes();
+
+            sendMessage(friend, msg, true, false, false, false);
+        }
+
+        public static void sendAppProtocolData(Friend friend, byte[] protocol_id, byte[] data)
+        {
+            // TODO use channels and drop SpixiAppData
+            SpixiMessage spixi_msg = new SpixiMessage();
+            spixi_msg.type = SpixiMessageCode.appProtocolData;
+            spixi_msg.data = (new AppDataMessage(protocol_id, data)).getBytes();
+
+            StreamMessage msg = new StreamMessage(friend.protocolVersion);
+            msg.type = StreamMessageCode.data;
+            msg.recipient = friend.walletAddress;
+            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
+            msg.data = spixi_msg.getBytes();
+
+            sendMessage(friend, msg, false, false, false);
         }
     }
 }

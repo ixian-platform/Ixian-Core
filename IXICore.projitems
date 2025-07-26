@@ -87,17 +87,21 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\MessageCrypto.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptAdd2.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\Keys2.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AppProtocolsMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\RequestAdd2Message.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptAdd2Message.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\KeysMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\Keys2Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\OfflinePushMessages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessageProcessor.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingRecipient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\ReactionData.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiAppData.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AppDataMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\SpixiBotAction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiMessage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiMessageReaction.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiMessageObjectMap.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\ReactionMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\LocalStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\Models\StorageTransaction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\TransactionCache.cs" />
@@ -131,6 +135,5 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="$(MSBuildThisFileDirectory)Streaming\Friends\" />
-    <Folder Include="$(MSBuildThisFileDirectory)Streaming\Models\" />
   </ItemGroup>
 </Project>

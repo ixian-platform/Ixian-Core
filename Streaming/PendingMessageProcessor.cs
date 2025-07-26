@@ -312,8 +312,17 @@ namespace IXICore.Streaming
                 if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
                     && friend.relayNode != null)
                 {
-                    StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
-                    sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                    var connected_client = NetworkServer.getClient(friend.walletAddress);
+                    if (connected_client != null)
+                    {
+                        connected_client.sendData(ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                        sent = true;
+                    }
+                    else
+                    {
+                        StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
+                        sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                    }
                     if (sent && pending_message.removeAfterSending)
                     {
                         removeMessage(friend, pending_message.streamMessage.id);
@@ -333,6 +342,10 @@ namespace IXICore.Streaming
                     {
                         send_to_server = false;
                         send_push_notification = false;
+                    }
+                    if ((friend.streamCapabilities & StreamCapabilities.IPN) == 0)
+                    {
+                        send_to_server = false;
                     }
                 }
                 if (send_to_server)
@@ -421,7 +434,6 @@ namespace IXICore.Streaming
             {
                 try
                 {
-                    //sendPendingRequests();
                     processPendingMessages();
                 }
                 catch (Exception e)

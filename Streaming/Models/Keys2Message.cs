@@ -15,19 +15,22 @@ using System;
 
 namespace IXICore.Streaming.Models
 {
-    public class Keys2
+    public class Keys2Message
     {
         public byte[] ecdhPubKey { get; set; }
         public byte[] mlkemCiphertext { get; set; }
         public byte[] chaChaSalt { get; set; }
-        public Keys2(byte[] ecdhPubKey, byte[] mlkemCiphertext, byte[] chaChaSalt)
+        public StreamCapabilities capabilities { get; set; }
+
+        public Keys2Message(byte[] ecdhPubKey, byte[] mlkemCiphertext, byte[] chaChaSalt, StreamCapabilities capabilities)
         {
             this.ecdhPubKey = ecdhPubKey;
             this.mlkemCiphertext = mlkemCiphertext;
             this.chaChaSalt = chaChaSalt;
+            this.capabilities = capabilities;
         }
 
-        public Keys2(byte[] data)
+        public Keys2Message(byte[] data)
         {
             int offset = 0;
             var bwo = data.ReadIxiBytes(offset);
@@ -41,6 +44,17 @@ namespace IXICore.Streaming.Models
             bwo = data.ReadIxiBytes(offset);
             offset += bwo.bytesRead;
             chaChaSalt = bwo.bytes;
+
+            if (data.Length > offset)
+            {
+                var ivio = data.GetIxiVarUInt(offset);
+                offset += ivio.bytesRead;
+                capabilities = (StreamCapabilities)ivio.num;
+            }
+            else
+            {
+                capabilities = StreamCapabilities.Incoming | StreamCapabilities.Outgoing | StreamCapabilities.IPN | StreamCapabilities.Apps;
+            }
         }
 
         public byte[] getBytes()
@@ -48,10 +62,12 @@ namespace IXICore.Streaming.Models
             byte[] ecdhPubkeyIxiBytes = ecdhPubKey.GetIxiBytes();
             byte[] mlkemCiphertextIxiBytes = mlkemCiphertext.GetIxiBytes();
             byte[] chachaSaltIxiBytes = chaChaSalt.GetIxiBytes();
-            byte[] keys2AddMsg = new byte[ecdhPubkeyIxiBytes.Length + mlkemCiphertextIxiBytes.Length + chachaSaltIxiBytes.Length];
+            byte[] capabilitiesBytes = ((int)capabilities).GetIxiVarIntBytes();
+            byte[] keys2AddMsg = new byte[ecdhPubkeyIxiBytes.Length + mlkemCiphertextIxiBytes.Length + chachaSaltIxiBytes.Length + capabilitiesBytes.Length];
             Buffer.BlockCopy(ecdhPubkeyIxiBytes, 0, keys2AddMsg, 0, ecdhPubkeyIxiBytes.Length);
             Buffer.BlockCopy(mlkemCiphertextIxiBytes, 0, keys2AddMsg, ecdhPubkeyIxiBytes.Length, mlkemCiphertextIxiBytes.Length);
             Buffer.BlockCopy(chachaSaltIxiBytes, 0, keys2AddMsg, ecdhPubkeyIxiBytes.Length + mlkemCiphertextIxiBytes.Length, chachaSaltIxiBytes.Length);
+            Buffer.BlockCopy(capabilitiesBytes, 0, keys2AddMsg, ecdhPubkeyIxiBytes.Length + mlkemCiphertextIxiBytes.Length + chachaSaltIxiBytes.Length, capabilitiesBytes.Length);
 
             return keys2AddMsg;
         }

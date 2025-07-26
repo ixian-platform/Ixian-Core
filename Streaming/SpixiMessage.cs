@@ -18,49 +18,53 @@ namespace IXICore
 {
     public enum SpixiMessageCode
     {
-        chat,
-        getNick,
-        nick,
-        requestAdd,
-        acceptAdd,
-        sentFunds,
-        requestFunds,
-        keys,
-        msgRead,
-        msgReceived,
-        fileData,
-        requestFileData,
-        fileHeader,
-        acceptFile,
-        requestCall,
-        acceptCall,
-        rejectCall,
-        callData,
-        requestFundsResponse,
-        acceptAddBot,
-        botGetMessages,
-        appData,
-        appRequest,
-        fileFullyReceived,
-        avatar,
-        getAvatar,
-        getPubKey,
-        pubKey,
-        appRequestAccept,
-        appRequestReject,
-        appRequestError,
-        appEndSession,
-        botAction,
-        msgDelete,
-        msgReaction,
-        msgTyping,
-        msgError,
-        leave,
-        leaveConfirmed,
-        msgReport,
-        requestAdd2,
-        acceptAdd2,
-        keys2
+        chat = 0,
+        getNick = 1,
+        nick = 2,
+        requestAdd = 3,
+        acceptAdd = 4,
+        sentFunds = 5,
+        requestFunds = 6,
+        keys = 7,
+        msgRead = 8,
+        msgReceived = 9,
+        fileData = 10,
+        requestFileData = 11,
+        fileHeader = 12,
+        acceptFile = 13,
+        requestCall = 14,
+        acceptCall = 15,
+        rejectCall = 16,
+        callData = 17,
+        requestFundsResponse = 18,
+        acceptAddBot = 19,
+        botGetMessages = 20,
+        appData = 21,
+        appRequest = 22,
+        fileFullyReceived = 23,
+        avatar = 24,
+        getAvatar = 25,
+        getPubKey = 26,
+        pubKey = 27,
+        appRequestAccept = 28,
+        appRequestReject = 29,
+        appRequestError = 30,
+        appEndSession = 31,
+        botAction = 32,
+        msgDelete = 33,
+        msgReaction = 34,
+        msgTyping = 35,
+        msgError = 36,
+        leave = 37,
+        leaveConfirmed = 38,
+        msgReport = 39,
+        requestAdd2 = 40,
+        acceptAdd2 = 41,
+        keys2 = 42,
+        getAppProtocols = 43,
+        appProtocols = 44,
+        appProtocolData = 45,
+        reserved = 0xF0, // 0xF0-0xFF reserved for custom apps/services
     }
 
     // TODO TODO TODO add checksum from StreamMessage/parent message to SpixiMessage when encrypted and when StreamMessage isn't signed and compare the checksums, to make sure StreamMessage hasn't been tampered with
@@ -98,6 +102,10 @@ namespace IXICore
                         int data_length = reader.ReadInt32();
                         if (data_length > 0)
                             data = reader.ReadBytes(data_length);
+                        else if (data_length < 0)
+                        {
+                            throw new Exception("Data length is negative: " + data_length);
+                        }
 
                         if (reader.BaseStream.Length - reader.BaseStream.Position > 0)
                         {
@@ -112,6 +120,7 @@ namespace IXICore
                 type = 0;
                 data = null;
                 channel = 0;
+                //throw; // TODO Enable this in next releases
             }
         }
 

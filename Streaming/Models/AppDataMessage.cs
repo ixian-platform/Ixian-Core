@@ -14,22 +14,22 @@ using IXICore.Meta;
 using System;
 using System.IO;
 
-namespace IXICore
+namespace IXICore.Streaming.Models
 {
-    class SpixiAppData
+    class AppDataMessage
     {
         public byte[] sessionId = null;
         public byte[] data = null;
         public string appId = null;
 
-        public SpixiAppData(byte[] session_id, byte[] in_data, string app_id = null)
+        public AppDataMessage(byte[] session_id, byte[] in_data, string app_id = null)
         {
             sessionId = session_id;
             data = in_data;
             appId = app_id;
         }
 
-        public SpixiAppData(byte[] bytes)
+        public AppDataMessage(byte[] bytes)
         {
             try
             {

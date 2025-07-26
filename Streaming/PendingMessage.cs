@@ -49,7 +49,7 @@ namespace IXICore.Streaming
                     {
                         int sm_length = reader.ReadInt32();
                         byte[] sm_bytes = reader.ReadBytes(sm_length);
-                        streamMessage = new StreamMessage(sm_bytes);
+                        streamMessage = new StreamMessage(sm_bytes, StreamMessageSerializationType.storage);
 
                         sendToServer = reader.ReadBoolean();
                         sendPushNotification = reader.ReadBoolean();
@@ -58,7 +58,7 @@ namespace IXICore.Streaming
                     catch (Exception e)
                     {
                         Logging.error("Cannot create pending message from bytes: {0}", e);
-                        throw e;
+                        throw;
                     }
                 }
             }
@@ -70,7 +70,7 @@ namespace IXICore.Streaming
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    byte[] data = streamMessage.getBytes();
+                    byte[] data = streamMessage.getBytes(StreamMessageSerializationType.storage);
                     writer.Write(data.Length);
                     writer.Write(data);
 

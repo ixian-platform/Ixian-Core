@@ -14,18 +14,18 @@ using System.IO;
 
 namespace IXICore
 {
-    public class SpixiMessageReaction
+    public class ReactionMessage
     {
         public byte[] msgId = null;
         public string reaction = null;
 
-        public SpixiMessageReaction(byte[] msg_id, string reaction)
+        public ReactionMessage(byte[] msg_id, string reaction)
         {
             msgId = msg_id;
             this.reaction = reaction;
         }
 
-        public SpixiMessageReaction(byte[] reaction_bytes)
+        public ReactionMessage(byte[] reaction_bytes)
         {
             using (MemoryStream m = new MemoryStream(reaction_bytes))
             {

@@ -13,6 +13,7 @@
 using IXICore.Meta;
 using IXICore.SpixiBot;
 using IXICore.Utils;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -164,7 +165,9 @@ namespace IXICore.Streaming
         private string _nick = "";
         private string userDefinedNick = "";
 
+        [JsonIgnore]
         public byte[] chachaKey = null; // TODO TODO don't keep keys in plaintext in memory
+        [JsonIgnore]
         public byte[] aesKey = null; // TODO TODO don't keep keys in plaintext in memory
         public long keyGeneratedTime = 0;
 
@@ -205,8 +208,15 @@ namespace IXICore.Streaming
         public long updatedStreamingNodes = 0;
         public Peer relayNode = null;
         public int protocolVersion = 0;
+
+        public StreamCapabilities streamCapabilities;
+        public List<byte[]> supportedProtocols = new();
+
+        [JsonIgnore]
         public byte[] ecdhPrivateKey = null;
+        [JsonIgnore]
         public byte[] mlKemPrivateKey = null;
+        [JsonIgnore]
         public byte[] aesSalt = null;
 
         public Friend(FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
@@ -222,6 +232,7 @@ namespace IXICore.Streaming
             keyGeneratedTime = key_generated_time;
             bot = false;
             addedTimestamp = Clock.getNetworkTimestamp();
+            streamCapabilities = StreamCapabilities.Incoming | StreamCapabilities.Outgoing | StreamCapabilities.IPN | StreamCapabilities.Apps;
         }
 
         public void setBotMode()
@@ -338,6 +349,21 @@ namespace IXICore.Streaming
                                 aesSalt = reader.ReadBytes(aes_salt_len);
                             }
                         }
+                        if (version >= 8)
+                        {
+                            streamCapabilities = (StreamCapabilities)reader.ReadInt32();
+
+                            int protocol_count = reader.ReadByte();
+                            for (int i = 0; i < protocol_count; i++)
+                            {
+                                byte[] protocol_id = reader.ReadBytes(reader.ReadByte());
+                                supportedProtocols.Add(protocol_id);
+                            }
+                        }
+                        else
+                        {
+                            streamCapabilities = StreamCapabilities.Incoming | StreamCapabilities.Outgoing | StreamCapabilities.IPN | StreamCapabilities.Apps;
+                        }
                     } catch (Exception e)
                     {
                         Logging.error("Exception in Friend deserialization: " + e);
@@ -352,7 +378,7 @@ namespace IXICore.Streaming
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    writer.Write(7);
+                    writer.Write(8);
 
                     writer.Write(walletAddress.addressNoChecksum.Length);
                     writer.Write(walletAddress.addressNoChecksum);
@@ -438,6 +464,15 @@ namespace IXICore.Streaming
                     else
                     {
                         writer.Write((int)0);
+                    }
+
+                    writer.Write((int)streamCapabilities);
+
+                    writer.Write((byte)supportedProtocols.Count);
+                    foreach (var proto in supportedProtocols)
+                    {
+                        writer.Write((byte)proto.Length);
+                        writer.Write(proto);
                     }
                 }
                 return m.ToArray();
@@ -846,7 +881,7 @@ namespace IXICore.Streaming
             return false;
         }
 
-        public bool addReaction(Address sender_address, SpixiMessageReaction reaction_data, int channel)
+        public bool addReaction(Address sender_address, ReactionMessage reaction_data, int channel)
         {
             if (!reaction_data.reaction.StartsWith("tip:") && !reaction_data.reaction.StartsWith("like:"))
             {
