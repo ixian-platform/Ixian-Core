@@ -72,7 +72,7 @@ namespace IXICore.Streaming
         protected bool running = false;
 
         protected static PendingMessageProcessor pendingMessageProcessor = null;
-        protected static StreamCapabilities streamCapabilities;
+        public static StreamCapabilities streamCapabilities { get; protected set; }
 
         protected List<Timer> _typingTimers = new();
 
@@ -116,7 +116,12 @@ namespace IXICore.Streaming
                     add_to_pending_messages = false;
                 }
             }
-            if (NetworkServer.getClient(friend.walletAddress) == null)
+            Address relayAddress = friend.walletAddress;
+            if (friend.relayNode != null)
+            {
+                relayAddress = friend.relayNode.walletAddress;
+            }
+            if (NetworkServer.getClient(relayAddress) == null)
             {
                 if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
                     && friend.relayNode != null)

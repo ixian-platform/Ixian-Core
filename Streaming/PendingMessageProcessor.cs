@@ -309,10 +309,14 @@ namespace IXICore.Streaming
             bool sent = false;
             if (friend.online)
             {
-                if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
-                    && friend.relayNode != null)
+                if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration)
                 {
-                    var connected_client = NetworkServer.getClient(friend.walletAddress);
+                    Address relayAddress = friend.walletAddress;
+                    if (friend.relayNode != null)
+                    {
+                        relayAddress = friend.relayNode.walletAddress;
+                    }
+                    var connected_client = NetworkServer.getClient(relayAddress);
                     if (connected_client != null)
                     {
                         connected_client.sendData(ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
@@ -320,8 +324,14 @@ namespace IXICore.Streaming
                     }
                     else
                     {
-                        StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
-                        sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                        if (friend.relayNode != null)
+                        {
+                            StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
+                            sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                        } else
+                        {
+                            sent = StreamClientManager.sendToClient(new List<Peer>() { new Peer(null, friend.walletAddress, 0, 0, 0, 0) }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                        }
                     }
                     if (sent && pending_message.removeAfterSending)
                     {

@@ -487,7 +487,7 @@ namespace IXICore.Network
                 {
                     if (c.isConnected()
                         && c.helloReceived
-                        && relayNodes.Find(x => x.hostname == c.getFullAddress()) != null)
+                        && relayNodes.Find(x => (x.hostname != null && x.hostname == c.getFullAddress()) || (x.walletAddress != null && x.walletAddress.SequenceEqual(c.serverWalletAddress))) != null)
                     {
                         clients.Add(c);
                         if (clients.Count == client_count)
