@@ -44,8 +44,8 @@ namespace IXICore
                 { SpixiMessageCode.requestFundsResponse, data => data },
                 { SpixiMessageCode.acceptAddBot, data => data },
                 { SpixiMessageCode.botGetMessages, data => data },
-                /*{ SpixiMessageCode.appData, data => new AppDataMessage(data) },
-                { SpixiMessageCode.appRequest, data => new AppRequestMessage(data) },
+                { SpixiMessageCode.appData, data => new AppDataMessage(data) },
+                /*{ SpixiMessageCode.appRequest, data => new AppRequestMessage(data) },
                 { SpixiMessageCode.fileFullyReceived, data => new FileFullyReceivedMessage(data) },*/
                 { SpixiMessageCode.avatar, data => data },
                 { SpixiMessageCode.getAvatar, data => data },

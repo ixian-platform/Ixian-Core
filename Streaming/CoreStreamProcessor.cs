@@ -481,9 +481,6 @@ namespace IXICore.Streaming
                     switch (spixi_message.type)
                     {
                         case SpixiMessageCode.msgReceived:
-                        case SpixiMessageCode.requestFileData:
-                        case SpixiMessageCode.fileData:
-                        case SpixiMessageCode.appData:
                         case SpixiMessageCode.msgTyping:
                             // do not send received confirmation
                             break;
@@ -993,6 +990,7 @@ namespace IXICore.Streaming
             msg_received.recipient = senderAddress;
             msg_received.data = new SpixiMessage(SpixiMessageCode.msgReceived, messageId, channel).getBytes();
             msg_received.encryptionType = StreamMessageEncryptionCode.none;
+            msg_received.requireRcvConfirmation = false;
 
             sendMessage(friend, msg_received, true, true, false, true);
         }
@@ -2107,6 +2105,7 @@ namespace IXICore.Streaming
             message.recipient = friend.walletAddress;
             message.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
             message.data = spixi_message.getBytes();
+            message.requireRcvConfirmation = false;
 
             if (friend.bot)
             {
@@ -2317,8 +2316,9 @@ namespace IXICore.Streaming
             msg.recipient = friend.walletAddress;
             msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
             msg.data = spixi_msg.getBytes();
+            msg.requireRcvConfirmation = false;
 
-            CoreStreamProcessor.sendMessage(friend, msg, false, false, false);
+            CoreStreamProcessor.sendMessage(friend, msg, false, false, false, !msg.requireRcvConfirmation);
         }
 
         public static void sendAppEndSession(Friend friend, byte[] session_id, byte[] data = null)
@@ -2383,8 +2383,9 @@ namespace IXICore.Streaming
             msg.recipient = friend.walletAddress;
             msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
             msg.data = spixi_msg.getBytes();
+            msg.requireRcvConfirmation = false;
 
-            sendMessage(friend, msg, false, false, false);
+            sendMessage(friend, msg, false, false, false, !msg.requireRcvConfirmation);
         }
     }
 }
