@@ -22,6 +22,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -648,8 +649,6 @@ namespace IXICore.Network
         // Parse thread
         protected async Task parseLoop()
         {
-            Thread.CurrentThread.IsBackground = true;
-
             // Prepare an special message object to use while sending, without locking up the queue messages
             QueueMessageRaw active_message = new QueueMessageRaw();
 

@@ -134,6 +134,7 @@ namespace IXICore.Storage
             readAccountFile();
 
             storageThread = new Thread(storageLoop);
+            storageThread.Name = "Local_Storage_Loop";
             storageThread.Start();
         }
 

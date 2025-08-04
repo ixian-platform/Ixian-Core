@@ -18,6 +18,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace IXICore.Streaming
 {
@@ -113,6 +114,7 @@ namespace IXICore.Streaming
             }
 
             pendingMessagesThread = new Thread(messageProcessorLoop);
+            pendingMessagesThread.Name = "Pending_Message_Processor_Loop";
             pendingMessagesThread.Start();
 
             offloadedMessagesTask = offloadedMessageProcessorLoop();

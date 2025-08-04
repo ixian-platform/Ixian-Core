@@ -48,6 +48,7 @@ namespace IXICore.Network
 
             // Start the reconnect thread
             reconnectThread = new Thread(reconnectClients);
+            reconnectThread.Name = "Stream_Client_Manager_Reconnect";
             autoReconnect = true;
             reconnectThread.Start();
         }
