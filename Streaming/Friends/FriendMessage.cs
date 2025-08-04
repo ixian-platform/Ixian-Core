@@ -42,6 +42,7 @@ namespace IXICore.Streaming
         public bool read;
         public bool confirmed;
         public bool sent; // if sent to PN/Offline server
+        public bool errorSending;
         public FriendMessageType type;
         public string transferId; // UID of file transfer if applicable
         public bool completed; // for file transfer, indicating whether the transfer completed
@@ -157,6 +158,10 @@ namespace IXICore.Streaming
                         {
                             sent = reader.ReadBoolean();
                         }
+                        if (m.Position < m.Length)
+                        {
+                            errorSending = reader.ReadBoolean();
+                        }
                     }
                     catch (Exception)
                     {
@@ -222,6 +227,7 @@ namespace IXICore.Streaming
                     }
 
                     writer.Write(sent);
+                    writer.Write(errorSending);
                 }
                 return m.ToArray();
             }

@@ -100,7 +100,7 @@ namespace IXICore.Streaming
         }
 
         // Send an encrypted message using the S2 network
-        public static void sendMessage(Friend friend, StreamMessage msg, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false)
+        public static void sendMessage(Friend friend, StreamMessage msg, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false, int channel = 0)
         {
             if (friend.bot)
             {
@@ -133,7 +133,7 @@ namespace IXICore.Streaming
                     fetchFriendsPresence(friend);
                 }
             }
-            pendingMessageProcessor.sendMessage(friend, msg, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
+            pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
         }
 
         public static void sendSpixiMessage(Friend friend, SpixiMessage spixi_message, byte[] id = null, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false)
@@ -245,7 +245,7 @@ namespace IXICore.Streaming
             {
                 pendingMessageProcessor.removeMessage(friend, msg_id);
 
-                Logging.info("Friend's handshake status is {0}", friend.handshakeStatus);
+                //Logging.info("Friend's handshake status is {0}", friend.handshakeStatus);
 
                 if (msg_id.Length == 1)
                 {
@@ -992,7 +992,7 @@ namespace IXICore.Streaming
             msg_received.encryptionType = StreamMessageEncryptionCode.none;
             msg_received.requireRcvConfirmation = false;
 
-            sendMessage(friend, msg_received, true, true, false, true);
+            sendMessage(friend, msg_received, true, true, false, true, channel);
         }
 
         protected bool handleMsgDelete(Friend friend, byte[] msg_id, byte[] msg_id_to_del, int channel)
@@ -1432,7 +1432,7 @@ namespace IXICore.Streaming
                 message.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
             }
 
-            sendMessage(friend, message);
+            sendMessage(friend, message, true, true, true, false, channel);
 
             return true;
         }
@@ -1741,7 +1741,7 @@ namespace IXICore.Streaming
             message.data = spixi_message.getBytes();
             message.encryptionType = StreamMessageEncryptionCode.none;
 
-            sendMessage(friend, message, false);
+            sendMessage(friend, message, false, true, true, false, channel);
         }
 
         public static void sendGetBotInfo(Friend friend)
@@ -2023,7 +2023,7 @@ namespace IXICore.Streaming
                 message.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
             }
 
-            sendMessage(bot, message);
+            sendMessage(bot, message, true, true, true, false, channel);
         }
 
         public static void sendMsgDelete(Friend friend, byte[] msg_id, int channel = 0)
@@ -2043,7 +2043,7 @@ namespace IXICore.Streaming
                 message.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
             }
 
-            sendMessage(friend, message);
+            sendMessage(friend, message, true, true, true, false, channel);
         }
 
         public static void sendMsgReport(Friend friend, byte[] msg_id, int channel = 0)
@@ -2061,7 +2061,7 @@ namespace IXICore.Streaming
             {
                 message.encryptionType = StreamMessageEncryptionCode.none;
                 message.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
-                sendMessage(friend, message);
+                sendMessage(friend, message, true, true, true, false, channel);
             }
             else
             {

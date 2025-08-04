@@ -229,5 +229,7 @@ namespace IXICore
         public static int maxRelaySectorNodesToRequest = 6;
         public static int contactSectorNodeIntervalSeconds = clientPresenceExpiration / 2;
         public static int requestPresenceTimeout = 30;
+
+        public static int messageExpirationSeconds = 86400 * 5; // 5 Days
     }
 }

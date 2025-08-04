@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Channels;
 
 namespace IXICore.Streaming
 {
@@ -24,6 +25,7 @@ namespace IXICore.Streaming
     {
         public Friend friend;
         public StreamMessage msg;
+        public int channel;
         public bool addToPendingMessages;
         public bool sendToServer;
         public bool sendPushNotification;
@@ -34,11 +36,11 @@ namespace IXICore.Streaming
     abstract class PendingMessageProcessor
     {
         Thread pendingMessagesThread; // Thread that checks the offline messages list for outstanding messages
-        Thread offloadedMessagesThread;
+        Task offloadedMessagesTask;
         bool running = false;
 
         List<PendingRecipient> pendingRecipients = new List<PendingRecipient>();
-        List<OffloadedMessage> msgQueue = new List<OffloadedMessage>();
+        Channel<OffloadedMessage> msgQueue = Channel.CreateUnbounded<OffloadedMessage>();
 
         string storagePath = "MsgQueue";
 
@@ -113,15 +115,22 @@ namespace IXICore.Streaming
             pendingMessagesThread = new Thread(messageProcessorLoop);
             pendingMessagesThread.Start();
 
-            offloadedMessagesThread = new Thread(offloadedMessageProcessorLoop);
-            offloadedMessagesThread.Start();
+            offloadedMessagesTask = offloadedMessageProcessorLoop();
         }
 
-        public void stop()
+        public async void stop()
         {
             running = false;
             pendingMessagesThread = null;
-            offloadedMessagesThread = null;
+            if (offloadedMessagesTask != null)
+            {
+                try
+                {
+                    await offloadedMessagesTask;
+                }
+                catch (OperationCanceledException) { /* ignore */ }
+                offloadedMessagesTask = null;
+            }
         }
 
         public void processPendingMessages()
@@ -150,6 +159,7 @@ namespace IXICore.Streaming
                 List<PendingMessageHeader> message_headers = null;
                 if (!friend.online)
                 {
+                    CoreStreamProcessor.fetchFriendsPresence(friend);
                     message_headers = recipient.messageQueue.FindAll(x => x.sendToServer);
                 }
                 else
@@ -177,15 +187,24 @@ namespace IXICore.Streaming
             }
         }
 
-        public void sendMessage(Friend friend, StreamMessage msg, bool add_to_pending_messages, bool send_to_server, bool send_push_notification, bool remove_after_sending = false)
+        public async void sendMessage(Friend friend, StreamMessage msg, int channel, bool add_to_pending_messages, bool send_to_server, bool send_push_notification, bool remove_after_sending = false)
         {
-            OffloadedMessage om = new OffloadedMessage{ friend = friend, msg = msg, addToPendingMessages = add_to_pending_messages, sendToServer = send_to_server, sendPushNotification = send_push_notification, removeAfterSending = remove_after_sending  };
-            msgQueue.Add(om);
+            OffloadedMessage om = new OffloadedMessage
+            {
+                friend = friend,
+                msg = msg,
+                addToPendingMessages = add_to_pending_messages,
+                sendToServer = send_to_server,
+                sendPushNotification = send_push_notification,
+                removeAfterSending = remove_after_sending,
+                channel = channel
+            };
+            await msgQueue.Writer.WriteAsync(om);
         }
 
         private void sendMessage(OffloadedMessage om)
         {
-            PendingMessage pm = new PendingMessage(om.msg, om.sendToServer, om.sendPushNotification, om.removeAfterSending);
+            PendingMessage pm = new PendingMessage(om.msg, om.sendToServer, om.sendPushNotification, om.removeAfterSending, om.channel);
             StreamMessage msg = pm.streamMessage;
             PendingMessageHeader tmp_msg_header = tmp_msg_header = getPendingMessageHeader(om.friend, msg.id);
             if (tmp_msg_header != null)
@@ -219,6 +238,18 @@ namespace IXICore.Streaming
         private bool processMessage(Friend friend, string file_path)
         {
             PendingMessage pm = new PendingMessage(file_path);
+            if (Clock.getNetworkTimestamp() - pm.streamMessage.timestamp > CoreConfig.messageExpirationSeconds)
+            {
+                try
+                {
+                    onMessageExpired(friend, 0, pm.streamMessage);
+                }
+                catch (Exception e)
+                {
+                    Logging.error("Error in onMessageSent: " + e);
+                }
+
+            }
             return sendMessage(friend, pm);
         }
 
@@ -311,12 +342,17 @@ namespace IXICore.Streaming
             {
                 if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration)
                 {
-                    Address relayAddress = friend.walletAddress;
-                    if (friend.relayNode != null)
+
+                    RemoteEndpoint connected_client = null;
+                    if ((CoreStreamProcessor.streamCapabilities & StreamCapabilities.Incoming) != 0)
                     {
-                        relayAddress = friend.relayNode.walletAddress;
+                        connected_client = NetworkServer.getClient(friend.walletAddress);
+                        if (connected_client == null
+                            && friend.relayNode != null)
+                        {
+                            connected_client = NetworkServer.getClient(friend.relayNode.walletAddress);
+                        }
                     }
-                    var connected_client = NetworkServer.getClient(relayAddress);
                     if (connected_client != null)
                     {
                         connected_client.sendData(ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
@@ -328,7 +364,8 @@ namespace IXICore.Streaming
                         {
                             StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
                             sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
-                        } else
+                        }
+                        else
                         {
                             sent = StreamClientManager.sendToClient(new List<Peer>() { new Peer(null, friend.walletAddress, 0, 0, 0, 0) }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
                         }
@@ -363,12 +400,10 @@ namespace IXICore.Streaming
                     if (OfflinePushMessages.sendPushMessage(msg, send_push_notification))
                     {
                         pending_message.sendToServer = false;
-                        // TODO set the proper channel
-                        friend.setMessageSent(0, pending_message.streamMessage.id);
 
                         try
                         {
-                            onMessageSent(friend, 0, msg);
+                            onMessageSent(friend, pending_message.channel, msg);
                         } catch (Exception e)
                         {
                             Logging.error("Error in onMessageSent: " + e);
@@ -448,33 +483,26 @@ namespace IXICore.Streaming
                 }
                 catch (Exception e)
                 {
-                    Logging.error("Unknown exception occured in messageProcessorLoop: " + e);
+                    Logging.error("Unknown exception occurred in messageProcessorLoop: " + e);
                 }
 
                 Thread.Sleep(5000);
             }
         }
 
-        private void offloadedMessageProcessorLoop()
+        private async Task offloadedMessageProcessorLoop()
         {
             while (running)
             {
-                while(msgQueue.Count > 0)
+                try
                 {
-                    try
-                    {
-                        OffloadedMessage om = msgQueue[0];
-                        msgQueue.RemoveAt(0);
-                        sendMessage(om);
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Unknown exception occured in offloadedMessageProcessorLoop: " + e);
-                    }
-
+                    var om = await msgQueue.Reader.ReadAsync();
+                    sendMessage(om);
                 }
-
-                Thread.Sleep(10); // TODO increase sleep onSleep, reset it onResume
+                catch (Exception e)
+                {
+                    Logging.error("Unknown exception occurred in offloadedMessageProcessorLoop: " + e);
+                }
             }
         }
 
@@ -491,5 +519,6 @@ namespace IXICore.Streaming
         }
 
         protected abstract void onMessageSent(Friend friend, int channel, StreamMessage msg);
+        protected abstract void onMessageExpired(Friend friend, int channel, StreamMessage msg);
     }
 }

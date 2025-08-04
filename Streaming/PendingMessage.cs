@@ -24,13 +24,15 @@ namespace IXICore.Streaming
         public bool sendToServer = false;
         public bool sendPushNotification = false;
         public bool removeAfterSending = false;
+        public int channel = 0;
 
-        public PendingMessage(StreamMessage stream_message, bool send_to_server, bool send_push_notification, bool remove_after_sending)
+        public PendingMessage(StreamMessage stream_message, bool send_to_server, bool send_push_notification, bool remove_after_sending, int channel)
         {
             streamMessage = stream_message;
             sendToServer = send_to_server;
             sendPushNotification = send_push_notification;
             removeAfterSending = remove_after_sending;
+            this.channel = channel;
         }
 
         public PendingMessage(string file_path)
@@ -54,6 +56,10 @@ namespace IXICore.Streaming
                         sendToServer = reader.ReadBoolean();
                         sendPushNotification = reader.ReadBoolean();
                         removeAfterSending = reader.ReadBoolean();
+                        if (m.Position < m.Length)
+                        {
+                            channel = reader.ReadInt32();
+                        }
                     }
                     catch (Exception e)
                     {
@@ -77,6 +83,7 @@ namespace IXICore.Streaming
                     writer.Write(sendToServer);
                     writer.Write(sendPushNotification);
                     writer.Write(removeAfterSending);
+                    writer.Write(channel);
                 }
                 return m.ToArray();
             }

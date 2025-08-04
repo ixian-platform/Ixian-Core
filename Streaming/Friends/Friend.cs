@@ -728,6 +728,36 @@ namespace IXICore.Streaming
             return true;
         }
 
+
+        public bool setMessageError(int channel, byte[] id)
+        {
+            var tmp_messages = getMessages(channel);
+            if (tmp_messages == null)
+            {
+                return false;
+            }
+            FriendMessage msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            if (msg == null)
+            {
+                Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
+                return false;
+            }
+
+            if (msg.localSender)
+            {
+                if (!msg.sent)
+                {
+                    if (!msg.errorSending)
+                    {
+                        msg.errorSending = true;
+                        IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
+                    }
+                }
+            }
+
+            return true;
+        }
+
         public int handshakeStatus
         {
             get

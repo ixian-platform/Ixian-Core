@@ -21,6 +21,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Threading.Channels;
 
 namespace IXICore.Network
 {
@@ -73,7 +74,7 @@ namespace IXICore.Network
         // Maintain two threads for handling data receiving and sending
         protected Thread recvThread = null;
         protected Thread sendThread = null;
-        protected Thread parseThread = null;
+        protected Task parseTask = null;
 
         public Presence presence = null;
         public PresenceAddress presenceAddress = null;
@@ -89,7 +90,7 @@ namespace IXICore.Network
         private List<QueueMessage> sendQueueMessagesLowPriority = new List<QueueMessage>();
 
         // Maintain a queue of raw received data
-        private List<QueueMessageRaw> recvRawQueueMessages = new List<QueueMessageRaw>();
+        private Channel<QueueMessageRaw> recvRawQueueMessages = Channel.CreateUnbounded<QueueMessageRaw>();
 
         private byte[] socketReadBuffer = null;
 
@@ -130,7 +131,7 @@ namespace IXICore.Network
             socket.Blocking = true;
         }
 
-        public void start(Socket socket = null)
+        public async void start(Socket socket = null)
         {
             if (fullyStopped)
             {
@@ -196,11 +197,14 @@ namespace IXICore.Network
                 sendThread.Join();
                 sendThread = null;
             }
-            if (parseThread != null)
+            if (parseTask != null)
             {
-                parseThread.Interrupt();
-                parseThread.Join();
-                parseThread = null;
+                try
+                {
+                    await parseTask;
+                }
+                catch (OperationCanceledException) { /* ignore */ }
+                parseTask = null;
             }
 
             try
@@ -217,9 +221,7 @@ namespace IXICore.Network
                 sendThread.Start();
 
                 // Start parse thread
-                parseThread = new Thread(new ThreadStart(parseLoop));
-                parseThread.Name = "Network_Remote_Endpoint_Parse_Thread";
-                parseThread.Start();
+                parseTask = parseLoop();
             }
             catch (Exception e)
             {
@@ -229,7 +231,7 @@ namespace IXICore.Network
         }
 
         // Aborts all related endpoint threads and data
-        public void stop()
+        public async void stop()
         {
             fullyStopped = true;
 
@@ -255,11 +257,6 @@ namespace IXICore.Network
                 sendQueueMessagesLowPriority.Clear();
             }
 
-            lock (recvRawQueueMessages)
-            {
-                recvRawQueueMessages.Clear();
-            }
-
             lock (subscribedFilters)
             {
                 subscribedFilters.Clear();
@@ -281,10 +278,15 @@ namespace IXICore.Network
                 //sendThread.Abort();
                 sendThread = null;
             }
-            if (parseThread != null)
+
+            if (parseTask != null)
             {
-                //parseThread.Abort();
-                parseThread = null;
+                try
+                {
+                    await parseTask;
+                }
+                catch (OperationCanceledException) { /* ignore */ }
+                parseTask = null;
             }
 
             disconnect();
@@ -644,7 +646,7 @@ namespace IXICore.Network
         }
 
         // Parse thread
-        protected void parseLoop()
+        protected async Task parseLoop()
         {
             Thread.CurrentThread.IsBackground = true;
 
@@ -656,24 +658,7 @@ namespace IXICore.Network
                 TLC.Report();
                 try
                 {
-                    bool message_found = false;
-                    lock (recvRawQueueMessages)
-                    {
-                        if (recvRawQueueMessages.Count > 0)
-                        {
-                            // Pick the oldest message
-                            active_message = recvRawQueueMessages[0];
-                            // Remove it from the queue
-                            recvRawQueueMessages.RemoveAt(0);
-                            message_found = true;
-                        }
-                    }
-
-                    if (!message_found)
-                    {
-                        Thread.Sleep(10);
-                        continue;
-                    }
+                    active_message = await recvRawQueueMessages.Reader.ReadAsync();
 
                     // Active message set, add it to Network Queue
                     MessagePriority priority = MessagePriority.auto;
@@ -743,12 +728,9 @@ namespace IXICore.Network
             }
         }
 
-        protected void parseDataInternal(QueueMessageRaw message)
+        protected async void parseDataInternal(QueueMessageRaw message)
         {
-            lock (recvRawQueueMessages)
-            {
-                recvRawQueueMessages.Add(message);
-            }
+            await recvRawQueueMessages.Writer.WriteAsync(message);
         }
 
 
