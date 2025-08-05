@@ -681,8 +681,7 @@ namespace IXICore
                         return false;
                     }
 
-                    Random r = new Random();
-                    int rIdx = r.Next(serverCount + clientCount);
+                    int rIdx = Random.Shared.Next(serverCount + clientCount);
 
                     RemoteEndpoint re = null;
 
@@ -1204,7 +1203,7 @@ namespace IXICore
                                         continue;
                                     }
 
-                                    KeepAlive ka = pa.getKeepAlive(address, p.powSolution);
+                                    KeepAlive ka = pa.getKeepAlive(address);
                                     byte[] ka_bytes = ka.getBytes();
                                     byte[] ka_len = IxiVarInt.GetIxiVarIntBytes(ka_bytes.Length);
                                     writer.Write(ka_len);

@@ -28,8 +28,9 @@ namespace IXICore
         public string nodeVersion; // Version
         public long lastSeenTime;
         public byte[] signature;
+        public SignerPowSolution powSolution;
 
-        public PresenceAddress(byte[] node_device, string node_address, char node_type, string node_version, long node_lastSeenTime, byte[] node_signature)
+        public PresenceAddress(byte[] node_device, string node_address, char node_type, string node_version, long node_lastSeenTime, byte[] node_signature, SignerPowSolution pow_solution = null)
         {
             device = node_device;
             address = node_address;
@@ -37,9 +38,10 @@ namespace IXICore
             nodeVersion = node_version;
             lastSeenTime = node_lastSeenTime;
             signature = node_signature;
+            powSolution = pow_solution;
         }
 
-        public PresenceAddress(byte[] bytes)
+        public PresenceAddress(byte[] bytes, Address wallet_address)
         {
             try
             {
@@ -85,6 +87,14 @@ namespace IXICore
                             if (sigLen > 0)
                             {
                                 signature = reader.ReadBytes(sigLen);
+                            }
+                            if (m.Position < m.Length)
+                            {
+                                int powSolutionLen = (int)reader.ReadIxiVarUInt();
+                                if (powSolutionLen > 0)
+                                {
+                                    powSolution = new SignerPowSolution(reader.ReadBytes(powSolutionLen), wallet_address);
+                                }
                             }
                         }
                     }
@@ -141,6 +151,16 @@ namespace IXICore
                         {
                             writer.Write(0);
                         }
+                        if (powSolution != null)
+                        {
+                            byte[] pow_bytes = powSolution.getBytes();
+                            writer.WriteIxiVarInt(pow_bytes.Length);
+                            writer.Write(pow_bytes);
+                        }
+                        else
+                        {
+                            writer.Write(0);
+                        }
                     }
 #if TRACE_MEMSTREAM_SIZES
                     Logging.info(String.Format("PresenceAddress::getBytes: {0}", m.Length));
@@ -150,70 +170,12 @@ namespace IXICore
             }
         }
 
-        public bool verifySignature(Address wallet, byte[] pub_key, SignerPowSolution powSolution)
+        public bool verify(IxiNumber minDifficulty, Address wallet, byte[] pub_key)
         {
-            if (signature != null)
-            {
-                using (MemoryStream m = new MemoryStream())
-                {
-                    byte[] data_to_verify = null;
-                    using (BinaryWriter writer = new BinaryWriter(m))
-                    {
-                        if (version == 1)
-                        {
-                            // TODO remove this section after upgrade to Presence v2
-                            writer.Write(version);
-                            writer.Write(wallet.addressWithChecksum.Length);
-                            writer.Write(wallet.addressWithChecksum);
-                            writer.Write(new System.Guid(device).ToString());
-                            writer.Write(lastSeenTime);
-                            writer.Write(address);
-                            writer.Write(type);
-
-                            data_to_verify = m.ToArray();
-                        }
-                        else
-                        {
-                            writer.WriteIxiVarInt(version);
-                            writer.WriteIxiVarInt(wallet.addressNoChecksum.Length);
-                            writer.Write(wallet.addressNoChecksum);
-                            writer.WriteIxiVarInt(device.Length);
-                            writer.Write(device);
-                            writer.WriteIxiVarInt(lastSeenTime);
-                            writer.Write(address);
-                            writer.Write(type);
-                            if(powSolution != null)
-                            {
-                                byte[] powSolutionBytes = powSolution.getBytes();
-                                writer.WriteIxiVarInt(powSolutionBytes.Length);
-                                writer.Write(powSolutionBytes);
-                            }
-                            else
-                            {
-                                writer.WriteIxiVarInt(0);
-                            }
-
-                            byte[] tmpBytes = m.ToArray();
-                            byte[] tmpBytesWithLock = new byte[ConsensusConfig.ixianChecksumLock.Length + tmpBytes.Length];
-                            Array.Copy(ConsensusConfig.ixianChecksumLock, tmpBytesWithLock, ConsensusConfig.ixianChecksumLock.Length);
-                            Array.Copy(tmpBytes, 0, tmpBytesWithLock, ConsensusConfig.ixianChecksumLock.Length, tmpBytes.Length);
-                            data_to_verify = CryptoManager.lib.sha3_512sqTrunc(tmpBytesWithLock);
-                        }
-                    }
-
-                    // Verify the signature
-                    if (CryptoManager.lib.verifySignature(data_to_verify, pub_key, signature))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-
-            return false;
+            return getKeepAlive(wallet).verify(pub_key, minDifficulty);
         }
 
-        public KeepAlive getKeepAlive(Address walletAddress, SignerPowSolution powSolution)
+        public KeepAlive getKeepAlive(Address walletAddress)
         {
             KeepAlive ka = new KeepAlive()
             {

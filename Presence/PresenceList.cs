@@ -111,7 +111,6 @@ namespace IXICore
                             wallet = presence.wallet,
                             pubkey = presence.pubkey,
                             metadata = presence.metadata,
-                            powSolution = presence.powSolution,
                             version = presence.version
                         };
                         // Go through all addresses and add any missing ones
@@ -161,6 +160,10 @@ namespace IXICore
                                         addr.address = local_addr.address;
                                         addr.lastSeenTime = local_addr.lastSeenTime;
                                         addr.signature = local_addr.signature;
+                                        if (local_addr.powSolution != null)
+                                        {
+                                            addr.powSolution = local_addr.powSolution;
+                                        }
                                         if (addr.type != local_addr.type)
                                         {
                                             lock (presenceCount)
@@ -432,6 +435,43 @@ namespace IXICore
             }
         }
 
+        public static KeepAlive generateKeepAlive(bool force_generate)
+        {
+            KeepAlive ka;
+            if (force_generate
+                || Clock.getNetworkTimestamp() - curNodePresenceAddress.lastSeenTime >= keepAliveInterval)
+            {
+                ka = new KeepAlive()
+                {
+                    deviceId = CoreConfig.device_id,
+                    hostName = curNodePresenceAddress.address,
+                    nodeType = curNodePresenceAddress.type,
+                    timestamp = Clock.getNetworkTimestamp(),
+                    walletAddress = IxianHandler.getWalletStorage().getPrimaryAddress(),
+                    powSolution = curNodePresenceAddress.powSolution
+                };
+                ka.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
+
+                curNodePresenceAddress.lastSeenTime = ka.timestamp;
+                curNodePresenceAddress.signature = ka.signature;
+            }
+            else
+            {
+                ka = new KeepAlive()
+                {
+                    deviceId = CoreConfig.device_id,
+                    hostName = curNodePresenceAddress.address,
+                    nodeType = curNodePresenceAddress.type,
+                    timestamp = curNodePresenceAddress.lastSeenTime,
+                    walletAddress = IxianHandler.getWalletStorage().getPrimaryAddress(),
+                    powSolution = curNodePresenceAddress.powSolution,
+                    signature = curNodePresenceAddress.signature
+                };
+            }
+
+            return ka;
+        }
+
         // Sends perioding keepalive network messages
         private static void keepAlive()
         {
@@ -476,19 +516,7 @@ namespace IXICore
 
                     try
                     {
-                        KeepAlive ka = new KeepAlive()
-                        {
-                            deviceId = CoreConfig.device_id,
-                            hostName = curNodePresenceAddress.address,
-                            nodeType = curNodePresenceAddress.type,
-                            timestamp = Clock.getNetworkTimestamp(),
-                            walletAddress = IxianHandler.getWalletStorage().getPrimaryAddress(),
-                            powSolution = curNodePresence.powSolution
-                        };
-                        ka.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
-
-                        curNodePresenceAddress.lastSeenTime = ka.timestamp;
-                        curNodePresenceAddress.signature = ka.signature;
+                        KeepAlive ka = generateKeepAlive(false);
 
                         byte[] ka_bytes = ka.getBytes();
 
@@ -613,9 +641,9 @@ namespace IXICore
                         return false;
                     }
 
-                    PresenceAddress pa = listEntry.addresses.Find(x => x.address == ka.hostName && x.device.SequenceEqual(ka.deviceId));
+                    PresenceAddress pa = listEntry.addresses.Find(x => x.device.SequenceEqual(ka.deviceId));
 
-                    if(pa != null)
+                    if (pa != null)
                     {
                         // Check the node type
                         if (pa.lastSeenTime != ka.timestamp)
@@ -647,9 +675,10 @@ namespace IXICore
                                 return false;
                             }
 
-                            // Update the timestamp
+                            // Update presence address
+                            pa.address = ka.hostName;
                             pa.lastSeenTime = ka.timestamp;
-                            listEntry.powSolution = ka.powSolution;
+                            pa.powSolution = ka.powSolution;
                             pa.signature = ka.signature;
                             pa.version = ka.version;
                             if (pa.type != ka.nodeType)
@@ -861,17 +890,14 @@ namespace IXICore
 
         public static void setPowSolution(SignerPowSolution powSolution)
         {
-            curNodePresence.powSolution = powSolution;
-            Presence p = getPresenceByAddress(IxianHandler.getWalletStorage().getPrimaryAddress());
-            if (p != null)
-            {
-                p.powSolution = powSolution;
-            }
+            curNodePresenceAddress.powSolution = powSolution;
+            generateKeepAlive(true);
+            forceSendKeepAlive = true;
         }
 
         public static SignerPowSolution getPowSolution()
         {
-            return curNodePresence.powSolution;
+            return curNodePresenceAddress.powSolution;
         }
 
         public static string myPublicAddress
@@ -882,7 +908,12 @@ namespace IXICore
                 _myPublicAddress = value;
                 if (curNodePresenceAddress != null)
                 {
-                    curNodePresenceAddress.address = value;
+                    if (curNodePresenceAddress.address != value)
+                    {
+                        curNodePresenceAddress.address = value;
+                        generateKeepAlive(true);
+                        forceSendKeepAlive = true;
+                    }
                 }
             }
         }

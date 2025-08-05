@@ -254,16 +254,32 @@ namespace IXICore
 
         public bool verify(byte[] pubKey, IxiNumber minDifficulty)
         {
+            bool validPowSolution = false;
             if (powSolution == null)
             {
                 // do nothing
             }
-            else if (IxianHandler.status != NodeStatus.warmUp
-                && !Presence.verifyPowSolution(powSolution, minDifficulty, walletAddress))
+            else if (IxianHandler.status == NodeStatus.warmUp
+                || Presence.verifyPowSolution(powSolution, minDifficulty, walletAddress))
+            {
+                validPowSolution = true;
+            }
+            else
             {
                 Logging.warn("Invalid pow solution received in verifyPresence, verification failed for {0}.", walletAddress.ToString());
-                powSolution = null;
                 return false;
+            }
+
+            switch (nodeType)
+            {
+                case 'M':
+                case 'H':
+                    if (!validPowSolution)
+                    {
+                        Logging.warn("'{0}' type node detected with no pow solution received in verify for {1}.", nodeType, walletAddress.ToString());
+                        return false;
+                    }
+                    break;
             }
 
             try

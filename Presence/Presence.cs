@@ -27,7 +27,6 @@ namespace IXICore
         public byte[] pubkey;
         public byte[] metadata; 
         public List<PresenceAddress> addresses;
-        public SignerPowSolution powSolution;
 
         public Presence()
         {
@@ -100,16 +99,18 @@ namespace IXICore
                                 {
                                     byte[] address_bytes = reader.ReadBytes(byte_count);
 
-                                    addresses.Add(new PresenceAddress(address_bytes));
+                                    addresses.Add(new PresenceAddress(address_bytes, wallet));
                                 }
                             }
 
-                            if(m.Position < m.Length)
+                            if (m.Position < m.Length)
                             {
-                                int powLen = (int)reader.ReadIxiVarUInt();
-                                if (powLen > 0)
+                                int pow_len = (int)reader.ReadIxiVarUInt();
+                                var first_master = addresses.Find(x => x.type == 'M' && x.powSolution == null);
+                                if (pow_len > 0
+                                    && first_master != null)
                                 {
-                                    powSolution = new SignerPowSolution(reader.ReadBytes(powLen), wallet);
+                                    first_master.powSolution = new SignerPowSolution(reader.ReadBytes(pow_len), wallet);
                                 }
                             }
                         }
@@ -145,14 +146,20 @@ namespace IXICore
                                 {
                                     byte[] address_bytes = reader.ReadBytes(byte_count);
 
-                                    addresses.Add(new PresenceAddress(address_bytes));
+                                    addresses.Add(new PresenceAddress(address_bytes, wallet));
                                 }
                             }
 
-                            int powLen = (int)reader.ReadIxiVarUInt();
-                            if (powLen > 0)
+                            if (m.Position < m.Length)
                             {
-                                powSolution = new SignerPowSolution(reader.ReadBytes(powLen), wallet);
+                                // TODO legacy, remove after a few versions
+                                int pow_len = (int)reader.ReadIxiVarUInt();
+                                var first_master = addresses.Find(x => x.type == 'M' && x.powSolution == null);
+                                if (pow_len > 0
+                                    && first_master != null)
+                                {
+                                    first_master.powSolution = new SignerPowSolution(reader.ReadBytes(pow_len), wallet);
+                                }
                             }
                         }
                     }
@@ -216,6 +223,8 @@ namespace IXICore
 
                         writer.Write(number_of_addresses);
 
+                        SignerPowSolution pow_solution = null;
+
                         // Write all ips
                         for (UInt16 i = from_index; i < number_of_addresses; i++)
                         {
@@ -224,6 +233,12 @@ namespace IXICore
                                 writer.Write(0);
                                 continue;
                             }
+
+                            if (pow_solution == null)
+                            {
+                                pow_solution = addresses[i].powSolution;
+                            }
+
                             byte[] address_data = addresses[i].getBytes();
                             if (address_data != null)
                             {
@@ -236,9 +251,9 @@ namespace IXICore
                             }
                         }
 
-                        if (powSolution != null)
+                        if (pow_solution != null)
                         {
-                            byte[] powSolutionBytes = powSolution.getBytes();
+                            byte[] powSolutionBytes = pow_solution.getBytes();
                             writer.WriteIxiVarInt(powSolutionBytes.Length);
                             writer.Write(powSolutionBytes);
                         }
@@ -291,6 +306,8 @@ namespace IXICore
 
                         writer.WriteIxiVarInt(number_of_addresses);
 
+                        SignerPowSolution pow_solution = null;
+
                         // Write all ips
                         for (int i = from_index; i < number_of_addresses; i++)
                         {
@@ -299,6 +316,13 @@ namespace IXICore
                                 writer.WriteIxiVarInt(0);
                                 continue;
                             }
+
+                            if (pow_solution == null && addresses[i].type == 'M')
+                            {
+                                // TODO legacy, remove after a few versions
+                                pow_solution = addresses[i].powSolution;
+                            }
+
                             byte[] address_data = addresses[i].getBytes();
                             if (address_data != null)
                             {
@@ -311,9 +335,10 @@ namespace IXICore
                             }
                         }
 
-                        if(powSolution != null)
+                        if(pow_solution != null)
                         {
-                            byte[] powSolutionBytes = powSolution.getBytes();
+                            // TODO legacy, remove after a few versions
+                            byte[] powSolutionBytes = pow_solution.getBytes();
                             writer.WriteIxiVarInt(powSolutionBytes.Length);
                             writer.Write(powSolutionBytes);
                         }
@@ -355,21 +380,6 @@ namespace IXICore
 
             bool validPowSolution = false;
 
-            if (powSolution == null)
-            {
-                // do nothing
-            }
-            else if (IxianHandler.status == NodeStatus.warmUp
-                || verifyPowSolution(powSolution, minDifficulty, wallet))
-            {
-                validPowSolution = true;
-            }
-            else
-            {
-                Logging.warn("Invalid pow solution received in verifyPresence, verification failed for {0}.", wallet.ToString());
-                powSolution = null;
-            }
-
             foreach (var entry in addresses)
             {
                 if (entry.device.Length > 64)
@@ -393,16 +403,6 @@ namespace IXICore
 
                 switch(entry.type)
                 {
-                    case 'M':
-                    case 'H':
-                        // TODO "IxianHandler.getLastBlockVersion() >= BlockVer.v10" can be removed after v10 upgrade
-                        if (IxianHandler.getLastBlockVersion() >= BlockVer.v10 && !validPowSolution)
-                        {
-                            Logging.warn("'{0}' type node detected with no pow solution received in verify for {1}.", entry.type, wallet.ToString());
-                            continue;
-                        }
-                        break;
-
                     case 'C':
                         expiration_time = CoreConfig.clientPresenceExpiration;
                         break;
@@ -421,7 +421,7 @@ namespace IXICore
                     continue;
                 }
 
-                if (!entry.verifySignature(wallet, pubkey, powSolution))
+                if (!entry.verify(minDifficulty, wallet, pubkey))
                 {
                     Logging.warn("Invalid presence address received in verifyPresence, signature verification failed for {0}.", wallet.ToString());
                     continue;
@@ -466,7 +466,7 @@ namespace IXICore
         public static bool verifyPowSolution(SignerPowSolution signerPow, IxiNumber minDifficulty, Address wallet)
         {
             // TODO Omega remove this once blockHash is part of SignerPowSolution
-            if(PresenceList.myPresenceType == 'C' || PresenceList.myPresenceType == 'R')
+            if (PresenceList.myPresenceType == 'C' || PresenceList.myPresenceType == 'R')
             {
                 return true;
             }
