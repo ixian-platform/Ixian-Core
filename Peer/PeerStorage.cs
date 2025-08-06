@@ -158,8 +158,7 @@ namespace IXICore
                     List<Peer> connectableList = peerList.FindAll(x => x.blacklisted == 0 && curTime - x.lastConnectAttempt > 30);
                     if (connectableList.Count > 0)
                     {
-                        Random rnd = new Random();
-                        p = connectableList[rnd.Next(connectableList.Count)];
+                        p = connectableList[Random.Shared.Next(connectableList.Count)];
                     }
                 }
                 if (p != null)

@@ -143,8 +143,7 @@ namespace IXICore.Network
                 {
                     List<Presence> tmp_presences = presences.FindAll(x => x.addresses.Find(y => y.type == 'R') != null); // TODO tmp_presences can be removed after protocol is finalized
 
-                    Random rnd = new Random();
-                    Presence p = tmp_presences[rnd.Next(tmp_presences.Count)];
+                    Presence p = tmp_presences[Random.Shared.Next(tmp_presences.Count)];
                     lock(p)
                     {
                         neighbor = p.addresses.Find(x => x.type == 'R').address;
@@ -173,8 +172,6 @@ namespace IXICore.Network
         {
             try
             {
-                Random rnd = new Random();
-
                 // Wait 5 seconds before starting the loop
                 Thread.Sleep(CoreConfig.networkClientReconnectInterval);
 
