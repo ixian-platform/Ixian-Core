@@ -20,7 +20,9 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Channels;
+using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -70,7 +72,7 @@ namespace IXICore.Network
         public Socket clientSocket;
         public RemoteEndpointState state;
 
-        // Maintain two threads for handling data receiving and sending
+        // Maintain tasks for handling data receiving and sending
         protected Task recvTask = null;
         protected Task sendTask = null;
         protected Task parseTask = null;
