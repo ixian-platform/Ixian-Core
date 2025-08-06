@@ -246,7 +246,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    sendTask.Wait();
+                    sendTask.WaitAsync(CancellationToken.None);
                 }
                 catch (Exception e)
                 {
@@ -259,7 +259,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    parseTask.Wait();
+                    parseTask.WaitAsync(CancellationToken.None);
                 }
                 catch (Exception e)
                 {
@@ -272,7 +272,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    recvTask.Wait();
+                    recvTask.WaitAsync(CancellationToken.None);
                 }
                 catch (Exception e)
                 {

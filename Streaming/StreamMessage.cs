@@ -98,7 +98,7 @@ namespace IXICore
 
         public long timestamp = 0; // TODO Can probably be moved to SpixiMessage
 
-        public bool requireRcvConfirmation = true; // TODO Can probably be removed
+        public bool requireRcvConfirmation = true;
 
         public StreamMessage(int version = 0)
         {
@@ -388,8 +388,8 @@ namespace IXICore
                     // Write the sender
                     if (sender != null)
                     {
-                        writer.WriteIxiVarInt(sender.addressWithChecksum.Length);
-                        writer.Write(sender.addressWithChecksum);
+                        writer.WriteIxiVarInt(sender.addressNoChecksum.Length);
+                        writer.Write(sender.addressNoChecksum);
                     }
                     else
                     {
@@ -400,8 +400,8 @@ namespace IXICore
                     // Write the recipient
                     if (recipient != null)
                     {
-                        writer.WriteIxiVarInt(recipient.addressWithChecksum.Length);
-                        writer.Write(recipient.addressWithChecksum);
+                        writer.WriteIxiVarInt(recipient.addressNoChecksum.Length);
+                        writer.Write(recipient.addressNoChecksum);
                     }
                     else
                     {

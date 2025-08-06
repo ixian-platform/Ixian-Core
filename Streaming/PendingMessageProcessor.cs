@@ -134,10 +134,10 @@ namespace IXICore.Streaming
             {
                 try
                 {
-                    msgQueue.Writer.Complete();
-                    offloadedMessagesTask.Wait();
+                    msgQueue.Writer.WriteAsync(null);
+                    offloadedMessagesTask.WaitAsync(CancellationToken.None);
                 }
-                catch (OperationCanceledException) { /* ignore */ }
+                catch (Exception) { /* ignore */ }
                 offloadedMessagesTask = null;
             }
         }
@@ -293,7 +293,7 @@ namespace IXICore.Streaming
             // TODO this function has to be improved and node's wallet address has to be added
             if (friend.publicKey != null || ((msg.encryptionType != StreamMessageEncryptionCode.rsa && msg.encryptionType != StreamMessageEncryptionCode.rsa2) && friend.aesKey != null && friend.chachaKey != null))
             {
-                if(msg.encryptionType == StreamMessageEncryptionCode.none)
+                if(msg.encryptionType == StreamMessageEncryptionCode.none && friend.handshakeStatus >= 3)
                 {
                     if (friend.aesKey != null && friend.chachaKey != null)
                     {
@@ -506,7 +506,10 @@ namespace IXICore.Streaming
                 try
                 {
                     var om = await msgQueue.Reader.ReadAsync();
-                    sendMessage(om);
+                    if (om != null)
+                    {
+                        sendMessage(om);
+                    }
                 }
                 catch (Exception e)
                 {
