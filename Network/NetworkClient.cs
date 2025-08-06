@@ -91,9 +91,7 @@ namespace IXICore.Network
                 {
                     Logging.info("Network client connection to {0}:{1} has failed.", hostname, port);
 
-                    disconnect();
-
-                    running = false;
+                    stop(false);
                     return false;
                 }
 
@@ -121,18 +119,14 @@ namespace IXICore.Network
                         break;
                 }
 
-                disconnect();
-
-                running = false;
+                stop(false);
                 return false;
             }
             catch (Exception)
             {
                 Logging.info("Network client connection to {0}:{1} has failed.", hostname, port);
 
-                disconnect();
-
-                running = false;
+                stop(false);
                 return false;
             }
 
@@ -154,9 +148,7 @@ namespace IXICore.Network
                 }
 
                 // Safely close the threads
-                running = false;
-
-                disconnect();
+                stop(false);
 
                 Logging.info(string.Format("--> Reconnecting to {0}, total reconnects: {1}", getFullAddress(true), totalReconnects));
                 return connectToServer(tcpHostname, tcpPort, serverWalletAddress);
@@ -169,8 +161,7 @@ namespace IXICore.Network
             base.onInitialized();
             try
             {
-                Random rnd = new Random();
-                CoreProtocolMessage.sendHelloMessageV6(this, false, rnd.Next());
+                CoreProtocolMessage.sendHelloMessageV6(this, false, Random.Shared.Next());
             }catch(Exception e)
             {
                 if (running)
@@ -185,7 +176,7 @@ namespace IXICore.Network
         /// <summary>
         ///  Breaks the connection to the remote server.
         /// </summary>
-        public override void disconnect()
+        protected override void disconnect()
         {
             base.disconnect();
             tcpClient.Close();

@@ -32,9 +32,7 @@ namespace IXICore.Network
 
         protected bool paused = false;
 
-        private Random rnd = new Random();
-
-        private int simultaneousConnectedNeighbors;
+        protected int simultaneousConnectedNeighbors;
 
         public NetworkClientManagerBase(int simultaneousConnectedNeighbors)
         {
@@ -69,16 +67,15 @@ namespace IXICore.Network
 
             if (connections_to_wait_for > 0)
             {
-                Random rnd = new Random();
                 // Connect to a random node first
                 int i = 0;
                 while (getConnectedClients(true).Count() < connections_to_wait_for && IxianHandler.forceShutdown == false)
                 {
-                    new Thread(() =>
+                    Task.Run(() =>
                     {
                         handleDisconnectedClients();
                         reconnectClients();
-                    }).Start();
+                    });
                     i++;
                     if (i > 10)
                     {
@@ -171,7 +168,7 @@ namespace IXICore.Network
             }
 
             // Connect randomly to a new node. Currently a 1% chance to reconnect during this iteration
-            if (rnd.Next(100) == 1)
+            if (Random.Shared.Next(100) == 1)
             {
                 connectToRandomNeighbor();
             }

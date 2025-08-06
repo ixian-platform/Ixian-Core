@@ -70,7 +70,7 @@ namespace IXICore.Network
                 PeerStorage.resetInitialConnectionCount();
             }
 
-            if (clientsToConnectTo.Count() <= 1)
+            if (clientsToConnectTo.Count() < simultaneousConnectedNeighbors)
             {
                 Peer connectToPeer = null;
                 // Find only masternodes

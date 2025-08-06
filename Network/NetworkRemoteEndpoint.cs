@@ -20,9 +20,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -73,8 +71,8 @@ namespace IXICore.Network
         public RemoteEndpointState state;
 
         // Maintain two threads for handling data receiving and sending
-        protected Thread recvThread = null;
-        protected Thread sendThread = null;
+        protected Task recvTask = null;
+        protected Task sendTask = null;
         protected Task parseTask = null;
 
         public Presence presence = null;
@@ -91,7 +89,7 @@ namespace IXICore.Network
         private List<QueueMessage> sendQueueMessagesLowPriority = new List<QueueMessage>();
 
         // Maintain a queue of raw received data
-        private Channel<QueueMessageRaw> recvRawQueueMessages = Channel.CreateUnbounded<QueueMessageRaw>();
+        private Channel<QueueMessageRaw?> recvRawQueueMessages = Channel.CreateUnbounded<QueueMessageRaw?>();
 
         private byte[] socketReadBuffer = null;
 
@@ -132,7 +130,7 @@ namespace IXICore.Network
             socket.Blocking = true;
         }
 
-        public async void start(Socket socket = null)
+        public void start(Socket socket = null)
         {
             if (fullyStopped)
             {
@@ -142,8 +140,11 @@ namespace IXICore.Network
 
             if (running)
             {
+                Logging.error("Can't start already running RemoteEndpoint");
                 return;
             }
+
+            running = true;
 
             if (socket != null)
             {
@@ -183,46 +184,30 @@ namespace IXICore.Network
             timeSyncComplete = false;
             timeSyncs.Clear();
 
-            running = true;
-
-            // Abort all related threads
-            if (recvThread != null)
-            {
-                recvThread.Interrupt();
-                recvThread.Join();
-                recvThread = null;
-            }
-            if (sendThread != null)
-            {
-                sendThread.Interrupt();
-                sendThread.Join();
-                sendThread = null;
-            }
-            if (parseTask != null)
-            {
-                try
-                {
-                    await parseTask;
-                }
-                catch (OperationCanceledException) { /* ignore */ }
-                parseTask = null;
-            }
-
             try
             {
                 TLC = new ThreadLiveCheck();
+
                 // Start receive thread
-                recvThread = new Thread(new ThreadStart(recvLoop));
-                recvThread.Name = "Network_Remote_Endpoint_Receive_Thread";
-                recvThread.Start();
+                recvTask = recvLoop();
+                recvTask.ContinueWith(t =>
+                {
+                    Logging.error("Exception in task: " + t.Exception);
+                }, TaskContinuationOptions.OnlyOnFaulted);
 
                 // Start send thread
-                sendThread = new Thread(new ThreadStart(sendLoop));
-                sendThread.Name = "Network_Remote_Endpoint_Send_Thread";
-                sendThread.Start();
+                sendTask = sendLoop();
+                sendTask.ContinueWith(t =>
+                {
+                    Logging.error("Exception in task: " + t.Exception);
+                }, TaskContinuationOptions.OnlyOnFaulted);
 
                 // Start parse thread
                 parseTask = parseLoop();
+                parseTask.ContinueWith(t =>
+                {
+                    Logging.error("Exception in task: " + t.Exception);
+                }, TaskContinuationOptions.OnlyOnFaulted);
             }
             catch (Exception e)
             {
@@ -232,16 +217,67 @@ namespace IXICore.Network
         }
 
         // Aborts all related endpoint threads and data
-        public async void stop()
+        public void stop(bool fully_stopped = true)
         {
-            fullyStopped = true;
+            fullyStopped = fully_stopped;
 
-            Thread.Sleep(50); // clear any last messages
+            if (sendTask != null)
+            {
+                Thread.Sleep(50);
+            }
 
             state = RemoteEndpointState.Closed;
             running = false;
 
-            Thread.Sleep(50); // wait for threads to stop
+            try
+            {
+                recvRawQueueMessages.Writer.WriteAsync(null);
+            }
+            catch (Exception e)
+            {
+                Logging.error("Error while stopping " + e);
+            }
+
+            disconnect();
+
+            if (sendTask != null)
+            {
+                try
+                {
+                    sendTask.Wait();
+                }
+                catch (Exception e)
+                {
+                    Logging.error("Error while stopping " + e);
+                }
+                sendTask = null;
+            }
+
+            if (parseTask != null)
+            {
+                try
+                {
+                    parseTask.Wait();
+                }
+                catch (Exception e)
+                {
+                    Logging.error("Error while stopping " + e);
+                }
+                parseTask = null;
+            }
+
+            if (recvTask != null)
+            {
+                try
+                {
+                    recvTask.Wait();
+                }
+                catch (Exception e)
+                {
+                    Logging.error("Error while stopping " + e);
+                }
+                recvTask = null;
+            }
 
             lock (sendQueueMessagesHighPriority)
             {
@@ -263,42 +299,17 @@ namespace IXICore.Network
                 subscribedFilters.Clear();
             }
 
-            lock(inventory)
+            lock (inventory)
             {
                 inventory.Clear();
             }
-
-            // Abort all related threads
-            if (recvThread != null)
-            {
-                //recvThread.Abort();
-                recvThread = null;
-            }
-            if (sendThread != null)
-            {
-                //sendThread.Abort();
-                sendThread = null;
-            }
-
-            if (parseTask != null)
-            {
-                try
-                {
-                    await parseTask;
-                }
-                catch (OperationCanceledException) { /* ignore */ }
-                parseTask = null;
-            }
-
-            disconnect();
         }
 
         // Receive thread
-        protected void recvLoop()
+        protected async Task recvLoop()
         {
             try
             {
-                Thread.CurrentThread.IsBackground = true;
                 socketReadBuffer = new byte[8192];
                 long lastReceivedMessageStatTime = Clock.getTimestampMillis();
                 int messageCount = 0;
@@ -309,11 +320,11 @@ namespace IXICore.Network
                     bool message_received = false;
                     try
                     {
-                        QueueMessageRaw? raw_msg = readSocketData();
+                        QueueMessageRaw? raw_msg = await readSocketData();
                         if (raw_msg != null)
                         {
                             message_received = true;
-                            parseDataInternal((QueueMessageRaw)raw_msg);
+                            await parseDataInternal((QueueMessageRaw)raw_msg);
                             messageCount++;
                         }
                     }
@@ -330,14 +341,6 @@ namespace IXICore.Network
                             }
                         }
                         state = RemoteEndpointState.Closed;
-                    }
-                    catch (ThreadAbortException)
-                    {
-                        state = RemoteEndpointState.Closed;
-                    }
-                    catch (ThreadInterruptedException)
-                    {
-                        throw;
                     }
                     catch (Exception e)
                     {
@@ -361,11 +364,11 @@ namespace IXICore.Network
                     int total_message_count = NetworkQueue.getQueuedMessageCount();
                     if (total_message_count > 10000)
                     {
-                        Thread.Sleep(1000);
+                        await Task.Delay(1000);
                     }
                     else if (total_message_count > 5000)
                     {
-                        Thread.Sleep(500);
+                        await Task.Delay(500);
                     }
                     else if (messageCount > 100)
                     {
@@ -374,7 +377,7 @@ namespace IXICore.Network
                         if (time_diff < 100)
                         {
                             // sleep to throttle the client to 1000 messages/second
-                            Thread.Sleep(100 - (int)time_diff);
+                            await Task.Delay(100 - (int)time_diff);
                             cur_time = Clock.getTimestampMillis();
                         }
                         lastReceivedMessageStatTime = cur_time;
@@ -382,13 +385,9 @@ namespace IXICore.Network
                     }
                     else if (!message_received)
                     {
-                        Thread.Sleep(10);
+                        await Task.Delay(10);
                     }
                 }
-            }
-            catch (ThreadInterruptedException)
-            {
-
             }
             catch (Exception e)
             {
@@ -398,7 +397,7 @@ namespace IXICore.Network
             running = false;
         }
 
-        public virtual void disconnect()
+        protected virtual void disconnect()
         {
             // Close the client socket
             if (clientSocket == null)
@@ -449,10 +448,8 @@ namespace IXICore.Network
         }
 
         // Send thread
-        protected void sendLoop()
+        protected async Task sendLoop()
         {
-            Thread.CurrentThread.IsBackground = true;
-
             try
             {
                 // Prepare an special message object to use while sending, without locking up the queue messages
@@ -555,16 +552,16 @@ namespace IXICore.Network
                     {
                         messageCount++;
                         // Active message set, attempt to send it
-                        sendDataInternal(active_message.code, active_message.data, active_message.checksum);
+                        await sendDataInternal(active_message.code, active_message.data, active_message.checksum);
                         if (active_message.code == ProtocolMessageCode.bye)
                         {
-                            Thread.Sleep(500); // grace sleep to get the message through
+                            await Task.Delay(500); // grace sleep to get the message through
                             state = RemoteEndpointState.Closed;
                             running = false;
                             fullyStopped = true;
                         }
                     }
-                    sendInventory();
+                    await sendInventory();
 
                     if (messageCount > 100)
                     {
@@ -573,7 +570,7 @@ namespace IXICore.Network
                         if (time_diff < 100)
                         {
                             // sleep to throttle the client to 1000 messages/second
-                            Thread.Sleep(100 - (int)time_diff);
+                            await Task.Delay(100 - (int)time_diff);
                             cur_time = Clock.getTimestampMillis();
                         }
                         lastSentMessageStatTime = cur_time;
@@ -581,13 +578,9 @@ namespace IXICore.Network
                     }
                     else if (!message_found)
                     {
-                        Thread.Sleep(10);
+                        await Task.Delay(10);
                     }
                 }
-            }
-            catch (ThreadInterruptedException)
-            {
-
             }
             catch (Exception e)
             {
@@ -605,7 +598,7 @@ namespace IXICore.Network
             }
         }
 
-        protected void sendInventory()
+        protected async Task sendInventory()
         {
             try
             {
@@ -637,7 +630,7 @@ namespace IXICore.Network
                             writer.Write(item_bytes);
                         }
                     }
-                    sendDataInternal(ProtocolMessageCode.inventory2, m.ToArray(), 0);
+                    await sendDataInternal(ProtocolMessageCode.inventory2, m.ToArray(), 0);
                 }
             }
             catch(Exception e)
@@ -649,15 +642,19 @@ namespace IXICore.Network
         // Parse thread
         protected async Task parseLoop()
         {
-            // Prepare an special message object to use while sending, without locking up the queue messages
-            QueueMessageRaw active_message = new QueueMessageRaw();
-
             while (running)
             {
                 TLC.Report();
                 try
                 {
-                    active_message = await recvRawQueueMessages.Reader.ReadAsync();
+                    QueueMessageRaw? active_message_task = await recvRawQueueMessages.Reader.ReadAsync();
+
+                    if (!active_message_task.HasValue)
+                    {
+                        continue;
+                    }
+
+                    QueueMessageRaw active_message = active_message_task.Value;
 
                     // Active message set, add it to Network Queue
                     MessagePriority priority = MessagePriority.auto;
@@ -708,16 +705,6 @@ namespace IXICore.Network
                     }
                     CoreProtocolMessage.readProtocolMessage(active_message, priority, this);
                 }
-                catch (ThreadInterruptedException)
-                {
-                    state = RemoteEndpointState.Closed;
-                    running = false;
-                }
-                catch (ThreadAbortException)
-                {
-                    state = RemoteEndpointState.Closed;
-                    running = false;
-                }
                 catch (Exception e)
                 {
                     state = RemoteEndpointState.Closed;
@@ -727,14 +714,13 @@ namespace IXICore.Network
             }
         }
 
-        protected async void parseDataInternal(QueueMessageRaw message)
+        protected async Task parseDataInternal(QueueMessageRaw message)
         {
             await recvRawQueueMessages.Writer.WriteAsync(message);
         }
 
-
         // Internal function that sends data through the socket
-        protected void sendDataInternal(ProtocolMessageCode code, byte[] data, uint checksum)
+        protected async Task sendDataInternal(ProtocolMessageCode code, byte[] data, uint checksum)
         {
             try
             {
@@ -759,7 +745,7 @@ namespace IXICore.Network
                     // Sleep a bit to allow other threads to do their thing
                     if (curSentBytes < bytesToSendCount)
                     {
-                        Thread.Sleep(1);
+                        await Task.Delay(1);
                     }
 
                     sentBytes += curSentBytes;
@@ -787,11 +773,6 @@ namespace IXICore.Network
                         Logging.warn("sendRE: Disconnected client {0} with socket exception {1} {2} {3}", getFullAddress(), se.SocketErrorCode, se.ErrorCode, se);
                     }
                 }
-                state = RemoteEndpointState.Closed;
-                running = false;
-            }
-            catch (ThreadAbortException)
-            {
                 state = RemoteEndpointState.Closed;
                 running = false;
             }
@@ -1072,7 +1053,7 @@ namespace IXICore.Network
             return header;
         }
 
-        protected void readTimeSyncData()
+        protected async Task readTimeSyncData()
         {
             if(timeSyncComplete)
             {
@@ -1088,7 +1069,7 @@ namespace IXICore.Network
                 i += rcvd_count;
                 if (rcvd_count <= 0)
                 {
-                    Thread.Sleep(1);
+                    await Task.Delay(1);
                 }
             }
             lock (timeSyncs)
@@ -1111,7 +1092,7 @@ namespace IXICore.Network
         }
 
         // Reads data from a socket and returns a byte array
-        protected QueueMessageRaw? readSocketData()
+        protected async Task<QueueMessageRaw?> readSocketData()
         {
             Socket socket = clientSocket;
 
@@ -1138,7 +1119,6 @@ namespace IXICore.Network
 
             try
             {
-                
                 int expected_data_len = 0;
                 int expected_header_len = 0;
                 int bytes_to_read = 1;
@@ -1149,7 +1129,7 @@ namespace IXICore.Network
                     if (bytes_received <= 0)
                     {
                         // sleep a litte while waiting for bytes
-                        Thread.Sleep(1);
+                        await Task.Delay(1);
                         // TODO should return null if a timeout occurs
                         continue;
                     }
@@ -1170,7 +1150,7 @@ namespace IXICore.Network
                             case 0x02: // 0x02 is the timesync
                                 if (timeSyncComplete == false)
                                 {
-                                    readTimeSyncData();
+                                    await readTimeSyncData();
                                 }
                                 break;
 
