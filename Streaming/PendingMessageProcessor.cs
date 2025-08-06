@@ -41,7 +41,7 @@ namespace IXICore.Streaming
         bool running = false;
 
         List<PendingRecipient> pendingRecipients = new List<PendingRecipient>();
-        Channel<OffloadedMessage> msgQueue = Channel.CreateUnbounded<OffloadedMessage>();
+        Channel<OffloadedMessage> msgQueue = null;
 
         string storagePath = "MsgQueue";
 
@@ -113,14 +113,20 @@ namespace IXICore.Streaming
                 Directory.CreateDirectory(storagePath);
             }
 
+            msgQueue = Channel.CreateUnbounded<OffloadedMessage>();
+
             pendingMessagesThread = new Thread(messageProcessorLoop);
             pendingMessagesThread.Name = "Pending_Message_Processor_Loop";
             pendingMessagesThread.Start();
 
             offloadedMessagesTask = offloadedMessageProcessorLoop();
+            offloadedMessagesTask.ContinueWith(t =>
+            {
+                Logging.error("Exception in task: " + t.Exception);
+            }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
-        public async void stop()
+        public void stop()
         {
             running = false;
             pendingMessagesThread = null;
@@ -128,7 +134,8 @@ namespace IXICore.Streaming
             {
                 try
                 {
-                    await offloadedMessagesTask;
+                    msgQueue.Writer.Complete();
+                    offloadedMessagesTask.Wait();
                 }
                 catch (OperationCanceledException) { /* ignore */ }
                 offloadedMessagesTask = null;
@@ -189,7 +196,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public async void sendMessage(Friend friend, StreamMessage msg, int channel, bool add_to_pending_messages, bool send_to_server, bool send_push_notification, bool remove_after_sending = false)
+        public void sendMessage(Friend friend, StreamMessage msg, int channel, bool add_to_pending_messages, bool send_to_server, bool send_push_notification, bool remove_after_sending = false)
         {
             OffloadedMessage om = new OffloadedMessage
             {
@@ -201,7 +208,7 @@ namespace IXICore.Streaming
                 removeAfterSending = remove_after_sending,
                 channel = channel
             };
-            await msgQueue.Writer.WriteAsync(om);
+            msgQueue.Writer.WriteAsync(om);
         }
 
         private void sendMessage(OffloadedMessage om)

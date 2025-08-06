@@ -76,7 +76,6 @@ namespace IXICore.Streaming
 
         protected List<Timer> _typingTimers = new();
 
-
         // Initialize the global stream processor
         public CoreStreamProcessor(PendingMessageProcessor pendingMessageProcessor, StreamCapabilities streamCapabilities)
         {
@@ -121,18 +120,21 @@ namespace IXICore.Streaming
             {
                 relayAddress = friend.relayNode.walletAddress;
             }
-            if (NetworkServer.getClient(relayAddress) == null)
+            Task.Run(async () =>
             {
-                if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
-                    && friend.relayNode != null)
+                if (NetworkServer.getClient(relayAddress) == null)
                 {
-                    StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
+                    if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
+                        && friend.relayNode != null)
+                    {
+                        StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
+                    }
+                    else
+                    {
+                        await fetchFriendsPresence(friend);
+                    }
                 }
-                else
-                {
-                    fetchFriendsPresence(friend);
-                }
-            }
+            });
             pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
         }
 
@@ -2199,60 +2201,63 @@ namespace IXICore.Streaming
             }
         }
 
-        public static void fetchFriendsPresence(Friend friend)
+        public static async Task fetchFriendsPresence(Friend friend)
         {
-            // TODO don't fetch user's presence if they're directly connected; also set online indicator to true if directly connected; it has to go both ways - for incoming and outgoing connections
-            if (Clock.getTimestamp() - friend.requestedPresence < CoreConfig.requestPresenceTimeout)
+            await Task.Run(() =>
             {
-                return;
-            }
-
-            if (friend.sectorNodes.Count() == 0
-                || (Clock.getNetworkTimestamp() - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
-            {
-                // If sector nodes are not yet initialized or we haven't received contact's presence information and haven't updated presence within the interval
-
-                Logging.trace("Fetching sector nodes for " + friend.walletAddress.ToString());
-                CoreProtocolMessage.fetchSectorNodes(friend.walletAddress, CoreConfig.maxRelaySectorNodesToRequest);
-                return;
-            }
-
-            using (MemoryStream mw = new MemoryStream())
-            {
-                using (BinaryWriter writer = new BinaryWriter(mw))
+                // TODO don't fetch user's presence if they're directly connected; also set online indicator to true if directly connected; it has to go both ways - for incoming and outgoing connections
+                if (Clock.getTimestamp() - friend.requestedPresence < CoreConfig.requestPresenceTimeout)
                 {
-                    writer.WriteIxiVarInt(friend.walletAddress.addressNoChecksum.Length);
-                    writer.Write(friend.walletAddress.addressNoChecksum);
+                    return;
                 }
 
-                Logging.trace("Fetching presence for " + friend.walletAddress.ToString());
-                if (!StreamClientManager.sendToClient(friend.sectorNodes, ProtocolMessageCode.getPresence2, mw.ToArray(), null, 2))
+                if (friend.sectorNodes.Count() == 0
+                    || (Clock.getNetworkTimestamp() - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
                 {
-                    // Not connected to contact's sector node
+                    // If sector nodes are not yet initialized or we haven't received contact's presence information and haven't updated presence within the interval
 
-                    var rnd = new Random();
-                    if (friend.sectorNodes.Count > 1)
+                    Logging.trace("Fetching sector nodes for " + friend.walletAddress.ToString());
+                    CoreProtocolMessage.fetchSectorNodes(friend.walletAddress, CoreConfig.maxRelaySectorNodesToRequest);
+                    return;
+                }
+
+                using (MemoryStream mw = new MemoryStream())
+                {
+                    using (BinaryWriter writer = new BinaryWriter(mw))
                     {
-                        int fromIndex = rnd.Next(friend.sectorNodes.Count - 1);
-                        for (int i = 0; i < 2; i++)
+                        writer.WriteIxiVarInt(friend.walletAddress.addressNoChecksum.Length);
+                        writer.Write(friend.walletAddress.addressNoChecksum);
+                    }
+
+                    Logging.trace("Fetching presence for " + friend.walletAddress.ToString());
+                    if (!StreamClientManager.sendToClient(friend.sectorNodes, ProtocolMessageCode.getPresence2, mw.ToArray(), null, 2))
+                    {
+                        // Not connected to contact's sector node
+
+                        if (friend.sectorNodes.Count > 1)
                         {
-                            var sn = friend.sectorNodes[fromIndex + i];
+                            int fromIndex = Random.Shared.Next(friend.sectorNodes.Count - 1);
+                            for (int i = 0; i < 2; i++)
+                            {
+                                var sn = friend.sectorNodes[fromIndex + i];
+                                Logging.trace("Connecting to sector node " + sn.hostname + " " + sn.walletAddress.ToString());
+                                StreamClientManager.connectTo(sn.hostname, sn.walletAddress);
+                            }
+                        }
+                        else
+                        {
+                            var sn = friend.sectorNodes[0];
                             Logging.trace("Connecting to sector node " + sn.hostname + " " + sn.walletAddress.ToString());
                             StreamClientManager.connectTo(sn.hostname, sn.walletAddress);
                         }
-                    } else
-                    {
-                        var sn = friend.sectorNodes[0];
-                        Logging.trace("Connecting to sector node " + sn.hostname + " " + sn.walletAddress.ToString());
-                        StreamClientManager.connectTo(sn.hostname, sn.walletAddress);
                     }
-                } else
-                {
-                    friend.requestedPresence = Clock.getTimestamp();
+                    else
+                    {
+                        friend.requestedPresence = Clock.getTimestamp();
+                    }
                 }
-            }
+            });
         }
-
 
         public static StreamMessage sendAppRequest(Friend friend, string app_id, byte[] session_id, byte[] data, string app_info)
         {
