@@ -221,9 +221,8 @@ namespace IXICore.Streaming
                 friend.aesSalt = null;
                 friend.ecdhPrivateKey = null;
                 friend.mlKemPrivateKey = null;
-                friend.handshakeStatus = 3;
                 friend.streamCapabilities = data.capabilities;
-                friend.save();
+                friend.handshakeStatus = 3;
 
                 sendNickname(friend);
 
@@ -1148,10 +1147,6 @@ namespace IXICore.Streaming
             if (new_friend != null)
             {
                 new_friend.protocolVersion = version;
-                if (new_friend.lastReceivedHandshakeMessageTimestamp >= received_timestamp)
-                {
-                    return false;
-                }
                 new_friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 new_friend.handshakeStatus = 1;
                 new_friend.save();
@@ -1174,16 +1169,11 @@ namespace IXICore.Streaming
 
                 friend.lastReceivedHandshakeMessageTimestamp = received_timestamp;
                 friend.setPublicKey(pub_key);
-                friend.save();
-                bool reset_keys = true;
-                if (friend.handshakeStatus > 0 && friend.handshakeStatus < 3)
-                {
-                    reset_keys = false;
-                }
                 friend.handshakeStatus = 1;
+                friend.save();
                 if (friend.approved)
                 {
-                    return sendAcceptAdd2(friend, reset_keys);
+                    return sendAcceptAdd2(friend);
                 }
             }
             return false;
@@ -1272,10 +1262,8 @@ namespace IXICore.Streaming
 
             friend.protocolVersion = data.version;
             friend.state = FriendState.Approved;
-            friend.handshakeStatus = 2;
-
             friend.streamCapabilities = data.capabilities;
-            friend.save();
+            friend.handshakeStatus = 2;
 
             sendKeys2(friend, ecdh_keypair.publicKey, mlkem_secret.ciphertext, chacha_salt);
 
@@ -1385,7 +1373,7 @@ namespace IXICore.Streaming
 
             if (friend.protocolVersion > 0)
             {
-                return sendAcceptAdd2(friend, reset_keys);
+                return sendAcceptAdd2(friend);
             }
 
             Logging.info("Sending accept add");
@@ -1440,25 +1428,25 @@ namespace IXICore.Streaming
             return true;
         }
 
-        public static bool sendAcceptAdd2(Friend friend, bool reset_keys)
+        public static bool sendAcceptAdd2(Friend friend)
         {
             if (friend.handshakeStatus > 1)
             {
                 return false;
             }
 
-            Logging.info("Sending accept add2");
-
-            if (reset_keys)
+            if (friend.ecdhPrivateKey != null)
             {
-                friend.aesKey = null;
-                friend.chachaKey = null;
-                friend.aesSalt = null;
-                friend.ecdhPrivateKey = null;
-                friend.mlKemPrivateKey = null;
+                Logging.warn("Accept add for {0} already sent.", friend.walletAddress.ToString());
+                return false;
             }
 
+            Logging.info("Sending accept add2");
+
             friend.state = FriendState.Approved;
+
+            friend.aesKey = null;
+            friend.chachaKey = null;
 
             var ecdh_keypair = CryptoManager.lib.generateECDHKeyPair();
             var mlkem_keypair = CryptoManager.lib.generateMLKemKeyPair();
