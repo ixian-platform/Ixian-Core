@@ -135,8 +135,8 @@ namespace IXICore.Streaming
                         await fetchFriendsPresence(friend);
                     }
                 }
-            });
-            pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
+                pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
+            });        
         }
 
         public static void sendSpixiMessage(Friend friend, SpixiMessage spixi_message, byte[] id = null, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false)
