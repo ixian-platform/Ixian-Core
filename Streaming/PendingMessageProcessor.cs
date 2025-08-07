@@ -119,7 +119,7 @@ namespace IXICore.Streaming
             pendingMessagesThread.Name = "Pending_Message_Processor_Loop";
             pendingMessagesThread.Start();
 
-            offloadedMessagesTask = offloadedMessageProcessorLoop();
+            offloadedMessagesTask = Task.Run(() => offloadedMessageProcessorLoop());
             offloadedMessagesTask.ContinueWith(t =>
             {
                 Logging.error("Exception in task: " + t.Exception);
@@ -134,8 +134,8 @@ namespace IXICore.Streaming
             {
                 try
                 {
-                    msgQueue.Writer.WriteAsync(null);
-                    offloadedMessagesTask.WaitAsync(CancellationToken.None);
+                    msgQueue.Writer.TryWrite(null);
+                    offloadedMessagesTask.Wait();
                 }
                 catch (Exception) { /* ignore */ }
                 offloadedMessagesTask = null;
@@ -208,7 +208,7 @@ namespace IXICore.Streaming
                 removeAfterSending = remove_after_sending,
                 channel = channel
             };
-            msgQueue.Writer.WriteAsync(om);
+            msgQueue.Writer.TryWrite(om);
         }
 
         private void sendMessage(OffloadedMessage om)
@@ -505,7 +505,7 @@ namespace IXICore.Streaming
             {
                 try
                 {
-                    var om = await msgQueue.Reader.ReadAsync();
+                    var om = await msgQueue.Reader.ReadAsync().ConfigureAwait(false);
                     if (om != null)
                     {
                         sendMessage(om);

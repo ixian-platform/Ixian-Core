@@ -116,12 +116,14 @@ namespace IXICore.Streaming
                     add_to_pending_messages = false;
                 }
             }
+
             Address relayAddress = friend.walletAddress;
             if (friend.relayNode != null)
             {
                 relayAddress = friend.relayNode.walletAddress;
             }
-            Task.Run(async () =>
+
+            Task.Run(() =>
             {
                 if (NetworkServer.getClient(relayAddress) == null)
                 {
@@ -132,11 +134,11 @@ namespace IXICore.Streaming
                     }
                     else
                     {
-                        await fetchFriendsPresence(friend);
+                        fetchFriendsPresence(friend);
                     }
                 }
                 pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
-            });        
+            });
         }
 
         public static void sendSpixiMessage(Friend friend, SpixiMessage spixi_message, byte[] id = null, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false)
@@ -2190,9 +2192,9 @@ namespace IXICore.Streaming
             }
         }
 
-        public static async Task fetchFriendsPresence(Friend friend)
+        public static void fetchFriendsPresence(Friend friend)
         {
-            await Task.Run(() =>
+            Task.Run(() =>
             {
                 // TODO don't fetch user's presence if they're directly connected; also set online indicator to true if directly connected; it has to go both ways - for incoming and outgoing connections
                 if (Clock.getTimestamp() - friend.requestedPresence < CoreConfig.requestPresenceTimeout)
