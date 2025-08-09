@@ -82,21 +82,31 @@ namespace IXICore.Streaming
         {
             CoreStreamProcessor.pendingMessageProcessor = pendingMessageProcessor;
             CoreStreamProcessor.streamCapabilities = streamCapabilities;
+        }
 
-            pendingMessageProcessor.start();
+        public void start()
+        {
+            if (running)
+            {
+                Logging.warn("StreamProcessor already running");
+                return;
+            }
 
             running = true;
+            
+            pendingMessageProcessor.start();
         }
 
         // Uninitialize the global stream processor
-        public void uninitialize()
+        public void stop()
         {
-            running = false;
-            if (pendingMessageProcessor != null)
+            if (!running)
             {
-                pendingMessageProcessor.stop();
-                pendingMessageProcessor = null;
+                Logging.warn("StreamProcessor already stopped");
+                return;
             }
+            running = false;
+            pendingMessageProcessor.stop();
         }
 
         // Send an encrypted message using the S2 network

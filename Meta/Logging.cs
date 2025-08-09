@@ -146,9 +146,14 @@ namespace IXICore.Meta
                 return;
             }
 
+            flush();
+
             running = false;
+            
             thread.Interrupt();
             thread.Join();
+            thread = null;
+            
             lock (logfilename)
             {
                 logFileStream.Flush();
@@ -304,11 +309,12 @@ namespace IXICore.Meta
             }
             catch (ThreadInterruptedException)
             {
-
+                running = false;
             }
             catch (Exception e)
             {
                 Console.WriteLine("Logging exception: {0}", e);
+                running = false;
             }
         }
 
@@ -450,20 +456,9 @@ namespace IXICore.Meta
         /// </summary>
         public static void flush()
         {
-            while (getRemainingStatementsCount() > 0)
+            while (running && logFileStream != null && getRemainingStatementsCount() > 0)
             {
-                lock(logfilename)
-                {
-                    if (logFileStream != null)
-                    {
-                        logFileStream.Flush();
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-                Thread.Sleep(100);
+                Thread.Sleep(25);
             }
             lock (logfilename)
             {

@@ -157,5 +157,63 @@ namespace IXICore.Meta
             r.FromXmlString(signPubKey);
             return r.VerifyData(version_bytes, signature_bytes, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1);
         }
+
+        public static int compareVersionsWithSuffix(string v1, string v2)
+        {
+            // Helper to split into numeric and suffix parts
+            (string numericPart, string suffix) splitVersion(string v)
+            {
+                int index = 0;
+                // Find where suffix starts (first non-digit/dot character)
+                while (index < v.Length && (char.IsDigit(v[index]) || v[index] == '.'))
+                    index++;
+                return (v.Substring(0, index), v.Substring(index));
+            }
+
+            var (num1, suf1) = splitVersion(v1);
+            var (num2, suf2) = splitVersion(v2);
+
+            if (Version.TryParse(num1, out var ver1) && Version.TryParse(num2, out var ver2))
+            {
+                int cmp = ver1.CompareTo(ver2);
+                if (cmp != 0)
+                    return cmp;
+
+                // Numeric parts are equal, so compare suffixes
+                if (string.IsNullOrEmpty(suf1))
+                {
+                    if (!string.IsNullOrEmpty(suf2))
+                    {
+                        if (!suf2.StartsWith('-'))
+                        {
+                            return -1; // suffix means higher version, so suf2 > suf1
+                        }
+                        else
+                        {
+                            return 1;
+                        }
+                    }
+                }
+                if (string.IsNullOrEmpty(suf2))
+                {
+                    if (!string.IsNullOrEmpty(suf1))
+                    {
+                        if (!suf1.StartsWith('-'))
+                        {
+                            return 1;  // suf1 > suf2
+                        }
+                        else
+                        {
+                            return -1;
+                        }
+                    }
+                }
+                    
+                return string.Compare(suf1, suf2, StringComparison.Ordinal);
+            }
+
+            // Fallback to string compare if parse fails
+            return string.Compare(v1, v2, StringComparison.Ordinal);
+        }
     }
 }
