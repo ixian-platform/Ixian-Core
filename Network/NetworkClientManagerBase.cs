@@ -33,7 +33,14 @@ namespace IXICore.Network
 
         protected bool paused = false;
 
-        protected int simultaneousConnectedNeighbors;
+        /// <summary>
+        ///  Target number of simultaneously connected neighbors.
+        /// </summary>
+        /// <remarks>
+        ///  If more neighbors are connected, they will slowly be disconnected. 
+        ///  If fewer neighbors are connected, more will be added over time.
+        /// </remarks>
+        public int simultaneousConnectedNeighbors;
 
         public NetworkClientManagerBase(int simultaneousConnectedNeighbors)
         {

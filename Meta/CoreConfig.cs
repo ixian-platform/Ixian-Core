@@ -118,14 +118,6 @@ namespace IXICore
         /// </summary>
         public static int maximumNeighborReconnectCount = 3;
         /// <summary>
-        ///  Target number of simultaneously connected neighbors.
-        /// </summary>
-        /// <remarks>
-        ///  If more neighbors are connected, they will slowly be disconnected. 
-        ///  If fewer neighbors are connected, more will be added over time.
-        /// </remarks>
-        public static int simultaneousConnectedNeighbors = 12;
-        /// <summary>
         /// Maximum number of events a client can be subscribed to.
         /// </summary>
         public static int maximumSubscribableEvents = 500;

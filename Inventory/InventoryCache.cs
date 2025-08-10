@@ -229,7 +229,6 @@ namespace IXICore.Inventory
                 Logging.error("Cannot process pendingInventoryItem, PendingInventoryItem is null.");
                 return false;
             }
-            if (pii.processed) return false;
 
             try
             {

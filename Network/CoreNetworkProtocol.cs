@@ -879,7 +879,8 @@ namespace IXICore
                             case ProtocolByeCode.incorrectIp: // incorrect IP
                                 if (IxiUtils.validateIPv4(byeData))
                                 {
-                                    if (NetworkClientManager.getConnectedClients(true).Length < 2)
+                                    if (NetworkClientManager.getConnectedClients(true).Length < 2
+                                        && NetworkServer.getConnectedClients(true).Length < 2)
                                     {
                                         IxianHandler.publicIP = byeData;
                                         Logging.warn("Changed internal IP Address to " + byeData + ", reconnecting");

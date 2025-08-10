@@ -153,5 +153,10 @@ namespace IXICore.Network
         {
             return clientManagerBase.getClient(clientAddress);
         }
+
+        public static void setSimultaneousConnectedNeighbors(int simultaneousConnectedNeighbors)
+        {
+            clientManagerBase.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
+        }
     }
 }
