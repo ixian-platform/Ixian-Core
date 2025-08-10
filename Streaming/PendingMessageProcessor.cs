@@ -142,7 +142,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public void processPendingMessages()
+        private void processPendingMessages()
         {
             List<PendingRecipient> tmp_pending_recipients;
             lock (pendingRecipients)

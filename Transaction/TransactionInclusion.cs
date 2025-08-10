@@ -531,7 +531,7 @@ namespace IXICore
 
                             if (InventoryCache.Instance != null)
                             {
-                                InventoryCache.Instance.setProcessedFlag(InventoryItemTypes.block, header.blockChecksum, true);
+                                InventoryCache.Instance.setProcessedFlag(InventoryItemTypes.block, header.blockChecksum);
                             }
 
                             if (lastBlockHeader != null && header.blockNum <= lastBlockHeader.blockNum)

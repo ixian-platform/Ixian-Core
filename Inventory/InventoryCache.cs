@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
+﻿// Copyright (C) 2017-2025 Ixian OU
 // This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -14,18 +14,59 @@ using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Utils;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.Threading;
 
 namespace IXICore.Inventory
 {
+    // Immutable key wrapper for byte[] with cached hashcode for fast lookups.
+    struct ByteArrayKey : IEquatable<ByteArrayKey>
+    {
+        private readonly byte[] bytes;
+        private readonly int hash;
+
+        public ByteArrayKey(byte[] bytes)
+        {
+            if (bytes == null)
+                throw new ArgumentNullException(nameof(bytes));
+
+            this.bytes = bytes;
+
+            // FNV-1a 32-bit hash
+            unchecked
+            {
+                uint h = 2166136261u; // offset basis
+                for (int i = 0; i < bytes.Length; i++)
+                    h = (h ^ bytes[i]) * 16777619u;
+                hash = (int)h; // final cast to signed int for GetHashCode compatibility
+            }
+        }
+
+        public byte[] Bytes => bytes;
+
+        public bool Equals(ByteArrayKey other)
+        {
+            var a = bytes;
+            var b = other.bytes;
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++)
+                if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        public override bool Equals(object obj) => obj is ByteArrayKey other && Equals(other);
+        public override int GetHashCode() => hash;
+    }
+
     class PendingInventoryItem
     {
         public InventoryItem item;
-        public bool processed;
+        public volatile bool processed;
         public long lastRequested;
         public int retryCount;
-        public List<RemoteEndpoint> endpoints;
+        private readonly ConcurrentDictionary<RemoteEndpoint, byte> endpoints = new ConcurrentDictionary<RemoteEndpoint, byte>();
 
         public PendingInventoryItem(InventoryItem item)
         {
@@ -33,7 +74,38 @@ namespace IXICore.Inventory
             processed = false;
             retryCount = 0;
             lastRequested = 0;
-            endpoints = new List<RemoteEndpoint>();
+        }
+
+        public void AddEndpoint(RemoteEndpoint ep)
+        {
+            if (ep != null)
+                endpoints.TryAdd(ep, 0);
+        }
+
+        public void RemoveEndpoint(RemoteEndpoint ep)
+        {
+            if (ep != null)
+                endpoints.TryRemove(ep, out _);
+        }
+
+        public RemoteEndpoint GetRandomConnectedEndpoint(Random rnd)
+        {
+            var keys = endpoints.Keys;
+            if (keys.Count == 0) return null;
+            int start = rnd.Next(0, Math.Max(1, keys.Count));
+            int idx = 0;
+            foreach (var ep in keys)
+            {
+                if (idx++ < start) continue;
+                if (ep != null && ep.isConnected() && ep.helloReceived)
+                    return ep;
+            }
+            foreach (var ep in keys)
+            {
+                if (ep != null && ep.isConnected() && ep.helloReceived)
+                    return ep;
+            }
+            return null;
         }
     }
 
@@ -48,266 +120,217 @@ namespace IXICore.Inventory
     {
         public static InventoryCache Instance { get; private set; }
 
+        // Two sets per type
+        protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, PendingInventoryItem>> pendingInventory;
+        protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, bool>> processedInventory;
 
-        protected Dictionary<InventoryItemTypes, Dictionary<byte[], PendingInventoryItem>> inventory = null;
-        protected Dictionary<InventoryItemTypes, InventoryTypeOptions> typeOptions = null;
+        // Queues for eviction
+        protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>> pendingQueues;
+        protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>> processedQueues;
 
-        Random rnd = new Random();
+        protected readonly Dictionary<InventoryItemTypes, InventoryTypeOptions> typeOptions;
+        private static readonly ThreadLocal<Random> threadRandom = new ThreadLocal<Random>(() =>
+            new Random(unchecked(Environment.TickCount * 31 + Thread.CurrentThread.ManagedThreadId)));
 
-        public InventoryCache()
+        protected InventoryCache()
         {
-            inventory = new Dictionary<InventoryItemTypes, Dictionary<byte[], PendingInventoryItem>>();
-            inventory.Add(InventoryItemTypes.block, new Dictionary<byte[], PendingInventoryItem>(new ByteArrayComparer()));
-            inventory.Add(InventoryItemTypes.blockSignature, new Dictionary<byte[], PendingInventoryItem>(new ByteArrayComparer()));
-            inventory.Add(InventoryItemTypes.keepAlive, new Dictionary<byte[], PendingInventoryItem>(new ByteArrayComparer()));
-            inventory.Add(InventoryItemTypes.transaction, new Dictionary<byte[], PendingInventoryItem>(new ByteArrayComparer()));
+            pendingInventory = new ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, PendingInventoryItem>>();
+            processedInventory = new ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, bool>>();
+            pendingQueues = new ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>>();
+            processedQueues = new ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>>();
 
-            typeOptions = new Dictionary<InventoryItemTypes, InventoryTypeOptions>();
-            typeOptions.Add(InventoryItemTypes.block, new InventoryTypeOptions() { maxRetries = 10, timeout = 15, maxItems = 100 });
-            typeOptions.Add(InventoryItemTypes.blockSignature, new InventoryTypeOptions() { maxRetries = 15, timeout = 10, maxItems = 2000 });
-            typeOptions.Add(InventoryItemTypes.keepAlive, new InventoryTypeOptions() { maxRetries = 2, timeout = 30, maxItems = 10000 });
-            typeOptions.Add(InventoryItemTypes.transaction, new InventoryTypeOptions() { maxRetries = 5, timeout = 200, maxItems = 10000 });
-        }
-
-        public static void init(InventoryCache instance)
-        {
-            Instance = instance;
-        }
-
-        public PendingInventoryItem get(InventoryItemTypes type, byte[] hash)
-        {
-            lock (inventory)
+            foreach (InventoryItemTypes t in Enum.GetValues(typeof(InventoryItemTypes)))
             {
-                var inventory_types = inventory[type];
-                if (!inventory_types.ContainsKey(hash))
-                {
-                    return null;
-                }
-                return inventory_types[hash];
+                pendingInventory[t] = new ConcurrentDictionary<ByteArrayKey, PendingInventoryItem>();
+                processedInventory[t] = new ConcurrentDictionary<ByteArrayKey, bool>();
+                pendingQueues[t] = new ConcurrentQueue<ByteArrayKey>();
+                processedQueues[t] = new ConcurrentQueue<ByteArrayKey>();
             }
+
+            typeOptions = new Dictionary<InventoryItemTypes, InventoryTypeOptions>
+            {
+                { InventoryItemTypes.block, new InventoryTypeOptions() { maxRetries = 10, timeout = 15, maxItems = 10 } },
+                { InventoryItemTypes.blockSignature, new InventoryTypeOptions() { maxRetries = 15, timeout = 10, maxItems = 2000 } },
+                { InventoryItemTypes.keepAlive, new InventoryTypeOptions() { maxRetries = 2, timeout = 30, maxItems = 10000 } },
+                { InventoryItemTypes.transaction, new InventoryTypeOptions() { maxRetries = 5, timeout = 200, maxItems = 10000 } }
+            };
         }
 
-        public PendingInventoryItem add(InventoryItem item, RemoteEndpoint endpoint)
-        {
-            lock (inventory)
-            {
-                var inventory_list = inventory[item.type];
-                if(item.hash == null)
-                {
-                    Logging.error("Error adding inventory item, hash is null.");
-                    return null;
-                }
+        public static void init(InventoryCache instance) => Instance = instance;
 
-                if (!inventory_list.ContainsKey(item.hash))
+        private PendingInventoryItem get(InventoryItemTypes type, byte[] hash)
+        {
+            if (hash == null) return null;
+            var key = new ByteArrayKey(hash);
+            pendingInventory[type].TryGetValue(key, out var pii);
+            return pii;
+        }
+
+        public PendingInventoryItem add(InventoryItem item, RemoteEndpoint endpoint, bool forceAddToPending)
+        {
+            if (item?.hash == null)
+            {
+                Logging.error("Error adding inventory item, hash is null.");
+                return null;
+            }
+            var type = item.type;
+            var key = new ByteArrayKey(item.hash);
+
+            // skip if disabled
+            if (!typeOptions.ContainsKey(type)
+                || typeOptions[type].maxItems == 0)
+            {
+                Logging.error("Error adding inventory item, type disabled.");
+                return null;
+            }
+
+            // skip if recently processed
+            if (processedInventory[type].ContainsKey(key))
+            {
+                if (forceAddToPending)
                 {
-                    PendingInventoryItem pii = new PendingInventoryItem(item);
-                    if(endpoint != null)
-                    {
-                        pii.endpoints.Add(endpoint);
-                    }
-                    inventory_list.Add(item.hash, pii);
-                    truncateInventory(item.type);
-                    return pii;
+                    processedInventory[type].TryRemove(key, out _);
                 }
                 else
                 {
-                    PendingInventoryItem pii = inventory_list[item.hash];
-                    pii.item = item;
-                    if (endpoint != null)
-                    {
-                        if (!pii.endpoints.Contains(endpoint))
-                        {
-                            pii.endpoints.Add(endpoint);
-                        }
-                    }
-                    return pii;
+                    return new PendingInventoryItem(item) { processed = true };
+                }
+            }
+
+            var dict = pendingInventory[type];
+            var queue = pendingQueues[type];
+
+            var pii = dict.GetOrAdd(key, _ =>
+            {
+                var newPii = new PendingInventoryItem(item);
+                if (endpoint != null) newPii.AddEndpoint(endpoint);
+                queue.Enqueue(key);
+                truncateQueueIfNeeded(type, pendingInventory, pendingQueues);
+                return newPii;
+            });
+
+            if (!ReferenceEquals(pii.item, item))
+                pii.item = item;
+            if (endpoint != null)
+                pii.AddEndpoint(endpoint);
+
+            return pii;
+        }
+
+        public bool processInventoryItem(InventoryItemTypes type, byte[] hash)
+        {
+            return processInventoryItem(get(type, hash));
+        }
+
+        public bool processInventoryItem(PendingInventoryItem pii)
+        {
+            if (pii == null)
+            {
+                Logging.error("Cannot process pendingInventoryItem, PendingInventoryItem is null.");
+                return false;
+            }
+            if (pii.processed) return false;
+
+            try
+            {
+                var rnd = threadRandom.Value;
+                var endpoint = pii.GetRandomConnectedEndpoint(rnd);
+
+                if (sendInventoryRequest(pii.item, endpoint))
+                {
+                    pii.lastRequested = Clock.getTimestamp();
+                    if (Interlocked.Increment(ref pii.retryCount) > typeOptions[pii.item.type].maxRetries)
+                        setProcessedFlag(pii.item.type, pii.item.hash);
+                    return true;
+                }
+                else
+                {
+                    // All good, we already have this item.
+                    setProcessedFlag(pii.item.type, pii.item.hash);
+                }
+            }
+            catch (Exception e)
+            {
+                Logging.error("Exception in processInventoryItem: {0}", e);
+                setProcessedFlag(pii.item.type, pii.item.hash);
+            }
+            return false;
+        }
+
+        public void processCache()
+        {
+            long now = Clock.getTimestamp();
+            foreach (var type in pendingInventory.Keys)
+            {
+                if (!typeOptions.TryGetValue(type, out var opts))
+                    opts = new InventoryTypeOptions();
+                long expiration_time = now - opts.timeout;
+
+                foreach (var kv in pendingInventory[type])
+                {
+                    var pii = kv.Value;
+                    if (pii.lastRequested > expiration_time) continue;
+                    processInventoryItem(pii);
                 }
             }
         }
 
-        private bool remove(InventoryItemTypes type, byte[] hash)
+        public virtual void setProcessedFlag(InventoryItemTypes type, byte[] hash)
         {
-            lock (inventory)
+            if (hash == null) return;
+            var key = new ByteArrayKey(hash);
+
+            // move from pending to processed
+            pendingInventory[type].TryRemove(key, out _);
+            processedInventory[type][key] = true;
+            processedQueues[type].Enqueue(key);
+            truncateQueueIfNeeded(type, processedInventory, processedQueues);
+        }
+
+        public long getItemCount()
+        {
+            long count = 0;
+            foreach (var kv in pendingInventory) count += kv.Value.Count;
+            foreach (var kv in processedInventory) count += kv.Value.Count;
+            return count;
+        }
+
+        public long getProcessedItemCount()
+        {
+            long count = 0;
+            foreach (var kv in processedInventory) count += kv.Value.Count;
+            return count;
+        }
+
+        protected void truncateQueueIfNeeded<T>(
+            InventoryItemTypes type,
+            ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, T>> dictMap,
+            ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>> queueMap)
+        {
+            if (!typeOptions.TryGetValue(type, out var opts))
+                opts = new InventoryTypeOptions();
+            var dict = dictMap[type];
+            var queue = queueMap[type];
+
+            while (dict.Count > opts.maxItems && queue.TryDequeue(out var oldKey))
             {
-                return inventory[type].Remove(hash);
+                dict.TryRemove(oldKey, out _);
             }
         }
 
         public static InventoryItem decodeInventoryItem(byte[] bytes)
         {
             InventoryItemTypes type = (InventoryItemTypes)bytes.GetIxiVarInt(0).num;
-            InventoryItem item = null;
             switch (type)
             {
-                case InventoryItemTypes.block:
-                    item = new InventoryItemBlock(bytes);
-                    break;
-                case InventoryItemTypes.transaction:
-                    item = new InventoryItem(bytes);
-                    break;
-                case InventoryItemTypes.keepAlive:
-                    item = new InventoryItemKeepAlive(bytes);
-                    break;
-                case InventoryItemTypes.blockSignature:
-                    item = new InventoryItemSignature(bytes);
-                    break;
+                case InventoryItemTypes.block: return new InventoryItemBlock(bytes);
+                case InventoryItemTypes.transaction: return new InventoryItem(bytes);
+                case InventoryItemTypes.keepAlive: return new InventoryItemKeepAlive(bytes);
+                case InventoryItemTypes.blockSignature: return new InventoryItemSignature(bytes);
+                default: return null;
             }
-            return item;
-        }
-
-        public bool processInventoryItem(InventoryItemTypes type, byte[] hash)
-        {
-            var pii = get(type, hash);
-            return processInventoryItem(pii);
-        }
-
-        public bool processInventoryItem(PendingInventoryItem pii)
-        {
-            if(pii == null)
-            {
-                Logging.error("Cannot process pendingInventoryItem, PendingInventoryItem is null.");
-                return false;
-            }
-            if(pii.processed)
-            {
-                return false;
-            }
-            try
-            {
-                var endpoints = pii.endpoints.OrderBy(x => rnd.Next());
-                RemoteEndpoint endpoint = null;
-                if(endpoints.Count() > 0)
-                {
-                    foreach (var ep in endpoints)
-                    {
-                        if (ep.isConnected() && ep.helloReceived)
-                        {
-                            endpoint = ep;
-                            break;
-                        }
-                        else
-                        {
-                            pii.endpoints.Remove(ep);
-                        }
-                    }
-                }
-                if (sendInventoryRequest(pii.item, endpoint))
-                {
-                    pii.lastRequested = Clock.getTimestamp();
-                    if (pii.retryCount > typeOptions[pii.item.type].maxRetries)
-                    {
-                        pii.processed = true;
-                    }
-                    pii.retryCount++;
-                    return true;
-                }
-                else
-                {
-                    pii.processed = true;
-                }
-                return false;
-            }
-            catch (Exception e)
-            {
-                Logging.error("Exception occurred in processInventoryItem: {0}", e);
-                pii.processed = true;
-            }
-
-            return false;
-        }
-
-        public void processCache()
-        {
-            List<PendingInventoryItem> items_to_process = new List<PendingInventoryItem>();
-            lock(inventory)
-            {
-                foreach(var types in inventory)
-                {
-                    long expiration_time = Clock.getTimestamp() - typeOptions[types.Key].timeout;
-                    foreach (var item in types.Value)
-                    {
-                        if (item.Value.processed)
-                        {
-                            continue;
-                        }
-                        if (item.Value.lastRequested > expiration_time)
-                        {
-                            continue;
-                        }
-                        Logging.trace("Processing inventory cache " + types.Key + ": " + item.Value.lastRequested);
-                        items_to_process.Add(item.Value);
-                    }
-                }
-            }
-            foreach(var item in items_to_process)
-            {
-                processInventoryItem(item);
-            }
-        }
-
-        virtual public bool setProcessedFlag(InventoryItemTypes type, byte[] hash, bool processed)
-        {
-            lock(inventory)
-            {
-                if (!inventory[type].ContainsKey(hash))
-                {
-                    if(processed)
-                    {
-                        var inventory_list = inventory[type];
-                        inventory_list.Add(hash, new PendingInventoryItem(new InventoryItem(type, hash)) { processed = processed });
-                        truncateInventory(type);
-                    }
-                }
-                else
-                {
-                    inventory[type][hash].processed = processed;
-                    return true;
-                }
-            }
-            return false;
         }
 
         abstract protected bool sendInventoryRequest(InventoryItem item, RemoteEndpoint endpoint);
-
-        public long getItemCount()
-        {
-            lock(inventory)
-            {
-                long count = 0;
-                foreach (var type in inventory)
-                {
-                    count += type.Value.Count();
-                }
-                return count;
-            }
-        }
-
-        public long getProcessedItemCount()
-        {
-            lock (inventory)
-            {
-                long count = 0;
-                foreach (var type in inventory)
-                {
-                    count += type.Value.Where(x => x.Value.processed == true).Count();
-                }
-                return count;
-            }
-        }
-
-        protected void truncateInventory(InventoryItemTypes type)
-        {
-            var inventory_list = inventory[type];
-            int max_items = 2000;
-            InventoryTypeOptions options;
-            if(typeOptions.TryGetValue(type, out options))
-            {
-                max_items = options.maxItems;
-            }
-            if (inventory_list.Count() > max_items)
-            {
-                inventory_list.Remove(inventory_list.Keys.First());
-            }
-        }
     }
 }

@@ -24,9 +24,7 @@ namespace IXICore.Network
         public InventoryCacheClient(TransactionInclusion tiv) : base()
         {
             this.tiv = tiv;
-            typeOptions[InventoryItemTypes.block].maxItems = 100;
-            typeOptions[InventoryItemTypes.transaction].maxItems = 600000;
-            typeOptions[InventoryItemTypes.keepAlive].maxItems = 600000;
+            typeOptions[InventoryItemTypes.blockSignature].maxItems = 0;
         }
 
         override protected bool sendInventoryRequest(InventoryItem item, RemoteEndpoint endpoint)
