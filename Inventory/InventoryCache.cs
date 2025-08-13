@@ -63,15 +63,15 @@ namespace IXICore.Inventory
     class PendingInventoryItem
     {
         public InventoryItem item;
-        public volatile bool processed;
+        public bool processed { get; private set; }
         public long lastRequested;
         public int retryCount;
         private readonly ConcurrentDictionary<RemoteEndpoint, byte> endpoints = new ConcurrentDictionary<RemoteEndpoint, byte>();
 
-        public PendingInventoryItem(InventoryItem item)
+        public PendingInventoryItem(InventoryItem item, bool processed = false)
         {
             this.item = item;
-            processed = false;
+            this.processed = processed;
             retryCount = 0;
             lastRequested = 0;
         }
@@ -181,7 +181,7 @@ namespace IXICore.Inventory
                 || typeOptions[type].maxItems == 0)
             {
                 Logging.error("Error adding inventory item, type disabled.");
-                return null;
+                return new PendingInventoryItem(item, true);
             }
 
             // skip if recently processed
@@ -193,7 +193,7 @@ namespace IXICore.Inventory
                 }
                 else
                 {
-                    return new PendingInventoryItem(item) { processed = true };
+                    return new PendingInventoryItem(item, true);
                 }
             }
 
@@ -279,11 +279,21 @@ namespace IXICore.Inventory
             if (hash == null) return;
             var key = new ByteArrayKey(hash);
 
+            // skip if disabled
+            if (!typeOptions.ContainsKey(type)
+                || typeOptions[type].maxItems == 0)
+            {
+                Logging.error("Error setting processed flag, type disabled.");
+                return;
+            }
+
             // move from pending to processed
-            pendingInventory[type].TryRemove(key, out _);
-            processedInventory[type][key] = true;
-            processedQueues[type].Enqueue(key);
-            truncateQueueIfNeeded(type, processedInventory, processedQueues);
+            if (pendingInventory[type].TryRemove(key, out _))
+            {
+                processedInventory[type][key] = true;
+                processedQueues[type].Enqueue(key);
+                truncateQueueIfNeeded(type, processedInventory, processedQueues);
+            }
         }
 
         public long getItemCount()
@@ -311,7 +321,7 @@ namespace IXICore.Inventory
             var dict = dictMap[type];
             var queue = queueMap[type];
 
-            while (dict.Count > opts.maxItems && queue.TryDequeue(out var oldKey))
+            while (queue.Count > opts.maxItems && queue.TryDequeue(out var oldKey))
             {
                 dict.TryRemove(oldKey, out _);
             }
