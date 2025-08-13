@@ -43,7 +43,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Meta\UpdateVerify.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Miner\SignerPowMiner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\CoreNetworkProtocol.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Network\InventoryCacheClient.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryCacheClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Messages\Rejected.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Network.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClient.cs" />

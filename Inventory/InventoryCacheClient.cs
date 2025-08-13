@@ -10,13 +10,13 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore.Inventory;
 using IXICore.Meta;
+using IXICore.Network;
 using IXICore.Utils;
 using System;
 using System.Linq;
 
-namespace IXICore.Network
+namespace IXICore.Inventory
 {
     class InventoryCacheClient : InventoryCache
     {

@@ -21,7 +21,7 @@ using System.Threading;
 namespace IXICore.Inventory
 {
     // Immutable key wrapper for byte[] with cached hashcode for fast lookups.
-    struct ByteArrayKey : IEquatable<ByteArrayKey>
+    public struct ByteArrayKey : IEquatable<ByteArrayKey>
     {
         private readonly byte[] bytes;
         private readonly int hash;
@@ -60,9 +60,9 @@ namespace IXICore.Inventory
         public override int GetHashCode() => hash;
     }
 
-    class PendingInventoryItem
+    public class PendingInventoryItem
     {
-        public InventoryItem item;
+        public InventoryItem item { get; private set; }
         public bool processed { get; private set; }
         public long lastRequested;
         public int retryCount;
@@ -99,33 +99,35 @@ namespace IXICore.Inventory
                 if (idx++ < start) continue;
                 if (ep != null && ep.isConnected() && ep.helloReceived)
                     return ep;
+                else endpoints.TryRemove(ep, out _);
             }
             foreach (var ep in keys)
             {
                 if (ep != null && ep.isConnected() && ep.helloReceived)
                     return ep;
+                else endpoints.TryRemove(ep, out _);
             }
             return null;
         }
     }
 
-    class InventoryTypeOptions
+    public class InventoryTypeOptions
     {
         public int maxRetries = 5;
         public int timeout = 200;
         public int maxItems = 2000;
     }
 
-    abstract class InventoryCache
+    public abstract class InventoryCache
     {
         public static InventoryCache Instance { get; private set; }
+        private static readonly object instanceLock = new object();
 
         // Two sets per type
         protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, PendingInventoryItem>> pendingInventory;
         protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, bool>> processedInventory;
 
         // Queues for eviction
-        protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>> pendingQueues;
         protected readonly ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>> processedQueues;
 
         protected readonly Dictionary<InventoryItemTypes, InventoryTypeOptions> typeOptions;
@@ -136,14 +138,12 @@ namespace IXICore.Inventory
         {
             pendingInventory = new ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, PendingInventoryItem>>();
             processedInventory = new ConcurrentDictionary<InventoryItemTypes, ConcurrentDictionary<ByteArrayKey, bool>>();
-            pendingQueues = new ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>>();
             processedQueues = new ConcurrentDictionary<InventoryItemTypes, ConcurrentQueue<ByteArrayKey>>();
 
             foreach (InventoryItemTypes t in Enum.GetValues(typeof(InventoryItemTypes)))
             {
                 pendingInventory[t] = new ConcurrentDictionary<ByteArrayKey, PendingInventoryItem>();
                 processedInventory[t] = new ConcurrentDictionary<ByteArrayKey, bool>();
-                pendingQueues[t] = new ConcurrentQueue<ByteArrayKey>();
                 processedQueues[t] = new ConcurrentQueue<ByteArrayKey>();
             }
 
@@ -156,7 +156,21 @@ namespace IXICore.Inventory
             };
         }
 
-        public static void init(InventoryCache instance) => Instance = instance;
+        public static void init(InventoryCache instance)
+        {
+            if (instance == null)
+            {
+                throw new ArgumentNullException(nameof(instance));
+            }
+            lock (instanceLock)
+            {
+                if (Instance != null)
+                {
+                    throw new InvalidOperationException("InventoryCache is already initialized.");
+                }
+                Instance = instance;
+            }
+        }
 
         private PendingInventoryItem get(InventoryItemTypes type, byte[] hash)
         {
@@ -181,7 +195,7 @@ namespace IXICore.Inventory
                 || typeOptions[type].maxItems == 0)
             {
                 Logging.error("Error adding inventory item, type disabled.");
-                return new PendingInventoryItem(item, true);
+                return null;
             }
 
             // skip if recently processed
@@ -198,21 +212,14 @@ namespace IXICore.Inventory
             }
 
             var dict = pendingInventory[type];
-            var queue = pendingQueues[type];
 
+            // Try to add to the dictionary
             var pii = dict.GetOrAdd(key, _ =>
             {
-                var newPii = new PendingInventoryItem(item);
-                if (endpoint != null) newPii.AddEndpoint(endpoint);
-                queue.Enqueue(key);
-                truncateQueueIfNeeded(type, pendingInventory, pendingQueues);
-                return newPii;
+                return new PendingInventoryItem(item);
             });
 
-            if (!ReferenceEquals(pii.item, item))
-                pii.item = item;
-            if (endpoint != null)
-                pii.AddEndpoint(endpoint);
+            pii.AddEndpoint(endpoint);
 
             return pii;
         }
@@ -235,7 +242,7 @@ namespace IXICore.Inventory
                 var rnd = threadRandom.Value;
                 var endpoint = pii.GetRandomConnectedEndpoint(rnd);
 
-                if (sendInventoryRequest(pii.item, endpoint))
+                if (endpoint == null || sendInventoryRequest(pii.item, endpoint))
                 {
                     pii.lastRequested = Clock.getTimestamp();
                     if (Interlocked.Increment(ref pii.retryCount) > typeOptions[pii.item.type].maxRetries)
@@ -288,9 +295,11 @@ namespace IXICore.Inventory
             }
 
             // move from pending to processed
-            if (pendingInventory[type].TryRemove(key, out _))
+            pendingInventory[type].TryRemove(key, out _);
+
+            if (processedInventory[type].TryAdd(key, true))
             {
-                processedInventory[type][key] = true;
+                // Only enqueue if the key was actually added to the processedInventory
                 processedQueues[type].Enqueue(key);
                 truncateQueueIfNeeded(type, processedInventory, processedQueues);
             }
