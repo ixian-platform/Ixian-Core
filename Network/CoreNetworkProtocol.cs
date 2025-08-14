@@ -517,8 +517,15 @@ namespace IXICore
 
                         writer.WriteIxiVarInt(block.blockNum);
 
-                        writer.WriteIxiVarInt(block.blockChecksum.Length);
-                        writer.Write(block.blockChecksum);
+                        if (block.blockChecksum != null)
+                        {
+                            writer.WriteIxiVarInt(block.blockChecksum.Length);
+                            writer.Write(block.blockChecksum);
+                        }
+                        else
+                        {
+                            writer.WriteIxiVarInt(0);
+                        }
 
                         writer.WriteIxiVarInt(block.version);
 
@@ -1231,7 +1238,7 @@ namespace IXICore
             endpoint.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
         }
 
-        public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest)
+        public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest, RemoteEndpoint endpoint = null)
         {
             Logging.trace("Fetching sector nodes for " + address.ToString());
             using (MemoryStream mw = new MemoryStream())
@@ -1242,7 +1249,21 @@ namespace IXICore
                     writer.Write(address.sectorPrefix);
                     writer.WriteIxiVarInt(maxSectorNodesToRequest);
                 }
-                NetworkClientManager.broadcastData(['M', 'H', 'R'], ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
+                if (endpoint != null)
+                {
+                    endpoint.sendData(ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
+                }
+                else
+                {
+                    char[] nodeTypes = ['M', 'H', 'R'];
+                    if (PresenceList.myPresenceType == 'M'
+                        || PresenceList.myPresenceType == 'H'
+                        || PresenceList.myPresenceType == 'R')
+                    {
+                        nodeTypes = ['M', 'H'];
+                    }
+                    NetworkClientManager.broadcastData(nodeTypes, ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
+                }
             }
         }
     }

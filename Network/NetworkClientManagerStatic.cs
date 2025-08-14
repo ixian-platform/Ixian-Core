@@ -20,10 +20,12 @@ namespace IXICore.Network
 {
     public class NetworkClientManagerStatic : NetworkClientManagerBase
     {
-        List<Peer> clientsToConnectTo = new();
+        bool usePeerStorage = true;
+        public List<Peer> clientsToConnectTo { get; private set; } = new();
 
-        public NetworkClientManagerStatic(int simultaneousConnectedNeighbors) : base(simultaneousConnectedNeighbors)
+        public NetworkClientManagerStatic(int simultaneousConnectedNeighbors, bool usePeerStorage = true) : base(simultaneousConnectedNeighbors)
         {
+            this.usePeerStorage = usePeerStorage;
         }
 
         public void setClientsToConnectTo(List<Peer> newClientsToConnectTo)
@@ -70,7 +72,8 @@ namespace IXICore.Network
                 PeerStorage.resetInitialConnectionCount();
             }
 
-            if (clientsToConnectTo.Count() < simultaneousConnectedNeighbors)
+            if (usePeerStorage
+                && clientsToConnectTo.Count() < simultaneousConnectedNeighbors)
             {
                 Peer connectToPeer = null;
                 // Find only masternodes

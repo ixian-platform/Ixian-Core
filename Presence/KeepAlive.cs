@@ -294,6 +294,7 @@ namespace IXICore
                         var ipAddrStr = hostName.Split(":");
                         if (!IPv4Subnet.IsPublicIP(ipAddrStr[0]))
                         {
+                            Logging.error("[PL] Received KEEPALIVE with local IP {0} for {1} ", hostName, walletAddress.ToString());
                             return false;
                         }
                     }
