@@ -54,6 +54,11 @@ namespace IXICore.Inventory
                 tiv.requestNewBlockHeaders(iib.blockNum, endpoint);
                 return true;
             }
+            else if (iib.blockNum > last_block_height + 1)
+            {
+                // Future block
+                return true;
+            }
             return false;
         }
 
@@ -69,7 +74,7 @@ namespace IXICore.Inventory
             if (p == null)
             {
                 CoreProtocolMessage.broadcastGetPresence(address, endpoint);
-                return false;
+                return true;
             }
             else
             {
