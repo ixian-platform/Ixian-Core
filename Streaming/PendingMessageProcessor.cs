@@ -323,6 +323,12 @@ namespace IXICore.Streaming
                     if (!msg.encrypt(friend.publicKey, friend.aesKey, friend.chachaKey))
                     {
                         Logging.warn("Could not encrypt message for {0}!", msg.recipient.ToString());
+                        if (msg.encryptionType == StreamMessageEncryptionCode.spixi1
+                            || msg.encryptionType == StreamMessageEncryptionCode.spixi2)
+                        {
+                            // Return true in case it has other messages in the queue that need to be processed and aren't encrypted
+                            return true;
+                        }
                         return false;
                     }
                     if (msg.version > 0 && (msg.encryptionType == StreamMessageEncryptionCode.rsa || msg.encryptionType == StreamMessageEncryptionCode.rsa2))
