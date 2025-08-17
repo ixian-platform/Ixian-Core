@@ -135,7 +135,7 @@ namespace IXICore.Streaming
                 try
                 {
                     msgQueue.Writer.TryWrite(null);
-                    offloadedMessagesTask.Wait();
+                    offloadedMessagesTask.GetAwaiter().GetResult();
                 }
                 catch (Exception) { /* ignore */ }
                 offloadedMessagesTask = null;
@@ -255,7 +255,7 @@ namespace IXICore.Streaming
                 }
                 catch (Exception e)
                 {
-                    Logging.error("Error in onMessageSent: " + e);
+                    Logging.error("Error in onMessageExpired: " + e);
                 }
 
             }

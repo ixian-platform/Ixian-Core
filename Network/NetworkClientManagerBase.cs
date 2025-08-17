@@ -25,10 +25,12 @@ namespace IXICore.Network
         public List<NetworkClient> networkClients { get; private set; } = new List<NetworkClient>();
         protected List<string> connectingClients = new List<string>(); // A list of clients that we're currently connecting
 
-        protected Thread reconnectThread;
+        private CancellationTokenSource ctsLoop;
+        private Task reconnectTask;
+        private TaskCompletionSource wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TimeSpan reconnectInterval = TimeSpan.FromMilliseconds(CoreConfig.networkClientReconnectInterval);
         protected bool autoReconnect = true;
 
-        protected bool running = false;
         protected ThreadLiveCheck TLC;
 
         protected bool paused = false;
@@ -58,7 +60,7 @@ namespace IXICore.Network
         // Afterwards, it starts the reconnect and keepalive threads
         public void start(int connections_to_wait_for = 0)
         {
-            if (running)
+            if (ctsLoop != null)
             {
                 return;
             }
@@ -69,9 +71,10 @@ namespace IXICore.Network
                 return;
             }
 
-            running = true;
             networkClients.Clear();
             connectingClients.Clear();
+
+            ctsLoop = new CancellationTokenSource();
 
             if (connections_to_wait_for > 0)
             {
@@ -94,7 +97,7 @@ namespace IXICore.Network
                     {
                         Thread.Sleep(200);
                     }
-                    if (!running)
+                    if (ctsLoop == null)
                     {
                         return;
                     }
@@ -105,16 +108,14 @@ namespace IXICore.Network
             TLC = new ThreadLiveCheck();
 
             autoReconnect = true;
-            reconnectThread = new Thread(reconnectLoop);
-            reconnectThread.Name = "Network_Client_Manager_Reconnect";
-            reconnectThread.Start();
+            reconnectTask = Task.Run(() => reconnectLoop(ctsLoop.Token));
         }
 
-        private void reconnectLoop()
+        private async Task reconnectLoop(CancellationToken token)
         {
             try
             {
-                while (autoReconnect)
+                while (autoReconnect && !token.IsCancellationRequested)
                 {
                     if (!paused)
                     {
@@ -125,27 +126,23 @@ namespace IXICore.Network
                             handleDisconnectedClients();
                             reconnectClients();
                         }
-                        catch (ThreadInterruptedException)
+                        catch (Exception e) when (e is not OperationCanceledException)
                         {
-                            throw;
-                        }
-                        catch (ThreadAbortException)
-                        {
-                            break;
-                        }
-                        catch (Exception e)
-                        {
-                            Logging.error("Fatal exception occurred in NetworkClientManager.reconnectClients: {0}", e);
+                            Logging.error("Fatal exception in reconnectClients: {0}", e);
                         }
                     }
 
-                    // Wait 5 seconds before rechecking
-                    Thread.Sleep(CoreConfig.networkClientReconnectInterval);
+                    // setup fresh wake signal
+                    var currentWake = wakeSignal;
+                    wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                    // wait either interval or wake signal
+                    await Task.WhenAny(Task.Delay(reconnectInterval, token), currentWake.Task);
                 }
             }
-            catch (ThreadInterruptedException)
+            catch (OperationCanceledException)
             {
-
+                // normal shutdown
             }
             catch (Exception e)
             {
@@ -188,39 +185,45 @@ namespace IXICore.Network
         // Starts the Network Client Manager in debug mode with a single connection and no reconnect. Used for development only.
         public bool startWithSingleConnection(string address)
         {
-            if (running)
+            if (ctsLoop != null)
             {
                 return false;
             }
-            running = true;
+
+            ctsLoop = new CancellationTokenSource();
+
             networkClients.Clear();
             connectingClients.Clear();
 
             bool result = connectTo(address, null);
-            if (!result)
-            {
-                running = false;
-            }
 
             return result;
         }
 
         public void stop()
         {
-            if (!running)
+            if (ctsLoop == null)
             {
                 return;
             }
-            running = false;
+
             autoReconnect = false;
             isolate();
 
-            // Force stopping of reconnect thread
-            if (reconnectThread == null)
-                return;
-            reconnectThread.Interrupt();
-            reconnectThread.Join();
-            reconnectThread = null;
+            ctsLoop.Cancel();
+            wakeSignal.TrySetResult();
+            try
+            {
+                // Wait for reconnect loop to finish
+                reconnectTask.GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                ctsLoop.Dispose();
+                ctsLoop = null;
+                reconnectTask = null;
+            }
         }
 
         public void pause()
@@ -905,6 +908,11 @@ namespace IXICore.Network
             }
 
             return true;
+        }
+
+        public void wakeReconnectLoop()
+        {
+            wakeSignal.TrySetResult();
         }
     }
 }

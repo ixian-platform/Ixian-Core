@@ -158,5 +158,10 @@ namespace IXICore.Network
         {
             clientManagerBase.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
         }
+
+        public static void wakeReconnectLoop()
+        {
+            clientManagerBase.wakeReconnectLoop();
+        }
     }
 }
