@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -23,53 +24,59 @@ namespace IXICore.Network
         private static List<NetworkClient> streamClients = new List<NetworkClient>();
         private static List<string> connectingClients = new List<string>(); // A list of clients that we're currently connecting
 
-        private static Thread reconnectThread;
+        private static CancellationTokenSource ctsLoop;
+        private static Task reconnectTask;
+        private static TaskCompletionSource wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private static readonly TimeSpan reconnectInterval = TimeSpan.FromMilliseconds(CoreConfig.networkClientReconnectInterval);
         private static bool autoReconnect = true;
 
         public static string primaryS2Address = "";
-
-        private static bool running = false;
 
         private static int simultaneousConnectedNeighbors;
 
         public static void start(int simultaneousConnectedNeighbors)
         {
-            if (running)
+            if (ctsLoop != null)
             {
                 return;
             }
 
             StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
 
-            running = true;
-
             streamClients.Clear();
             connectingClients.Clear();
 
+            ctsLoop = new CancellationTokenSource();
+
             // Start the reconnect thread
-            reconnectThread = new Thread(reconnectClients);
-            reconnectThread.Name = "Stream_Client_Manager_Reconnect";
             autoReconnect = true;
-            reconnectThread.Start();
+            reconnectTask = Task.Run(() => reconnectLoop(ctsLoop.Token));
         }
 
         public static void stop()
         {
-            if (!running)
+            if (ctsLoop == null)
             {
                 return;
             }
-            running = false;
 
             autoReconnect = false;
             isolate();
 
-            // Force stopping of reconnect thread
-            if (reconnectThread == null)
-                return;
-
-            reconnectThread.Interrupt();
-            reconnectThread = null;
+            ctsLoop.Cancel();
+            wakeSignal.TrySetResult();
+            try
+            {
+                // Wait for reconnect loop to finish
+                reconnectTask.GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                ctsLoop.Dispose();
+                ctsLoop = null;
+                reconnectTask = null;
+            }
         }
 
         // Immediately disconnects all clients
@@ -168,13 +175,10 @@ namespace IXICore.Network
             }
         }
 
-        private static void reconnectClients()
+        private static async Task reconnectLoop(CancellationToken token)
         {
             try
             {
-                // Wait 5 seconds before starting the loop
-                Thread.Sleep(CoreConfig.networkClientReconnectInterval);
-
                 while (autoReconnect)
                 {
                     try
@@ -202,22 +206,26 @@ namespace IXICore.Network
                             client.stop();
                         }
                     }
-                    catch (ThreadInterruptedException)
+                    catch (Exception e) when (e is not OperationCanceledException)
                     {
-                        throw;
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Error trying to reconnect stream clients: " + e);
+                        Logging.error("Fatal exception in reconnectClients: {0}", e);
                     }
 
-                    // Wait 5 seconds before rechecking
-                    Thread.Sleep(CoreConfig.networkClientReconnectInterval);
+                    // setup fresh wake signal
+                    var currentWake = wakeSignal;
+                    wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+                    // wait either interval or wake signal
+                    await Task.WhenAny(Task.Delay(reconnectInterval, token), currentWake.Task);
                 }
             }
-            catch (ThreadInterruptedException)
+            catch (OperationCanceledException)
             {
-
+                // normal shutdown
+            }
+            catch (Exception e)
+            {
+                Logging.error("ReconnectLoop exception: {0}", e);
             }
         }
 
@@ -519,6 +527,11 @@ namespace IXICore.Network
             }
 
             return false;
+        }
+
+        public static void wakeReconnectLoop()
+        {
+            wakeSignal.TrySetResult();
         }
     }
 }

@@ -239,7 +239,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    sendTask.Wait();
+                    sendTask.GetAwaiter().GetResult();
                 }
                 catch (Exception e)
                 {
@@ -252,7 +252,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    parseTask.Wait();
+                    parseTask.GetAwaiter().GetResult();
                 }
                 catch (Exception e)
                 {
@@ -267,7 +267,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    recvTask.Wait();
+                    recvTask.GetAwaiter().GetResult();
                 }
                 catch (Exception e)
                 {
