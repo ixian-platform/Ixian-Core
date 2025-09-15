@@ -439,6 +439,7 @@ namespace IXICore
         {
             KeepAlive ka;
             if (force_generate
+                || curNodePresenceAddress.lastSeenTime > Clock.getNetworkTimestamp() + 10
                 || Clock.getNetworkTimestamp() - curNodePresenceAddress.lastSeenTime >= keepAliveInterval)
             {
                 ka = new KeepAlive()
