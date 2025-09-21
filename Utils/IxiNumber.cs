@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -10,9 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore.Meta;
 using System;
-using System.Linq;
 using System.Numerics;
 
 namespace IXICore
@@ -44,6 +42,10 @@ namespace IXICore
 
         public IxiNumber(byte[] bytes)
         {
+            if (bytes.Length == 0)
+            {
+                throw new ArgumentException("Byte array cannot be empty.");
+            }
             amount = new BigInteger(bytes);
         }
 
@@ -62,71 +64,34 @@ namespace IXICore
             amount = BigInteger.Multiply(number, divisor);
         }
 
-        public IxiNumber(string number)
+        public IxiNumber(string str)
         {
-            string[] split = number.Split('.');
-            if (split.Count() > 1 && split[1].Length > 0)
-            {
-                string second_part = split[1];
-                // Check if there are more decimals than neccessary and ignore the rest 
-                if(second_part.Length > num_decimals)
-                    second_part = second_part.Substring(0, num_decimals);
+            if (string.IsNullOrWhiteSpace(str))
+                throw new ArgumentNullException(nameof(str));
 
-                BigInteger p1 = 0;
-                BigInteger p2 = 0;
+            str = str.Trim();
 
-                // Could be cleaned up with tryParse
-                try
-                {
-                    p1 = BigInteger.Parse(split[0]);
-                }
-                catch (Exception)
-                {
-                    p1 = 0;
-                }
+            bool isNegative = str.StartsWith("-");
+            if (isNegative)
+                str = str.Substring(1);
 
-                try
-                {
-                    p2 = BigInteger.Parse(second_part);
-                }
-                catch (Exception)
-                {
-                    p2 = 0;
-                }
+            string[] parts = str.Split('.');
+            string intPart = parts[0];
+            string fracPart = (parts.Length > 1 ? parts[1] : "");
 
-                // Check for partial decimals
-                int s2_length = second_part.Length;
-                double exponent = 0;
-                if(s2_length < num_decimals)
-                    exponent = num_decimals - s2_length;
+            // Pad/truncate fractional part to 8 decimals
+            if (fracPart.Length > 8)
+                fracPart = fracPart.Substring(0, 8);
+            else if (fracPart.Length < 8)
+                fracPart = fracPart.PadRight(8, '0');
 
-                double multiplier = 1;
-                if(exponent > 0)
-                    multiplier = Math.Pow(10, exponent);
+            string raw = intPart + fracPart;
+            if (string.IsNullOrEmpty(raw))
+                raw = "0";
 
-                // Multiply the second part if neccessary
-                p2 = BigInteger.Multiply(p2, new BigInteger(multiplier));
-
-                // Multiply the first part to make room for the decimals
-                p1 = BigInteger.Multiply(p1, divisor);
-
-                // Finally, add both parts
-                amount = BigInteger.Add(p1, p2);
-            }
-            else
-            {
-                try
-                {
-                    amount = BigInteger.Parse(number);
-                }
-                catch(Exception)
-                {
-                    amount = 0;
-                }
-                // No decimals detected, multiply the amount 
-                amount = BigInteger.Multiply(amount, divisor);
-
-            }
+            amount = BigInteger.Parse(raw);
+            if (isNegative)
+                amount = -amount;
         }
 
         // Returns a string containing the raw amount
@@ -138,26 +103,27 @@ namespace IXICore
         // Returns a formatted string containing decimals
         public override string ToString()
         {
-            string ret = "ERR";
             try
             {
                 BigInteger p2;
                 BigInteger p1 = BigInteger.DivRem(amount, divisor, out p2);
-                string second_part = p2.ToString("D");
 
-                // Check for and add leading 0s
-                int s2_length = second_part.Length;
-                int padding = num_decimals - s2_length;
-                second_part = second_part.PadLeft(s2_length + padding, '0');
+                bool isNegative = amount < 0;
+                if (isNegative)
+                {
+                    p1 = BigInteger.Abs(p1);
+                    p2 = BigInteger.Abs(p2);
+                }
 
-                // Return the correctly formatted number
-                ret = string.Format("{0}.{1}", p1.ToString("D"), second_part);
+                string secondPart = p2.ToString().PadLeft(num_decimals, '0');
+
+                string result = $"{p1}.{secondPart}";
+                return isNegative ? "-" + result : result;
             }
-            catch(Exception)
+            catch
             {
-                // TODO: handle formatting errors
+                return "ERR";
             }
-            return ret;
         }
 
         public override int GetHashCode()
@@ -171,7 +137,7 @@ namespace IXICore
             {
                 return this == (IxiNumber)obj;
             }
-            if(obj is long)
+            if (obj is long)
             {
                 return this == (long)obj;
             }
@@ -193,7 +159,7 @@ namespace IXICore
             amount = BigInteger.Add(amount, num.getAmount());
         }
 
-        public void substract(IxiNumber num)
+        public void subtract(IxiNumber num)
         {
             amount = BigInteger.Subtract(amount, num.getAmount());
         }
@@ -229,7 +195,7 @@ namespace IXICore
         {
             return new IxiNumber(BigInteger.Divide(BigInteger.Multiply(num1.getAmount(), divisor), num2.getAmount()));
         }
-        
+
         public static IxiNumber divRem(IxiNumber num1, IxiNumber num2, out IxiNumber remainder)
         {
             BigInteger bi_remainder = 0;
@@ -262,17 +228,6 @@ namespace IXICore
         {
             return new IxiNumber(value);
         }
-        /*
-        public static bool operator ==(IxiNumber a, long b)
-        {
-            bool status = false;
-            BigInteger bi = new BigInteger(b);
-            if (BigInteger.Compare(a.getAmount(), bi) == 0)
-            {
-                status = true;
-            }
-            return status;
-        }*/
 
         public static bool operator ==(IxiNumber a, IxiNumber b)
         {
@@ -287,79 +242,17 @@ namespace IXICore
             }
 
             bool status = false;
-            if(BigInteger.Compare(a.getAmount(), b.getAmount()) == 0)
+            if (BigInteger.Compare(a.getAmount(), b.getAmount()) == 0)
             {
                 status = true;
             }
             return status;
         }
-        /*
-        public static bool operator !=(IxiNumber a, long b)
-        {
-            bool status = false;
-            BigInteger bi = new BigInteger(b);
-            if (BigInteger.Compare(a.getAmount(), bi) != 0)
-            {
-                status = true;
-            }
-            return status;
-        }*/
 
         public static bool operator !=(IxiNumber a, IxiNumber b)
         {
             return !(a == b);
-            /*bool status = false;
-            if (BigInteger.Compare(a.getAmount(), b.getAmount()) != 0)
-            {
-                status = true;
-            }
-            return status;*/
         }
-        /*
-        public static bool operator >(IxiNumber a, long b)
-        {
-            bool status = false;
-            BigInteger bi = new BigInteger(b);
-            if (BigInteger.Compare(a.getAmount(), bi) > 0)
-            {
-                status = true;
-            }
-            return status;
-        }
-
-        public static bool operator >=(IxiNumber a, long b)
-        {
-            bool status = false;
-            BigInteger bi = new BigInteger(b);
-            if (BigInteger.Compare(a.getAmount(), bi) >= 0)
-            {
-                status = true;
-            }
-            return status;
-        }
-
-        public static bool operator <(IxiNumber a, long b)
-        {
-            bool status = false;
-            BigInteger bi = new BigInteger(b);
-            if (BigInteger.Compare(a.getAmount(), bi) < 0)
-            {
-                status = true;
-            }
-            return status;
-        }
-
-        public static bool operator <=(IxiNumber a, long b)
-        {
-            bool status = false;
-            BigInteger bi = new BigInteger(b);
-            if (BigInteger.Compare(a.getAmount(), bi) <= 0)
-            {
-                status = true;
-            }
-            return status;
-        }
-        */
         public static bool operator >(IxiNumber a, IxiNumber b)
         {
             bool status = false;
@@ -419,78 +312,6 @@ namespace IXICore
         public static IxiNumber operator /(IxiNumber a, IxiNumber b)
         {
             return divide(a, b);
-        }
-
-
-        public static void test()
-        {
-            IxiNumber num1 = new IxiNumber("2.00000000");
-            IxiNumber num2 = new IxiNumber("2.0");
-            ulong num3 = 2;
-            long num4 = 2;
-            int num5 = 2;
-
-            Logging.info(num1.ToString());
-            Logging.info(num2.ToString());
-            Logging.info("div: " + (num1 / num2).ToString());
-            Logging.info("mul: " + (num1 * num2).ToString());
-            Logging.info("div: " + (num1 / num3).ToString());
-            Logging.info("mul: " + (num1 * num3).ToString());
-            Logging.info("div: " + (num1 / num4).ToString());
-            Logging.info("mul: " + (num1 * num4).ToString());
-            Logging.info("div: " + (num1 / num5).ToString());
-            Logging.info("mul: " + (num1 * num5).ToString());
-
-            num1 = new IxiNumber("0.5");
-            num2 = new IxiNumber("2");
-
-            Logging.info(num1.ToString());
-            Logging.info(num2.ToString());
-            Logging.info("div: " + (num1 / num2).ToString());
-            Logging.info("mul: " + (num1 * num2).ToString());
-            Logging.info("div: " + (num1 / num3).ToString());
-            Logging.info("mul: " + (num1 * num3).ToString());
-            Logging.info("div: " + (num1 / num4).ToString());
-            Logging.info("mul: " + (num1 * num4).ToString());
-            Logging.info("div: " + (num1 / num5).ToString());
-            Logging.info("mul: " + (num1 * num5).ToString());
-
-            num1 = new IxiNumber(2);
-            num2 = new IxiNumber(2);
-
-            Logging.info(num1.ToString());
-            Logging.info(num2.ToString());
-            Logging.info("div: " + (num1 / num2).ToString());
-            Logging.info("mul: " + (num1 * num2).ToString());
-            Logging.info("div: " + (num1 / num3).ToString());
-            Logging.info("mul: " + (num1 * num3).ToString());
-            Logging.info("div: " + (num1 / num4).ToString());
-            Logging.info("mul: " + (num1 * num4).ToString());
-            Logging.info("div: " + (num1 / num5).ToString());
-            Logging.info("mul: " + (num1 * num5).ToString());
-
-            num1 = new IxiNumber("1.23456789");
-            num2 = new IxiNumber("2.34567890");
-            double num1d = 1.23456789;
-            double num2d = 2.34567890;
-
-            Logging.info(num1.ToString());
-            Logging.info(num2.ToString());
-            Logging.info("div: " + (num1 / num2).ToString());
-            Logging.info("mul: " + (num1 * num2).ToString());
-            Logging.info("div: " + (num1d / num2d).ToString());
-            Logging.info("mul: " + (num1d * num2d).ToString());
-
-            num1 = new IxiNumber("1.23456789");
-            num2 = new IxiNumber("2");
-            num3 = 2;
-
-            Logging.info(num1.ToString());
-            Logging.info(num2.ToString());
-            Logging.info("div: " + (num1 / num2).ToString());
-            Logging.info("mul: " + (num1 * num2).ToString());
-            Logging.info("div: " + (num1 / num3).ToString());
-            Logging.info("mul: " + (num1 * num3).ToString());
         }
 
         public int CompareTo(IxiNumber other)
