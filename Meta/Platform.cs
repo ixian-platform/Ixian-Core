@@ -88,31 +88,10 @@ namespace IXICore
         /// <summary>
         ///  Returns the number of available RAM bytes.
         /// </summary>
-        /// <remarks>
-        ///  If this function is called for the first time, it initializes an internal RAM PerformanceCounter
-        ///  to speed up future lookups
-        /// </remarks>
         /// <returns>Number of available bytes in RAM as a long</returns>
         public static long getAvailableRAM()
         {
-#if !__MOBILE__
-            if (ramCounter == null)
-            {
-#pragma warning disable CA1416 // Validate platform compatibility
-                if (IXICore.Platform.onMono() == false)
-                {
-                    ramCounter = new PerformanceCounter("Memory", "Available Bytes", true);
-                }
-                else
-                {
-                    ramCounter = new PerformanceCounter("Mono Memory", "Available Physical Memory", true);
-                }
-#pragma warning restore CA1416 // Validate platform compatibility
-            }
-
-            return Convert.ToInt64(ramCounter.NextValue());
-#endif
-            return 0;
+            return (long)8 * 1024 * 1024 * 1024;
         }
 
         /// <summary>

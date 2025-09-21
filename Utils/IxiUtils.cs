@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -173,6 +174,25 @@ namespace IXICore.Utils
             return hashes.First();
         }
 
+        public static byte[] GetBytesBE(this ulong value)
+        {
+            byte[] b = new byte[8];
+            BinaryPrimitives.WriteUInt64BigEndian(b, value);
+            return b;
+        }
+
+        public static byte[] GetBytesBE(this int value)
+        {
+            byte[] b = new byte[4];
+            BinaryPrimitives.WriteInt32BigEndian(b, value);
+            return b;
+        }
+
+        // Converts long to ulong safely for negative numbers
+        public static ulong ToUlongAbs(this long value)
+        {
+            return value == long.MinValue ? (ulong)long.MaxValue + 1 : (ulong)Math.Abs(value);
+        }
     }
 
 

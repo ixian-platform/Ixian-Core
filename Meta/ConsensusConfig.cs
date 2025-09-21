@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -258,7 +258,7 @@ namespace IXICore
         public static readonly uint rnMinCapacity = 10; // 10kB
         // Unit = months * capacity in kB
         public static readonly IxiNumber rnMinPricePerUnit = new IxiNumber("10.00000000"); // initial min price limit, will be reduced as things evolve
-        public static readonly IxiNumber rnPricePerUnit = new IxiNumber("500.00000000"); // initial price, will be reduced as things evolve
+        public static IxiNumber rnPricePerUnit = new IxiNumber("500.00000000"); // initial price, will be reduced as things evolve
         /// <summary>
         /// Nonexistant wallet address which is used in the 'to' fields for Name transactions, where currency goes to a name reward pool.
         /// </summary>
