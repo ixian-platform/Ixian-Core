@@ -188,6 +188,13 @@ namespace IXICore.Utils
             return b;
         }
 
+        public static byte[] GetBytesBE(this short value)
+        {
+            byte[] b = new byte[2];
+            BinaryPrimitives.WriteInt16BigEndian(b, value);
+            return b;
+        }
+
         // Converts long to ulong safely for negative numbers
         public static ulong ToUlongAbs(this long value)
         {

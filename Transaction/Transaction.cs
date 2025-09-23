@@ -1,5 +1,5 @@
-// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -864,6 +864,12 @@ namespace IXICore
             }
         }
 
+        // Used strictly by storage as it doesn't calculate legacy transaction checksums
+        public Transaction(byte[] txid, byte[] txBytes)
+        {
+            fromBytesV7(txBytes, true, txid);
+        }
+
         private void fromBytesLegacy(byte[] bytes, bool include_applied = false)
         {
             try
@@ -1101,7 +1107,7 @@ namespace IXICore
             }
         }
 
-        private void fromBytesV7(byte[] bytes, bool include_applied = false)
+        private void fromBytesV7(byte[] bytes, bool include_applied = false, byte[] txid = null)
         {
             try
             {
@@ -1195,7 +1201,23 @@ namespace IXICore
                             timeStamp = (long)reader.ReadIxiVarUInt();
                         }
 
-                        generateChecksums();
+                        if (txid != null)
+                        {
+                            if (version < 5)
+                            {
+                                generateChecksums();
+                            }
+                            else
+                            {
+                                id = txid;
+                                var iwo = txid.GetIxiVarUInt(1);
+                                checksum = txid.AsSpan(iwo.bytesRead + 1).ToArray();
+                            }
+                        }
+                        else
+                        {
+                            generateChecksums();
+                        }
                     }
                 }
             }

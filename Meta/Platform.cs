@@ -11,7 +11,6 @@
 // MIT License for more details.
 
 using System;
-using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -22,10 +21,6 @@ namespace IXICore
     /// </summary>
     class Platform
     {
-#if !__MOBILE__
-        private static PerformanceCounter ramCounter = null;
-#endif
-
         /// <summary>
         /// Get the Operating System name and Version.
         /// Example: "Microsoft Windows 10.0.10586"
@@ -61,7 +56,7 @@ namespace IXICore
         /// <returns>True, if the program is executing on BSD</returns>
         public static bool onBSD()
         {
-            return false;// RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD);
+            return RuntimeInformation.IsOSPlatform(OSPlatform.FreeBSD);
         }
 
         /// <summary>
@@ -83,15 +78,6 @@ namespace IXICore
         public static bool onMono()
         {
             return Type.GetType("Mono.Runtime") != null;
-        }
-
-        /// <summary>
-        ///  Returns the number of available RAM bytes.
-        /// </summary>
-        /// <returns>Number of available bytes in RAM as a long</returns>
-        public static long getAvailableRAM()
-        {
-            return (long)8 * 1024 * 1024 * 1024;
         }
 
         /// <summary>

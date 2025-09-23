@@ -45,14 +45,22 @@ namespace IXICore
 
         private Address recipientAddress = null; // solverAddress is not trasmitted over the network
         private byte[] _checksum = null;
-        public byte[] checksum { get {
-                if(_checksum == null)
+        public byte[] checksum
+        {
+            get
+            {
+                if (_checksum == null)
                 {
                     var targetBlockHash = IxianHandler.getBlockHash(blockNum);
                     _checksum = solutionToHash(solution, blockNum, targetBlockHash, recipientAddress, signingPubKey);
                 }
                 return _checksum;
-            } } // checksum is not trasmitted over the network
+            }
+            set
+            {
+                _checksum = value;
+            }
+        } // checksum is not trasmitted over the network
 
         private IxiNumber _difficulty = 0;
 
@@ -132,9 +140,17 @@ namespace IXICore
                         blockNum = reader.ReadIxiVarUInt();
 
                         int solutionLen = (int)reader.ReadIxiVarUInt();
+                        if (solutionLen > 64)
+                        {
+                            throw new InvalidDataException("solution can't be larger than 64 bytes.");
+                        }
                         solution = reader.ReadBytes(solutionLen);
 
                         int signingPubKeyLen = (int)reader.ReadIxiVarUInt();
+                        if (signingPubKeyLen > 300)
+                        {
+                            throw new InvalidDataException("signingPubKeyLen can't be larger than 300 bytes.");
+                        }
                         signingPubKey = reader.ReadBytes(signingPubKeyLen);
 
                         this.recipientAddress = recipientAddress;
@@ -148,7 +164,6 @@ namespace IXICore
             }
         }
 
-        // TODO Omega a blockHash should be included so that clients can verify PoW
         public byte[] getBytes(bool compacted = false)
         {
             using (MemoryStream m = new MemoryStream(640))
@@ -184,7 +199,7 @@ namespace IXICore
         {
             if (bits > maxTargetBits)
             {
-                throw new ArgumentOutOfRangeException(String.Format("bits can't be higher than minTargetBits: {0} < {1}", bits, maxTargetBits));
+                throw new ArgumentOutOfRangeException(String.Format("bits can't be higher than maxTargetBits: {0} < {1}", bits, maxTargetBits));
             }
             byte[] targetBytes = BitConverter.GetBytes(bits);
             int firstPos = targetBytes[7];
