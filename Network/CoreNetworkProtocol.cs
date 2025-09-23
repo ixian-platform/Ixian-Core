@@ -889,8 +889,11 @@ namespace IXICore
                                     if (NetworkClientManager.getConnectedClients(true).Length < 2
                                         && NetworkServer.getConnectedClients(true).Length < 2)
                                     {
-                                        IxianHandler.publicIP = byeData;
-                                        Logging.warn("Changed internal IP Address to " + byeData + ", reconnecting");
+                                        if (!IxianHandler.forceIP)
+                                        {
+                                            IxianHandler.publicIP = byeData;
+                                            Logging.warn("Changed internal IP Address to " + byeData + ", reconnecting");
+                                        }
                                     }
                                 }
                                 break;
@@ -1099,7 +1102,7 @@ namespace IXICore
             return netBh;
         }
 
-        public static void broadcastGetTransactions(List<byte[]> tx_list, long msg_id, RemoteEndpoint endpoint)
+        public static void broadcastGetTransactions(List<byte[]> tx_list, long block_num, RemoteEndpoint endpoint)
         {
             int tx_count = tx_list.Count;
             int max_tx_per_chunk = CoreConfig.maximumTransactionsPerChunk;
@@ -1114,7 +1117,7 @@ namespace IXICore
                         {
                             next_tx_count = max_tx_per_chunk;
                         }
-                        writer.WriteIxiVarInt(msg_id);
+                        writer.WriteIxiVarInt(block_num);
                         writer.WriteIxiVarInt(next_tx_count);
 
                         for (int j = 0; j < next_tx_count && i < tx_count; j++)
@@ -1134,7 +1137,7 @@ namespace IXICore
                             }
                         }
                     }
-                    MessagePriority priority = msg_id > 0 ? MessagePriority.high : MessagePriority.auto;
+                    MessagePriority priority = block_num > 0 ? MessagePriority.high : MessagePriority.auto;
                     if (endpoint == null)
                     {
                         char[] node_types = new char[] { 'M', 'H' };
@@ -1146,7 +1149,7 @@ namespace IXICore
                     }
                     else
                     {
-                        endpoint.sendData(ProtocolMessageCode.getTransactions2, mOut.ToArray(), null, msg_id, priority);
+                        endpoint.sendData(ProtocolMessageCode.getTransactions2, mOut.ToArray(), null, 0, priority);
                     }
                 }
             }
@@ -1235,7 +1238,7 @@ namespace IXICore
 
         public static void sendRejected(RejectedCode code, byte[] data, RemoteEndpoint endpoint)
         {
-            endpoint.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
+            endpoint?.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
         }
 
         public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest, RemoteEndpoint endpoint = null)

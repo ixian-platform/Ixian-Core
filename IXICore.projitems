@@ -124,7 +124,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\IxiNumber.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\IxiUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\KDTable.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)utils\MemoryInfoProvider.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils\MemoryInfoProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\NetDump.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />

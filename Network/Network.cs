@@ -143,7 +143,7 @@ namespace IXICore.Network
         //blockSignature = 42,
         getNameRecord = 43,
         nameRecord = 44,
-        getNextSuperBlock = 45,
+        //getNextSuperBlock = 45,
         getBlockHeaders3 = 46,
         blockHeaders3 = 47,
         getRandomPresences = 48,
@@ -719,6 +719,7 @@ namespace IXICore.Network
 
             if (externalIp != "" && IPAddress.TryParse(externalIp, out _))
             {
+                IxianHandler.forceIP = true;
                 IxianHandler.publicIP = externalIp;
             }
             else

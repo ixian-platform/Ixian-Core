@@ -89,6 +89,7 @@ namespace IXICore.Meta
 
         public static List<Balance> balances = new List<Balance>(); // Stores the last known balances for this node
 
+        public static bool forceIP = false;
         private static string _publicIP = "";
         private static int _publicPort = 0;
 
