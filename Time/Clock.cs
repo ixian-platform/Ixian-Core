@@ -1,5 +1,5 @@
-// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -16,6 +16,9 @@ namespace IXICore
 {
     public class Clock
     {
+        private static readonly long UnixEpochTicks = DateTimeOffset.UnixEpoch.UtcTicks;
+        private static readonly long TicksPerSecond = TimeSpan.TicksPerSecond;
+        private static readonly long TicksPerMillisecond = TimeSpan.TicksPerMillisecond;
         /// <summary>
         ///  Value represents the detected time offset from the network majority and is used when time synchronization is required.
         /// </summary>
@@ -54,8 +57,7 @@ namespace IXICore
         /// <returns>Unix epoch (number of seconds since 1970-01-01)</returns>
         public static long getTimestamp()
         {
-            double unixTimestamp = (DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalSeconds;
-            return (long)unixTimestamp;
+            return (DateTime.UtcNow.Ticks - UnixEpochTicks) / TicksPerSecond;
         }
 
         /// <summary>
@@ -65,23 +67,24 @@ namespace IXICore
         /// <returns>Unix epoch (number of seconds since 1970-01-01)</returns>
         public static long getTimestampMillis()
         {
-            double unixTimestamp = (DateTime.UtcNow.Subtract(new DateTime(1970, 1, 1))).TotalMilliseconds;
-            return (long)unixTimestamp;
+            return (DateTime.UtcNow.Ticks - UnixEpochTicks) / TicksPerMillisecond;
         }
 
         public static string getRelativeTime(long timestamp)
         {
-            DateTime epoch = new DateTime(1970, 1, 1);
-            return getRelativeTime(epoch.AddSeconds(timestamp));
+            return getRelativeTime(DateTimeOffset.UnixEpoch.UtcDateTime.AddSeconds(timestamp));
         }
 
         public static string getRelativeTime(DateTime targetTime)
         {
-            var span = new TimeSpan(DateTime.UtcNow.Ticks - targetTime.Ticks);
+            if (targetTime > DateTime.UtcNow)
+                return "in the future";
+
+            var span = DateTime.UtcNow - targetTime;
             double delta = Math.Abs(span.TotalSeconds);
 
             if (delta < 1 * 60)
-                return span.Seconds == 1 ? "one second ago" : span.Seconds + " seconds ago";
+                return span.Seconds == 1 ? "a second ago" : span.Seconds + " seconds ago";
 
             if (delta < 2 * 60)
                 return "a minute ago";
@@ -103,13 +106,13 @@ namespace IXICore
 
             if (delta < 12 * 2592000)
             {
-                int months = Convert.ToInt32(Math.Floor((double)span.Days / 30));
-                return months <= 1 ? "one month ago" : months + " months ago";
+                int months = Convert.ToInt32(Math.Floor(delta / 86400 / 30));
+                return months <= 1 ? "a month ago" : months + " months ago";
             }
             else
             {
-                int years = Convert.ToInt32(Math.Floor((double)span.Days / 365));
-                return years <= 1 ? "one year ago" : years + " years ago";
+                int years = Convert.ToInt32(Math.Floor(delta / 86400 / 365));
+                return years <= 1 ? "a year ago" : years + " years ago";
             }
         }
 
