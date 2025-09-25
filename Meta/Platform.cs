@@ -81,24 +81,28 @@ namespace IXICore
         }
 
         /// <summary>
-        ///  Returns the number of available disk space bytes for the current folder's root disk.
+        ///  Returns the number of available disk space bytes for the specified directory.
         /// </summary>
         /// <remarks>
-        ///  This function detects the current running folder's root path disk and returns the available free space
+        ///  This function detects the specified folder's root path disk and returns the available free space
         /// </remarks>
-        /// <returns>Number of available disk space bytes as a long</returns>
-        public static long getAvailableDiskSpace()
+        /// <returns>Number of available disk space bytes as a long or -1 on error</returns>
+        public static long getAvailableDiskSpace(string directory)
         {
-            string driveLetter = Path.GetPathRoot(Environment.CurrentDirectory).ToLower();
-            foreach (DriveInfo drive in DriveInfo.GetDrives())
+            try
             {
-                if (drive.IsReady && drive.Name.ToLower() == driveLetter)
+                string root = Path.GetPathRoot(Path.GetFullPath(directory));
+
+                var drive = new DriveInfo(root);
+                if (drive.IsReady)
                 {
-                    return drive.AvailableFreeSpace;
+                    return drive.AvailableFreeSpace > 0 ? drive.AvailableFreeSpace : 0;
                 }
+            }
+            catch
+            {
             }
             return -1;
         }
-
     }
 }
