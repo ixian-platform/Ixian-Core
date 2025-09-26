@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -81,22 +81,30 @@ namespace IXICore
         }
 
         /// <summary>
-        ///  Returns the number of available disk space bytes for the specified directory.
+        ///  Returns the number of available disk space bytes for the specified path.
         /// </summary>
         /// <remarks>
         ///  This function detects the specified folder's root path disk and returns the available free space
         /// </remarks>
         /// <returns>Number of available disk space bytes as a long or -1 on error</returns>
-        public static long getAvailableDiskSpace(string directory)
+        public static long getAvailableDiskSpace(string path)
         {
             try
             {
-                string root = Path.GetPathRoot(Path.GetFullPath(directory));
-
-                var drive = new DriveInfo(root);
-                if (drive.IsReady)
+                if (onLinux() || onMac())
                 {
-                    return drive.AvailableFreeSpace > 0 ? drive.AvailableFreeSpace : 0;
+                    var drive = new DriveInfo(path);
+                    return Math.Max(drive.AvailableFreeSpace, 0);
+                }
+                else
+                {
+                    string root = Path.GetPathRoot(Path.GetFullPath(path));
+
+                    var drive = new DriveInfo(root);
+                    if (drive.IsReady)
+                    {
+                        return Math.Max(drive.AvailableFreeSpace, 0);
+                    }
                 }
             }
             catch

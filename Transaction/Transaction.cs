@@ -864,7 +864,6 @@ namespace IXICore
             }
         }
 
-        // Used strictly by storage as it doesn't calculate legacy transaction checksums
         public Transaction(byte[] txid, byte[] txBytes)
         {
             fromBytesV7(txBytes, true, txid);
