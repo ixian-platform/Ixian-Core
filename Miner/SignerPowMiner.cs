@@ -193,7 +193,7 @@ namespace IXICore.Miner
                 return;
             }
 
-            solvingDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), Clock.getNetworkTimestamp());
+            solvingDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0);
 
             if (solvingDifficulty < 0)
             {
@@ -367,7 +367,7 @@ namespace IXICore.Miner
             {
                 if (newSolution.difficulty <= solution.difficulty
                     && solution.blockNum + ConsensusConfig.getPlPowBlocksValidity(IxianHandler.getLastBlockVersion()) - 1 > IxianHandler.getHighestKnownNetworkBlockHeight()
-                    && solution.difficulty > IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(),  Clock.getNetworkTimestamp()))
+                    && solution.difficulty > IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0))
                 {
                     // If the new solution has a lower difficulty than the previously submitted solution and the previously submitted solution is still valid
 
