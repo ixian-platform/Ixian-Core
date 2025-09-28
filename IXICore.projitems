@@ -66,7 +66,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Presence\Presence.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceList.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Presence\PresenceSelector.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Presence\RelaySectors.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\IRegNamesStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\IxiNameUtils.cs" />

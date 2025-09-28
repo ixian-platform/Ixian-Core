@@ -145,7 +145,7 @@ namespace IXICore.Network
 
             try
             {
-                List<Presence> presences = PresenceList.getPresencesByType('R');
+                List<Presence> presences = PresenceList.getPresencesByType('R', CoreConfig.maxRelaySectorNodesToRequest);
                 if(presences.Count > 0)
                 {
                     List<Presence> tmp_presences = presences.FindAll(x => x.addresses.Find(y => y.type == 'R') != null); // TODO tmp_presences can be removed after protocol is finalized
