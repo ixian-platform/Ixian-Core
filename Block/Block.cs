@@ -2137,6 +2137,11 @@ namespace IXICore
                 return false;
             }
 
+            if (skip_sig_verification)
+            {
+                return true;
+            }
+
             List<BlockSignature> safe_sigs;
             lock (signatures)
             {
@@ -2172,8 +2177,7 @@ namespace IXICore
                         return;
                     }
 
-                    // Verify signature
-                    if (skip_sig_verification || verifySignature(sig))
+                    if (verifySignature(sig))
                     {
                         // Skip duplicates
                         if (!seenAddresses.TryAdd(signerAddress, i))
