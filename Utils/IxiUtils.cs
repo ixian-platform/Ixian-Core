@@ -67,10 +67,7 @@ namespace IXICore.Utils
 
         public static void AddOrReplace<TKey, TValue>(this IDictionary<TKey, TValue> dico, TKey key, TValue value)
         {
-            if (dico.ContainsKey(key))
-                dico[key] = value;
-            else
-                dico.Add(key, value);
+            dico[key] = value;
         }
 
         // bytes extension

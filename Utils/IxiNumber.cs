@@ -196,7 +196,7 @@ namespace IXICore
             return new IxiNumber(BigInteger.Divide(BigInteger.Multiply(num1.getAmount(), divisor), num2.getAmount()));
         }
 
-        public static IxiNumber divRem(IxiNumber num1, IxiNumber num2, out IxiNumber remainder)
+        public static IxiNumber divRemLowPrecision(IxiNumber num1, IxiNumber num2, out IxiNumber remainder)
         {
             BigInteger bi_remainder = 0;
             BigInteger bi_quotient = BigInteger.DivRem(BigInteger.Multiply(num1.getAmount(), divisor), num2.getAmount(), out bi_remainder);
@@ -206,6 +206,15 @@ namespace IXICore
             return new IxiNumber(bi_quotient);
         }
 
+        public static IxiNumber divRem(IxiNumber num1, IxiNumber num2, out IxiNumber remainder)
+        {
+            BigInteger bi_quotient = BigInteger.Divide(BigInteger.Multiply(num1.getAmount(), divisor), num2.getAmount());
+
+            IxiNumber quotient = new(bi_quotient);
+            remainder = num1 - quotient * num2;
+
+            return quotient;
+        }
 
         // TODO: equals, assign, +, -
 
