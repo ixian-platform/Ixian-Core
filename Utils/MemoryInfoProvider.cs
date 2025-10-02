@@ -13,6 +13,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 
 #if ANDROID
 using Android.App;
@@ -38,7 +39,7 @@ namespace IXICore.Utils
         public long GetTotalRAM()
         {
 #if WINDOWS
-        return GetWindowsTotalRAM();
+            return GetWindowsTotalRAM();
 #elif LINUX
         return GetLinuxTotalRAM();
 #elif OSX
@@ -53,11 +54,29 @@ namespace IXICore.Utils
         }
 
 #if WINDOWS
-    private static long GetWindowsTotalRAM()
-    {
-        // Windows 10+ supports this
-        return new Microsoft.VisualBasic.Devices.ComputerInfo().TotalPhysicalMemory;
-    }
+        private static long GetWindowsTotalRAM()
+        {
+            var memStatus = new MEMORYSTATUSEX();
+            return GlobalMemoryStatusEx(memStatus) ? (long)memStatus.ullTotalPhys : 0;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private class MEMORYSTATUSEX
+        {
+            public uint dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX));
+            public uint dwMemoryLoad;
+            public ulong ullTotalPhys;
+            public ulong ullAvailPhys;
+            public ulong ullTotalPageFile;
+            public ulong ullAvailPageFile;
+            public ulong ullTotalVirtual;
+            public ulong ullAvailVirtual;
+            public ulong ullAvailExtendedVirtual;
+        }
+
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GlobalMemoryStatusEx([In, Out] MEMORYSTATUSEX buffer);
 #endif
 
 #if LINUX
@@ -112,7 +131,7 @@ namespace IXICore.Utils
         try
         {
             ActivityManager.MemoryInfo mi = new ActivityManager.MemoryInfo();
-            var activityManager = (ActivityManager)Application.Context.GetSystemService(Context.ActivityService)!;
+            var activityManager = (ActivityManager)Android.App.Application.Context.GetSystemService(Context.ActivityService)!;
             activityManager.GetMemoryInfo(mi);
             return mi.TotalMem;
         }
