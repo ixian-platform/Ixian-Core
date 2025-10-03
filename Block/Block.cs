@@ -2205,10 +2205,10 @@ namespace IXICore
         }
 
         /// <summary>
-        ///  Checks the signatures on the block and returns true, if the block has already been signed by the given public key.
+        ///  Checks the signatures on the block and returns true, if the block has already been signed by the given address.
         /// </summary>
-        /// <param name="public_key">The public key to check.</param>
-        /// <returns>True, if the public key has already signed the block.</returns>
+        /// <param name="address">The address to check.</param>
+        /// <returns>True, if the address has already signed the block.</returns>
         public bool hasNodeSignature(Address address)
         {
             if (getNodeSignature(address) != null)
@@ -2219,11 +2219,27 @@ namespace IXICore
             return false;
         }
 
+
         /// <summary>
-        ///  Finds the signatures on the block and returns it, if the block has already been signed by the given public key.
+        ///  Checks the signatures on the block and returns true, if the block has already been signed by the given solution.
         /// </summary>
-        /// <param name="public_key">The public key to check.</param>
-        /// <returns>signature, if the public key has already signed the block.</returns>
+        /// <param name="solution">The solution to check.</param>
+        /// <returns>True, if the solution has already signed the block.</returns>
+        public bool hasNodeSignature(byte[] solution)
+        {
+            if (getNodeSignature(solution) != null)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        ///  Finds the signatures on the block and returns it, if the block has already been signed by the given address.
+        /// </summary>
+        /// <param name="address">The address to check.</param>
+        /// <returns>signature, if the address has already signed the block.</returns>
         public BlockSignature getNodeSignature(Address address)
         {
             if (compacted)
@@ -2255,6 +2271,48 @@ namespace IXICore
                 {
                     // Check if it matches
                     if (node_address.SequenceEqual(merged_signature.recipientPubKeyOrAddress.addressNoChecksum))
+                    {
+                        return merged_signature;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        ///  Finds the signatures on the block and returns it, if the block has already been signed by the given solution.
+        /// </summary>
+        /// <param name="solution">The solution to check.</param>
+        /// <returns>signature, if the solution has already signed the block.</returns>
+        public BlockSignature getNodeSignature(byte[] solution)
+        {
+            if (compacted)
+            {
+                Logging.error("Trying to execute hasNodeSignature on a compacted block {0}", blockNum);
+                return null;
+            }
+
+            if (solution == null)
+            {
+                return null;
+            }
+
+            lock (signatures)
+            {
+                var sigs = signatures;
+                if (sigs == null)
+                {
+                    sigs = frozenSignatures;
+                }
+                if (sigs == null)
+                {
+                    return null;
+                }
+                foreach (BlockSignature merged_signature in signatures)
+                {
+                    // Check if it matches
+                    if (solution.SequenceEqual(merged_signature.powSolution.solution))
                     {
                         return merged_signature;
                     }

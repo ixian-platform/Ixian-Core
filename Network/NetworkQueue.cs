@@ -155,6 +155,7 @@ namespace IXICore.Network
                     case ProtocolMessageCode.getBlockHeaders3:
                     case ProtocolMessageCode.getRelevantBlockTransactions:
                     case ProtocolMessageCode.getSignatures2:
+                    case ProtocolMessageCode.getSignatures3:
                     case ProtocolMessageCode.getBlockSignatures2:
                     case ProtocolMessageCode.getPIT2:
 #pragma warning restore CS0618 // Type or member is obsolete
@@ -233,6 +234,7 @@ namespace IXICore.Network
                             case ProtocolMessageCode.getRelevantBlockTransactions:
                             case ProtocolMessageCode.blockData2:
                             case ProtocolMessageCode.getSignatures2:
+                            case ProtocolMessageCode.getSignatures3:
                             case ProtocolMessageCode.getBlockSignatures2:
                             case ProtocolMessageCode.getPIT2:
                             case ProtocolMessageCode.inventory2:

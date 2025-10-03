@@ -151,6 +151,7 @@ namespace IXICore.Inventory
             {
                 { InventoryItemTypes.block, new InventoryTypeOptions() { maxRetries = 10, timeout = 15, maxItems = 10 } },
                 { InventoryItemTypes.blockSignature, new InventoryTypeOptions() { maxRetries = 15, timeout = 10, maxItems = 2000 } },
+                { InventoryItemTypes.blockSignature2, new InventoryTypeOptions() { maxRetries = 15, timeout = 10, maxItems = 2000 } },
                 { InventoryItemTypes.keepAlive, new InventoryTypeOptions() { maxRetries = 2, timeout = 30, maxItems = 10000 } },
                 { InventoryItemTypes.transaction, new InventoryTypeOptions() { maxRetries = 5, timeout = 200, maxItems = 10000 } }
             };
@@ -345,6 +346,7 @@ namespace IXICore.Inventory
                 case InventoryItemTypes.transaction: return new InventoryItem(bytes);
                 case InventoryItemTypes.keepAlive: return new InventoryItemKeepAlive(bytes);
                 case InventoryItemTypes.blockSignature: return new InventoryItemSignature(bytes);
+                case InventoryItemTypes.blockSignature2: return new InventoryItemSignature(bytes);
                 default: return null;
             }
         }

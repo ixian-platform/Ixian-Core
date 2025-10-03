@@ -25,6 +25,7 @@ namespace IXICore.Inventory
         {
             this.tiv = tiv;
             typeOptions[InventoryItemTypes.blockSignature].maxItems = 0;
+            typeOptions[InventoryItemTypes.blockSignature2].maxItems = 0;
         }
 
         override protected bool sendInventoryRequest(InventoryItem item, RemoteEndpoint endpoint)

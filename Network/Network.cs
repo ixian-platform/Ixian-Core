@@ -105,8 +105,8 @@ namespace IXICore.Network
         //signaturesChunk = 12,
         blockSignature2 = 13,
         getBlockSignatures2 = 14,
-        //[Obsolete("Use transactionsChunk3 instead")]
-        //transactionsChunk = 15,
+        getSignatures3 = 15,
+        [Obsolete("Use getSignatures3 instead")]
         getSignatures2 = 16,
         signaturesChunk2 = 17,
         getSectorNodes = 18,

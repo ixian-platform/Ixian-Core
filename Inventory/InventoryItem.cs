@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Utils;
+using System;
 using System.IO;
 
 namespace IXICore.Inventory
@@ -19,8 +20,10 @@ namespace IXICore.Inventory
     {
         transaction = 0,
         block = 1,
+        [Obsolete("Use blockSignature2 instead")]
         blockSignature = 2,
-        keepAlive = 3
+        keepAlive = 3,
+        blockSignature2 = 4
     }
 
     public class InventoryItem
