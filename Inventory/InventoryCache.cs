@@ -282,9 +282,9 @@ namespace IXICore.Inventory
             }
         }
 
-        public virtual void setProcessedFlag(InventoryItemTypes type, byte[] hash)
+        public virtual bool setProcessedFlag(InventoryItemTypes type, byte[] hash)
         {
-            if (hash == null) return;
+            if (hash == null) return false;
             var key = new ByteArrayKey(hash);
 
             // skip if disabled
@@ -292,7 +292,7 @@ namespace IXICore.Inventory
                 || typeOptions[type].maxItems == 0)
             {
                 Logging.error("Error setting processed flag, type disabled.");
-                return;
+                return false;
             }
 
             // move from pending to processed
@@ -303,7 +303,10 @@ namespace IXICore.Inventory
                 // Only enqueue if the key was actually added to the processedInventory
                 processedQueues[type].Enqueue(key);
                 truncateQueueIfNeeded(type, processedInventory, processedQueues);
+                return true;
             }
+
+            return false;
         }
 
         public long getItemCount()
