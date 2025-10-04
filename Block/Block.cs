@@ -2646,7 +2646,7 @@ namespace IXICore
             }
         }
 
-        public void setSignaturesFromBytes(byte[] sigBytes)
+        public void setSignaturesFromBytes(byte[] sigBytes, bool verifyDuplicates)
         {
             using (MemoryStream m = new MemoryStream(sigBytes))
             {
@@ -2675,7 +2675,7 @@ namespace IXICore
                             int sigLen = (int)reader.ReadIxiVarUInt();
                             BlockSignature sig = new BlockSignature(reader.ReadBytes(sigLen), false);
 
-                            if (!containsSignature(sig.recipientPubKeyOrAddress))
+                            if (!verifyDuplicates || !containsSignature(sig.recipientPubKeyOrAddress))
                             {
                                 signatures.Add(sig);
                             }
