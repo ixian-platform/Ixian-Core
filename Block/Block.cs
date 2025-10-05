@@ -441,7 +441,7 @@ namespace IXICore
 
                                 if (!containsSignature(sigAddress))
                                 {
-                                    BlockSignature newSig = new BlockSignature() { signature = sig, recipientPubKeyOrAddress = sigAddress };
+                                    BlockSignature newSig = new BlockSignature() { blockNum = blockNum, blockHash = blockChecksum, signature = sig, recipientPubKeyOrAddress = sigAddress };
                                     signatures.Add(newSig);
                                 }
                             }
@@ -574,7 +574,7 @@ namespace IXICore
 
                             if (!containsSignature(sigAddress))
                             {
-                                BlockSignature newSig = new BlockSignature() { signature = sig, recipientPubKeyOrAddress = sigAddress };
+                                BlockSignature newSig = new BlockSignature() { blockNum = blockNum, blockHash = blockChecksum, signature = sig, recipientPubKeyOrAddress = sigAddress };
                                 signatures.Add(newSig);
                             }
                         }
@@ -802,7 +802,7 @@ namespace IXICore
                                 for (int i = 0; i < num_signatures; i++)
                                 {
                                     int sigLen = (int)reader.ReadIxiVarUInt();
-                                    BlockSignature sig = new BlockSignature(reader.ReadBytes(sigLen), false);
+                                    BlockSignature sig = new BlockSignature(reader.ReadBytes(sigLen), blockNum, blockChecksum);
 
                                     if (!containsSignature(sig.recipientPubKeyOrAddress))
                                     {
@@ -2673,7 +2673,7 @@ namespace IXICore
                         for (int i = 0; i < num_signatures; i++)
                         {
                             int sigLen = (int)reader.ReadIxiVarUInt();
-                            BlockSignature sig = new BlockSignature(reader.ReadBytes(sigLen), false);
+                            BlockSignature sig = new BlockSignature(reader.ReadBytes(sigLen), blockNum, blockChecksum);
 
                             if (!verifyDuplicates || !containsSignature(sig.recipientPubKeyOrAddress))
                             {
