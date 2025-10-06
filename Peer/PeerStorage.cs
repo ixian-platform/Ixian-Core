@@ -27,7 +27,11 @@ namespace IXICore
 
         private static int initialConnectionCount = 0;
 
-        private static bool dirty = false;
+        private static bool updated = false;
+
+        private static long lastSaveTime = 0;
+
+        private static readonly long saveCoolDown = 60;
 
         public static void init(string path, string filename = "")
         {
@@ -86,7 +90,7 @@ namespace IXICore
                     }
                 }
             }
-            dirty = true;
+            updated = true;
 
             return true;
         }
@@ -95,7 +99,7 @@ namespace IXICore
         {
             if (peerList.RemoveAll(x => x.hostname == hostname) > 0)
             {
-                dirty = true;
+                updated = true;
 
                 return true;
             }
@@ -172,18 +176,25 @@ namespace IXICore
         // Saves a list of 500 master node addresses to a file
         public static void savePeersFile()
         {
-            if (!dirty)
+            if (!updated)
             {
                 return;
             }
-
-            dirty = false;
 
             lock (peerList)
             {
                 // Don't write to file if no masternode presences were found in addition to the current node
                 if (peerList.Count < 2)
                     return;
+
+                long curTime = Clock.getTimestamp();
+                if (curTime - lastSaveTime < saveCoolDown)
+                {
+                    return;
+                }
+
+                lastSaveTime = curTime;
+                updated = false;
 
                 string tempPath = fullPeersPath + ".tmp";
 
