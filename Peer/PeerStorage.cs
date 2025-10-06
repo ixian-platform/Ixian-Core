@@ -177,6 +177,8 @@ namespace IXICore
                 return;
             }
 
+            dirty = false;
+
             lock (peerList)
             {
                 // Don't write to file if no masternode presences were found in addition to the current node
