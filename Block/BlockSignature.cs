@@ -55,7 +55,7 @@ namespace IXICore
             }
         }
 
-        public BlockSignature(byte[] bytes, bool bytesFromBroadcast)
+        public BlockSignature(byte[] bytes, ulong blockNum, byte[] blockHash)
         {
             if (bytes.Length > 2048)
             {
@@ -67,12 +67,17 @@ namespace IXICore
                 {
                     using (BinaryReader reader = new BinaryReader(m))
                     {
-                        if (bytesFromBroadcast)
+                        if (blockNum == 0)
                         {
-                            ulong blockNum = reader.ReadIxiVarUInt();
+                            this.blockNum = reader.ReadIxiVarUInt();
 
                             int blockHashLen = (int)reader.ReadIxiVarUInt();
-                            blockHash = reader.ReadBytes(blockHashLen);
+                            this.blockHash = reader.ReadBytes(blockHashLen);
+                        }
+                        else
+                        {
+                            this.blockNum = blockNum;
+                            this.blockHash = blockHash;
                         }
 
                         int signerAddressLen = (int)reader.ReadIxiVarUInt();
