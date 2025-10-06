@@ -39,7 +39,7 @@ namespace IXICore.Network
                 {
                     wallet_addr = new Address(Base58Check.Base58CheckEncoding.DecodePlain(addr[1]));
                 }
-                PeerStorage.addPeerToPeerList(addr[0], wallet_addr, Clock.getTimestamp(), 0, 1, 0, false);
+                PeerStorage.addPeerToPeerList(addr[0], wallet_addr, Clock.getTimestamp(), 0, 1, 0);
             }
 
             NetworkClientManager.clientManagerBase = clientManagerBase;

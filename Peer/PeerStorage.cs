@@ -27,6 +27,8 @@ namespace IXICore
 
         private static int initialConnectionCount = 0;
 
+        private static bool dirty = false;
+
         public static void init(string path, string filename = "")
         {
             if(filename == "")
@@ -43,7 +45,7 @@ namespace IXICore
             initialConnectionCount = 0;
         }
 
-        public static bool addPeerToPeerList(string hostname, Address walletAddress, long last_seen, long last_connect_attempt, long last_connected, int rating, bool storePeersFile = true)
+        public static bool addPeerToPeerList(string hostname, Address walletAddress, long last_seen, long last_connect_attempt, long last_connected, int rating)
         {
             if(!validateHostname(hostname))
             {
@@ -84,20 +86,17 @@ namespace IXICore
                     }
                 }
             }
+            dirty = true;
 
-            if (storePeersFile)
-            {
-                savePeersFile();
-                return true;
-            }
-            return false;
+            return true;
         }
 
         public static bool removePeer(string hostname)
         {
             if (peerList.RemoveAll(x => x.hostname == hostname) > 0)
             {
-                savePeersFile();
+                dirty = true;
+
                 return true;
             }
             return false;
@@ -173,13 +172,20 @@ namespace IXICore
         // Saves a list of 500 master node addresses to a file
         public static void savePeersFile()
         {
+            if (!dirty)
+            {
+                return;
+            }
+
             lock (peerList)
             {
                 // Don't write to file if no masternode presences were found in addition to the current node
                 if (peerList.Count < 2)
                     return;
 
-                using (TextWriter tw = new StreamWriter(fullPeersPath))
+                string tempPath = fullPeersPath + ".tmp";
+
+                using (TextWriter tw = new StreamWriter(tempPath, false))
                 {
                     foreach (Peer p in peerList)
                     {
@@ -192,6 +198,9 @@ namespace IXICore
                     tw.Flush();
                     tw.Close();
                 }
+
+                File.Copy(tempPath, fullPeersPath, true);
+                File.Delete(tempPath);
             }
         }
 
@@ -221,11 +230,11 @@ namespace IXICore
                         {
                             if (split_hostname.Length == 6)
                             {
-                                addPeerToPeerList(split_hostname[0], new Address(Base58Check.Base58CheckEncoding.DecodePlain(split_hostname[1])), Int64.Parse(split_hostname[2]), Int64.Parse(split_hostname[3]), Int64.Parse(split_hostname[4]), Int32.Parse(split_hostname[5]), false);
+                                addPeerToPeerList(split_hostname[0], new Address(Base58Check.Base58CheckEncoding.DecodePlain(split_hostname[1])), Int64.Parse(split_hostname[2]), Int64.Parse(split_hostname[3]), Int64.Parse(split_hostname[4]), Int32.Parse(split_hostname[5]));
                             }
                             else if (split_hostname.Length == 2)
                             {
-                                addPeerToPeerList(split_hostname[0], new Address(Base58Check.Base58CheckEncoding.DecodePlain(split_hostname[1])), 0, 0, 0, 0, false);
+                                addPeerToPeerList(split_hostname[0], new Address(Base58Check.Base58CheckEncoding.DecodePlain(split_hostname[1])), 0, 0, 0, 0);
                             }
                         }catch(Exception)
                         {
