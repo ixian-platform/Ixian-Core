@@ -33,8 +33,11 @@ namespace IXICore.Network
         public static string primaryS2Address = "";
 
         private static int simultaneousConnectedNeighbors;
+        private static bool automaticallySetPublicIP;
 
-        public static void start(int simultaneousConnectedNeighbors)
+        private static HashSet<string> pinnedNodes = new();
+
+        public static void start(int simultaneousConnectedNeighbors, bool automaticallySetPublicIP)
         {
             if (ctsLoop != null)
             {
@@ -42,6 +45,7 @@ namespace IXICore.Network
             }
 
             StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
+            StreamClientManager.automaticallySetPublicIP = automaticallySetPublicIP;
 
             streamClients.Clear();
             connectingClients.Clear();
@@ -79,6 +83,20 @@ namespace IXICore.Network
             }
         }
 
+        public static void setPinnedNodes(List<string> pinnedNodes)
+        {
+            lock (streamClients)
+            {
+                if (pinnedNodes == null)
+                {
+                    StreamClientManager.pinnedNodes = new();
+                    return;
+                }
+
+                StreamClientManager.pinnedNodes = pinnedNodes.ToHashSet();
+            }
+        }
+
         // Immediately disconnects all clients
         public static void isolate()
         {
@@ -103,7 +121,7 @@ namespace IXICore.Network
             stop();
             Thread.Sleep(100);
             Logging.info("Starting stream clients...");
-            start(simultaneousConnectedNeighbors);
+            start(simultaneousConnectedNeighbors, automaticallySetPublicIP);
         }
 
         // Send data to all connected nodes
@@ -187,23 +205,57 @@ namespace IXICore.Network
 
                         if (getConnectedClients(true).Count() > simultaneousConnectedNeighbors)
                         {
-                            NetworkClient client;
+                            NetworkClient? client = null;
                             lock (streamClients)
                             {
-                                client = streamClients[0];
-                                streamClients.RemoveAt(0);
+                                foreach (var tmpClient in streamClients)
+                                {
+                                    if (tmpClient.getFullAddress(true) == primaryS2Address)
+                                    {
+                                        continue;
+                                    }
+                                    if (pinnedNodes.Contains(tmpClient.getFullAddress(true)))
+                                    {
+                                        continue;
+                                    }
+                                    client = tmpClient;
+                                    break;
+                                }
+                                if (client != null)
+                                {
+                                    streamClients.Remove(client);
+                                }
                             }
-                            CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
-                            client.stop();
+                            if (client != null)
+                            {
+                                CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
+                                client.stop();
+                            }
                         }
 
                         string[] netClients = getConnectedClients();
 
                         // Check if we need to connect to more neighbors
-                        if (netClients.Length < 1 || !netClients.Contains(primaryS2Address))
+                        if (netClients.Length < 1)
                         {
                             // Scan for and connect to a new neighbor
                             connectToRandomStreamNode();
+                        }
+
+                        if (!netClients.Contains(primaryS2Address))
+                        {
+                            primaryS2Address = getConnectedClients(true).First();
+                            if (automaticallySetPublicIP)
+                            {
+                                var endpoint = streamClients.Find(x => x.getFullAddress(true) == primaryS2Address);
+                                if (endpoint != null)
+                                {
+                                    IxianHandler.publicIP = endpoint.address;
+                                    IxianHandler.publicPort = endpoint.incomingPort;
+                                    PresenceList.forceSendKeepAlive = true;
+                                    Logging.info("Forcing KA from StreamClientManager");
+                                }
+                            }
                         }
                     }
                     catch (Exception e) when (e is not OperationCanceledException)
@@ -323,7 +375,7 @@ namespace IXICore.Network
             {
                 // Verify against the publicly disclosed ip
                 // Don't connect to self
-                if (resolved_server_name.Equals(IxianHandler.publicIP, StringComparison.Ordinal))
+                if (!automaticallySetPublicIP && resolved_server_name.Equals(IxianHandler.publicIP, StringComparison.Ordinal))
                 {
                     if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
                     {
