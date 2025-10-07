@@ -79,14 +79,20 @@ namespace IXICore.Streaming
             return false;
         }
 
+        public static void resetCooldown()
+        {
+            lastUpdate = 0;
+        }
+
         public static bool fetchPushMessages(bool force = false, bool fireLocalNotification = false)
         {
-            if(force == false && lastUpdate + cooldownPeriod > Clock.getTimestamp())
+            long curTime = Clock.getTimestamp();
+            if (force == false && lastUpdate + cooldownPeriod > curTime)
             {
                 return false;
             }
 
-            lastUpdate = Clock.getTimestamp();
+            lastUpdate = curTime;
 
             if (pushNotificationAuthKey == null)
             {
