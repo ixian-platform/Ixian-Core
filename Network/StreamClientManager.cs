@@ -185,15 +185,6 @@ namespace IXICore.Network
                     {
                         handleDisconnectedClients();
 
-                        string[] netClients = getConnectedClients();
-
-                        // Check if we need to connect to more neighbors
-                        if (netClients.Length < 1 || !netClients.Contains(primaryS2Address))
-                        {
-                            // Scan for and connect to a new neighbor
-                            connectToRandomStreamNode();
-                        }
-
                         if (getConnectedClients(true).Count() > simultaneousConnectedNeighbors)
                         {
                             NetworkClient client;
@@ -204,6 +195,15 @@ namespace IXICore.Network
                             }
                             CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
                             client.stop();
+                        }
+
+                        string[] netClients = getConnectedClients();
+
+                        // Check if we need to connect to more neighbors
+                        if (netClients.Length < 1 || !netClients.Contains(primaryS2Address))
+                        {
+                            // Scan for and connect to a new neighbor
+                            connectToRandomStreamNode();
                         }
                     }
                     catch (Exception e) when (e is not OperationCanceledException)

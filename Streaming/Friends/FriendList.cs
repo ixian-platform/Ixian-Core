@@ -57,15 +57,15 @@ namespace IXICore.Streaming
         // Retrieves friends based on the sector prefix
         public static List<Friend> getFriendsBySectorPrefix(byte[] sector_prefix)
         {
-            List<Friend> friends = new();
+            List<Friend> filtered = new();
             foreach (Friend friend in friends)
             {
                 if (friend.walletAddress.sectorPrefix.SequenceEqual(sector_prefix))
                 {
-                    friends.Add(friend);
+                    filtered.Add(friend);
                 }
             }
-            return friends;
+            return filtered;
         }
 
         // Set the nickname for a specific wallet address
