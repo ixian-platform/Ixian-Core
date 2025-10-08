@@ -174,7 +174,7 @@ namespace IXICore
         }
 
         // Saves a list of 500 master node addresses to a file
-        public static void savePeersFile()
+        public static void savePeersFile(bool force = false)
         {
             if (!updated)
             {
@@ -188,7 +188,8 @@ namespace IXICore
                     return;
 
                 long curTime = Clock.getTimestamp();
-                if (curTime - lastSaveTime < saveCoolDown)
+                if (!force
+                    && curTime - lastSaveTime < saveCoolDown)
                 {
                     return;
                 }
