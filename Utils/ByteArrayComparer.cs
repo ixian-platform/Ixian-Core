@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -13,26 +13,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace IXICore.Utils
 {
     public class _ByteArrayComparer
     {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Compare(byte[] x, byte[] y)
         {
-            var len = Math.Min(x.Length, y.Length);
-            for (var i = 0; i < len; i++)
-            {
-                var c = x[i].CompareTo(y[i]);
-                if (c != 0)
-                {
-                    return c;
-                }
-            }
-
-            return x.Length.CompareTo(y.Length);
+            return ((ReadOnlySpan<byte>)x).SequenceCompareTo(y);
         }
-
     }
 
     public class ByteArrayComparer : IComparer<byte[]>, IEqualityComparer<byte[]>
