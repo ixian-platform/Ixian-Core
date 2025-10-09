@@ -84,7 +84,7 @@ namespace IXICore
             return bytes.ToArray();
         }
 
-        private RSACryptoServiceProvider rsaKeyFromBytes(byte [] keyBytes)
+        private RSA rsaKeyFromBytes(byte [] keyBytes)
         {
             try
             {
@@ -153,9 +153,9 @@ namespace IXICore
                     offset += dataLen;
                 }
 
-                RSACryptoServiceProvider rcsp = new RSACryptoServiceProvider();
-                rcsp.ImportParameters(rsaParams);
-                return rcsp;
+                RSA rsa = RSA.Create();
+                rsa.ImportParameters(rsaParams);
+                return rsa;
             }catch(Exception e)
             {
                 Logging.warn("An exception occurred while trying to reconstruct PKI from bytes: {0}", e.Message);
@@ -220,9 +220,8 @@ namespace IXICore
         {
             try
             {
-                RSACryptoServiceProvider rsa = rsaKeyFromBytes(privateKey);
-                byte[] signature = rsa.SignData(input_data, SHA512.Create());
-                return signature;
+                RSA rsa = rsaKeyFromBytes(privateKey);
+                return rsa.SignData(input_data, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1);
             }
             catch (Exception e)
             {
@@ -235,8 +234,7 @@ namespace IXICore
         {
             try
             {
-
-                RSACryptoServiceProvider rsa = rsaKeyFromBytes(publicKey);
+                RSA rsa = rsaKeyFromBytes(publicKey);
 
                 if(rsa == null)
                 {
@@ -245,7 +243,7 @@ namespace IXICore
                 }
 
                 byte[] signature_bytes = signature;
-                return rsa.VerifyData(input_data, SHA512.Create(), signature_bytes);
+                return rsa.VerifyData(input_data, signature_bytes, HashAlgorithmName.SHA512, RSASignaturePadding.Pkcs1);
             }
             catch (Exception e)
             {
@@ -257,16 +255,16 @@ namespace IXICore
         // Encrypt data using RSA
         public byte[] encryptWithRSA(byte[] input, byte[] publicKey)
         {
-            RSACryptoServiceProvider rsa = rsaKeyFromBytes(publicKey);
-            return rsa.Encrypt(input, true);
+            RSA rsa = rsaKeyFromBytes(publicKey);
+            return rsa.Encrypt(input, RSAEncryptionPadding.OaepSHA1);
         }
 
 
         // Decrypt data using RSA
         public byte[] decryptWithRSA(byte[] input, byte[] privateKey)
         {
-            RSACryptoServiceProvider rsa = rsaKeyFromBytes(privateKey);
-            return rsa.Decrypt(input, true);
+            RSA rsa = rsaKeyFromBytes(privateKey);
+            return rsa.Decrypt(input, RSAEncryptionPadding.OaepSHA1);
         }
 
         // Encrypt data using AES
@@ -585,42 +583,6 @@ namespace IXICore
                 Logging.error("Error in chacha decryption. {0}", e.ToString());
             }
             return null;
-        }
-
-        public byte[] generateChildKey(byte[] parentKey, int version, int seed = 0)
-        {
-            RSACryptoServiceProvider origRsa = rsaKeyFromBytes(parentKey);
-            if(origRsa.PublicOnly)
-            {
-                Logging.error("Child key cannot be generated from a public key! Private key is also required.");
-                return null;
-            }
-            RSAParameters origKey = origRsa.ExportParameters(true);
-            RsaKeyPairGenerator kpGenerator = new RsaKeyPairGenerator();
-            int seed_len = origKey.P.Length + origKey.Q.Length;
-            if (seed != 0)
-            {
-                seed_len += 4;
-            }
-            byte[] child_seed = new byte[seed_len];
-            Array.Copy(origKey.P, 0, child_seed, 0, origKey.P.Length);
-            Array.Copy(origKey.Q, 0, child_seed, origKey.P.Length, origKey.Q.Length);
-            if(seed != 0)
-            {
-                Array.Copy(BitConverter.GetBytes(seed), 0, child_seed, origKey.P.Length + origKey.Q.Length, 4);
-            }
-
-            Org.BouncyCastle.Crypto.Digests.Sha512Digest key_digest = new Org.BouncyCastle.Crypto.Digests.Sha512Digest();
-            Org.BouncyCastle.Crypto.Prng.DigestRandomGenerator digest_rng = new Org.BouncyCastle.Crypto.Prng.DigestRandomGenerator(key_digest);
-            digest_rng.AddSeedMaterial(child_seed);
-            // TODO: Check if certainty of 80 is good enough for us
-            RsaKeyGenerationParameters keyParams = new RsaKeyGenerationParameters(BigInteger.ValueOf(0x10001), new SecureRandom(digest_rng), 4096, 80);
-            RsaKeyPairGenerator keyGen = new RsaKeyPairGenerator();
-            keyGen.Init(keyParams);
-            AsymmetricCipherKeyPair keyPair = keyGen.GenerateKeyPair();
-            //
-            RSACryptoServiceProvider newRsa = (RSACryptoServiceProvider)DotNetUtilities.ToRSA((RsaPrivateCrtKeyParameters)keyPair.Private);
-            return rsaKeyToBytes(newRsa, true, version);
         }
 
         public byte[] getSecureRandomBytes(int length)

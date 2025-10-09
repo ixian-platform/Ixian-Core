@@ -248,16 +248,6 @@ namespace IXICore
         byte[] decryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad, int offset);
 
         /// <summary>
-        ///  Generates a child RSA key from the given parent RSA key, so that the process may be repeated in the future. This function
-        ///  allows for RSA key derivation and hirearchical keys.
-        ///  Using a different `seed` value will yield different child keys, but the process can be repeated if the seed values are known.
-        /// </summary>
-        /// <param name="parentKey">RSA private key in Ixian serialized format.</param>
-        /// <param name="seed">A unique seed value.</param>
-        /// <returns>A new RSA key in Ixian serialized format.</returns>
-        byte[] generateChildKey(byte[] parentKey, int version, int seed);
-
-        /// <summary>
         ///  Verifies that the provided Ixian key pair are valid, working RSA keys. Both encryption and signing are tested and the 
         ///  resulting values are then decrypted and verified to ensure that the process is reversible.
         /// </summary>
@@ -441,11 +431,6 @@ namespace IXICore
         public byte[] decryptWithChachaPoly1305(byte[] input, byte[] key, byte[] nonce, byte[] aad, int inOffset)
         {
             return _cryptoLib.decryptWithChachaPoly1305(input, key, nonce, aad, inOffset);
-        }
-
-        public byte[] generateChildKey(byte[] parentKey, int version, int seed)
-        {
-            return _cryptoLib.generateChildKey(parentKey, version, seed);
         }
 
         public bool testKeys(byte[] plaintext, IxianKeyPair kp)
