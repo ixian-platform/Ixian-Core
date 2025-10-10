@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2025 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -12,6 +12,7 @@
 
 using IXICore.Meta;
 using System;
+using System.Net;
 using System.Net.Sockets;
 
 namespace IXICore.Network
@@ -34,16 +35,30 @@ namespace IXICore.Network
 
         public string myAddress = ""; // My address as reported by the node
 
-        public NetworkClient()
+        private IPEndPoint bindEndpoint = null;
+
+        public NetworkClient(string bindAddress)
         {
+            if (!string.IsNullOrEmpty(bindAddress))
+            {
+                var localIP = IPAddress.Parse(bindAddress);
+                bindEndpoint = new IPEndPoint(localIP, 0);
+            }
+
             prepareClient();
         }
 
         // Prepare the client socket
         private void prepareClient()
         {
-            tcpClient = new TcpClient();
-
+            if (bindEndpoint != null)
+            {
+                tcpClient = new TcpClient(bindEndpoint);
+            }
+            else
+            {
+                tcpClient = new TcpClient();
+            }
 
             Socket tmpSocket = tcpClient.Client;
 
@@ -150,7 +165,7 @@ namespace IXICore.Network
                 // Safely close the threads
                 stop(false);
 
-                Logging.info(string.Format("--> Reconnecting to {0}, total reconnects: {1}", getFullAddress(true), totalReconnects));
+                Logging.info("--> Reconnecting to {0}, total reconnects: {1}", getFullAddress(true), totalReconnects);
                 return connectToServer(tcpHostname, tcpPort, serverWalletAddress);
             }
         }
@@ -166,7 +181,7 @@ namespace IXICore.Network
             {
                 if (running)
                 {
-                    Logging.warn(string.Format("recvRE: Disconnected client {0} with exception {1}", getFullAddress(), e.ToString()));
+                    Logging.warn("onInitialized: Disconnected client {0} with exception {1}", getFullAddress(), e.ToString());
                 }
                 state = RemoteEndpointState.Closed;
                 running = false;
@@ -179,7 +194,23 @@ namespace IXICore.Network
         protected override void disconnect()
         {
             base.disconnect();
-            tcpClient.Close();
+            if (tcpClient == null)
+            {
+                return;
+            }
+
+            try
+            {
+                tcpClient.Close();
+            }
+            catch (Exception e)
+            {
+                Logging.warn("Disconnect: Error closing tcpClient: {0}", e.Message);
+            }
+            finally
+            {
+                tcpClient = null;
+            }
         }
 
         /// <summary>

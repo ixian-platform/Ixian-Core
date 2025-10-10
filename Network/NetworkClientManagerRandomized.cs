@@ -19,7 +19,7 @@ namespace IXICore.Network
 {
     public class NetworkClientManagerRandomized : NetworkClientManagerBase
     {
-        public NetworkClientManagerRandomized(int simultaneousConnectedNeighbors) : base(simultaneousConnectedNeighbors)
+        public NetworkClientManagerRandomized(int simultaneousConnectedNeighbors, string bindAddress = null) : base(simultaneousConnectedNeighbors, bindAddress)
         {
         }
 

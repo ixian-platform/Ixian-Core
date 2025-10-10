@@ -44,7 +44,9 @@ namespace IXICore.Network
         /// </remarks>
         public int simultaneousConnectedNeighbors;
 
-        public NetworkClientManagerBase(int simultaneousConnectedNeighbors)
+        private string bindAddress = null;
+
+        public NetworkClientManagerBase(int simultaneousConnectedNeighbors, string bindAddress = null)
         {
             if (simultaneousConnectedNeighbors < 3)
             {
@@ -53,6 +55,7 @@ namespace IXICore.Network
                 throw new Exception("Setting simultanousConnectedNeighbors should be at least 3.");
             }
             this.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
+            this.bindAddress = bindAddress;
         }
 
         // Starts the Network Client Manager.
@@ -366,7 +369,7 @@ namespace IXICore.Network
             }
 
             // Connect to the specified node
-            NetworkClient new_client = new NetworkClient();
+            NetworkClient new_client = new NetworkClient(bindAddress);
             // Recompose the connection address from the resolved IP and the original port
             bool result = new_client.connectToServer(resolved_server_name, Convert.ToInt32(server[1]), wallet_address);
 

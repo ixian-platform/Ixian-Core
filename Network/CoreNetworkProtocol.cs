@@ -868,14 +868,11 @@ namespace IXICore
                 {
                     endpoint.stop();
 
-                    bool byeV1 = false;
                     try
                     {
                         ProtocolByeCode byeCode = (ProtocolByeCode)reader.ReadInt32();
                         string byeMessage = reader.ReadString();
                         string byeData = reader.ReadString();
-
-                        byeV1 = true;
 
                         switch (byeCode)
                         {
@@ -893,9 +890,11 @@ namespace IXICore
                                         {
                                             IxianHandler.publicIP = byeData;
                                             Logging.warn("Changed internal IP Address to " + byeData + ", reconnecting");
+                                            return;
                                         }
                                     }
                                 }
+                                Logging.warn("Disconnected by '{0}', with message: {1} {2} {3}", endpoint.address.ToString(), byeCode.ToString(), byeMessage, byeData);
                                 break;
 
                             case ProtocolByeCode.notConnectable: // not connectable from the internet
@@ -912,24 +911,10 @@ namespace IXICore
                                 break;
                         }
                     }
-                    catch (Exception)
+                    catch (Exception e)
                     {
-
+                        Logging.error("Exception in processBye: " + e);
                     }
-                    if (byeV1)
-                    {
-                        return;
-                    }
-
-                    reader.BaseStream.Seek(0, SeekOrigin.Begin);
-
-                    // Retrieve the message
-                    string message = reader.ReadString();
-
-                    if (message.Length > 0)
-                        Logging.warn("Disconnected with v0 message: {0}", message);
-                    else
-                        Logging.warn("Disconnected v0");
                 }
             }
         }

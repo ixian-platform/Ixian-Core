@@ -37,7 +37,9 @@ namespace IXICore.Network
 
         private static HashSet<string> pinnedNodes = new();
 
-        public static void start(int simultaneousConnectedNeighbors, bool automaticallySetPublicIP)
+        private static string bindAddress = null;
+
+        public static void start(int simultaneousConnectedNeighbors, bool automaticallySetPublicIP, string bindAddress = null)
         {
             if (ctsLoop != null)
             {
@@ -46,6 +48,7 @@ namespace IXICore.Network
 
             StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
             StreamClientManager.automaticallySetPublicIP = automaticallySetPublicIP;
+            StreamClientManager.bindAddress = bindAddress;
 
             streamClients.Clear();
             connectingClients.Clear();
@@ -430,7 +433,7 @@ namespace IXICore.Network
 
 
             // Connect to the specified node
-            NetworkClient new_client = new NetworkClient();
+            NetworkClient new_client = new NetworkClient(bindAddress);
             // Recompose the connection address from the resolved IP and the original port
             bool result = new_client.connectToServer(resolved_server_name, Convert.ToInt32(server[1]), wallet_address);
 
