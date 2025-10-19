@@ -113,6 +113,21 @@ function jsonToHtml(jsonArr)
     return html;
 }
 
+function addressListToString(jsonArr, includeAmounts) {
+    var html = "";
+    for (var key in jsonArr) {
+        if (html != "") {
+            html += ", ";
+        }
+        if (includeAmounts) {
+            html += key + ": " + jsonArr[key];
+        } else {
+            html += key;
+        }
+    }
+    return html;
+}
+
 function getActivity() {
     var activity_type_el = document.getElementById("activity_type");
     $.getJSON("activity?type=" + activity_type_el.options[activity_type_el.selectedIndex].value + "&descending=true", {})
@@ -122,15 +137,16 @@ function getActivity() {
                 var paymentsEl = document.getElementById("payments");
                 paymentsEl.innerHTML += document.getElementById("templates").getElementsByClassName("payment")[0].outerHTML;
                 var htmlEl = paymentsEl.lastElementChild;
-                htmlEl.getElementsByClassName("pdesc")[0].innerHTML = data["result"][i]["toList"];
 
+                htmlEl.getElementsByClassName("pdesc")[0].innerHTML = addressListToString(data["result"][i]["addressList"], false);
+
+                data["result"][i]["addressList"] = addressListToString(data["result"][i]["addressList"], true);
                 htmlEl.getElementsByClassName("pdetails")[0].innerHTML = jsonToHtml(data["result"][i]);
 
                 var type = data["result"][i]["type"];
                 if (type == 100) {
                     htmlEl.className += " received";
                     htmlEl.getElementsByClassName("pamount")[0].innerHTML = data["result"][i]["value"];
-                    htmlEl.getElementsByClassName("pdesc")[0].innerHTML = data["result"][i]["from"];
                     htmlEl.getElementsByClassName("pdesc")[0].innerHTML += "<br/>Payment Received";
                 } else if (type == 101) {
                     htmlEl.className += " sent";
@@ -139,12 +155,10 @@ function getActivity() {
                 } else if (type == 200) {
                     htmlEl.className += " received";
                     htmlEl.getElementsByClassName("pamount")[0].innerHTML = data["result"][i]["value"];
-                    htmlEl.getElementsByClassName("pdesc")[0].innerHTML = data["result"][i]["from"];
                     htmlEl.getElementsByClassName("pdesc")[0].innerHTML += "<br/>Mining Reward";
                 } else if (type == 201) {
                     htmlEl.className += " received";
                     htmlEl.getElementsByClassName("pamount")[0].innerHTML = data["result"][i]["value"];
-                    htmlEl.getElementsByClassName("pdesc")[0].innerHTML = data["result"][i]["wallet"];
                     htmlEl.getElementsByClassName("pdesc")[0].innerHTML += "<br/>Signing Reward";
                 } else if (type == 202) {
                     htmlEl.className += " received";

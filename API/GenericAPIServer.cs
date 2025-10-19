@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.RegNames;
@@ -99,8 +100,10 @@ namespace IXICore
 
         protected Dictionary<string, string> authorizedUsers;
 
+        protected IActivityStorage activityStorage;
+
         // Start the API server
-        public void start(List<string> listen_URLs, Dictionary<string, string> authorized_users = null, List<string> allowed_IPs = null)
+        public void start(List<string> listen_URLs, Dictionary<string, string> authorized_users = null, List<string> allowed_IPs = null, IActivityStorage activity_storage = null)
         {
             continueRunning = true;
 
@@ -108,6 +111,8 @@ namespace IXICore
 
             authorizedUsers = authorized_users;
             allowedIPs = allowed_IPs;
+
+            activityStorage = activity_storage;
 
             apiControllerThread = new Thread(apiLoop);
             apiControllerThread.Name = "API_Controller_Thread";
@@ -1420,13 +1425,17 @@ namespace IXICore
 
         private JsonResponse onActivity(Dictionary<string, object> parameters)
         {
-#if !__MOBILE__
+            if (activityStorage == null)
+            {
+                return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "Activity not implemented" } };
+            }
+
             JsonError error = null;
 
-            string fromIndex = "0";
-            if (parameters.ContainsKey("fromIndex"))
+            byte[] fromKey = null;
+            if (parameters.ContainsKey("fromKey"))
             {
-                fromIndex = (string)parameters["fromIndex"];
+                fromKey = Convert.FromBase64String((string)parameters["fromKey"]);
             }
 
             string count = "50";
@@ -1470,20 +1479,17 @@ namespace IXICore
                 }
             }
 
-            List<Activity> res = null;
+            List<ActivityObject> res;
 
             if (type == -1)
             {
-                res = ActivityStorage.getActivitiesBySeedHash(IxianHandler.getWalletStorage(wallet).getSeedHash(), Int32.Parse(fromIndex), Int32.Parse(count), descending, orderBy);
+                res = activityStorage.getActivitiesBySeedHashAndType(IxianHandler.getWalletStorage(wallet).getSeedHash(), null, fromKey, Int32.Parse(count), descending);
             }
             else
             {
-                res = ActivityStorage.getActivitiesBySeedHashAndType(IxianHandler.getWalletStorage(wallet).getSeedHash(), (ActivityType)type, Int32.Parse(fromIndex), Int32.Parse(count), descending, orderBy);
+                res = activityStorage.getActivitiesBySeedHashAndType(IxianHandler.getWalletStorage(wallet).getSeedHash(), (ActivityType)type, fromKey, Int32.Parse(count), descending);
             }
             return new JsonResponse { result = res, error = error };
-#else
-            return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "Activity not implemented" } };
-#endif
         }
 
         private JsonResponse onGenerateNewAddress(Dictionary<string, object> parameters)

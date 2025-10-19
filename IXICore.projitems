@@ -9,6 +9,9 @@
     <Import_RootNamespace>IXICore</Import_RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)Activity\Activity.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Activity\ActivityStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Activity\IActivityStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Address\Address.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Address\AddressClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Address\AddressMatcher.cs" />
@@ -28,12 +31,12 @@
     <Compile Include="$(MSBuildThisFileDirectory)Crypto\ForceCRC32\SafeProxyC.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Crypto\KeyDerivation.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryCache.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryCacheClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryItem.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryItemBlock.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryItemKeepAlive.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryItemSignature.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Journal\Journal.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Meta\Activity.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Meta\ConsensusConfig.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Meta\CoreConfig.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Meta\IxianNode.cs" />
@@ -43,7 +46,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Meta\UpdateVerify.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Miner\SignerPowMiner.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\CoreNetworkProtocol.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Inventory\InventoryCacheClient.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Messages\Rejected.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\Network.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClient.cs" />
@@ -127,6 +129,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\NetDump.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils\StorageIndex.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Wordlist.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\WordlistSources.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Wallet\Wallet.cs" />

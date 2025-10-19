@@ -177,6 +177,12 @@ namespace IXICore.Utils
             BinaryPrimitives.WriteUInt64BigEndian(b, value);
             return b;
         }
+        public static byte[] GetBytesBE(this long value)
+        {
+            byte[] b = new byte[8];
+            BinaryPrimitives.WriteInt64BigEndian(b, value);
+            return b;
+        }
 
         public static byte[] GetBytesBE(this int value)
         {
