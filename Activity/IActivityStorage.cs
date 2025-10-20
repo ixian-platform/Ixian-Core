@@ -20,7 +20,7 @@ namespace IXICore.Activity
         public abstract void stopStorage();
         public abstract void deleteData();
 
-        public abstract List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[] fromKey = null, int count = 0, bool descending = false);
+        public abstract List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[] fromActivityId = null, int count = 0, bool descending = false);
 
         public abstract bool insertActivity(ActivityObject activity);
 

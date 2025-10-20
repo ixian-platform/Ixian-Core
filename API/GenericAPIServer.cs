@@ -348,6 +348,11 @@ namespace IXICore
                 response = onActivity(parameters);
             }
 
+            if (methodName.Equals("activity2", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onActivity2(parameters);
+            }
+
             if (methodName.Equals("generatenewaddress", StringComparison.OrdinalIgnoreCase))
             {
                 response = onGenerateNewAddress(parameters);
@@ -1425,17 +1430,38 @@ namespace IXICore
 
         private JsonResponse onActivity(Dictionary<string, object> parameters)
         {
+            return new JsonResponse
+            {
+                result = null,
+                error = new JsonError()
+                {
+                    code = (int)RPCErrorCode.RPC_INVALID_REQUEST,
+                    message = "/activity has been deprecated, please use /activity2?wallet=&type=&count=&fromId=&descending="
+                }
+            };
+        }
+
+        private JsonResponse onActivity2(Dictionary<string, object> parameters)
+        {
             if (activityStorage == null)
             {
-                return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "Activity not implemented" } };
+                return new JsonResponse
+                {
+                    result = null,
+                    error = new JsonError()
+                    {
+                        code = (int)RPCErrorCode.RPC_INTERNAL_ERROR,
+                        message = "/activity2 can't be used, because ActivityStorage was not implemented."
+                    }
+                };
             }
 
             JsonError error = null;
 
             byte[] fromKey = null;
-            if (parameters.ContainsKey("fromKey"))
+            if (parameters.ContainsKey("fromId"))
             {
-                fromKey = Convert.FromBase64String((string)parameters["fromKey"]);
+                fromKey = Convert.FromBase64String((string)parameters["fromId"]);
             }
 
             string count = "50";
@@ -1462,26 +1488,9 @@ namespace IXICore
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
             }
 
-            string orderBy = "insertedTimestamp";
-            if (parameters.ContainsKey("orderBy"))
-            {
-                string tmpOrderBy = (string)parameters["orderBy"];
-                switch (tmpOrderBy)
-                {
-                    case "insertedTimestamp":
-                        break;
-                    case "timestamp":
-                        orderBy = "timestamp";
-                        break;
-                    case "blockheight":
-                        orderBy = "blockheight";
-                        break;
-                }
-            }
-
             List<ActivityObject> res;
 
-            if (type == -1)
+            if (type == -1 || type == (int)ActivityType.None)
             {
                 res = activityStorage.getActivitiesBySeedHashAndType(IxianHandler.getWalletStorage(wallet).getSeedHash(), null, fromKey, Int32.Parse(count), descending);
             }

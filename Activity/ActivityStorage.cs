@@ -43,6 +43,9 @@ namespace IXICore.Activity
         // Reuse a single 0xFF byte to avoid tiny allocations in the hot path
         private static readonly byte[] oneByteFF = new byte[] { 0xFF };
 
+        private readonly byte[] ACTIVITY_KEY_PAYLOAD = new byte[] { 0 };
+        private readonly byte[] ACTIVITY_KEY_META = new byte[] { 1 };
+
         public ulong minBlockNumber { get; private set; }
         public ulong maxBlockNumber { get; private set; }
         public int dbVersion { get; private set; }
@@ -241,9 +244,11 @@ namespace IXICore.Activity
                 lastUsedTime = DateTime.Now;
                 using (WriteBatch writeBatch = new WriteBatch())
                 {
-                    byte[] key = StorageIndex.combineKeys(activity.seedHash, StorageIndex.combineKeys(Clock.getTimestamp().GetBytesBE(), activity.id));
-                    writeBatch.Put(key, activity.getBytes(), activityCF);
-                    idxActivityId.addIndexEntry(activity.id, null, key);
+                    byte[] timestampTypeIdKey = StorageIndex.combineKeys(Clock.getTimestampMillis().GetBytesBE(), StorageIndex.combineKeys(((short)activity.type).GetBytesBE(), activity.id));
+                    byte[] key = StorageIndex.combineKeys(activity.seedHash, timestampTypeIdKey);
+                    writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, key), activity.GetBytes(), activityCF);
+                    writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_META, key), activity.GetMetaBytes(), activityCF);
+                    idxActivityId.addIndexEntry(activity.id, activity.seedHash, timestampTypeIdKey);
                     updateMinMax(writeBatch, activity.blockHeight);
                     database.Write(writeBatch);
                 }
@@ -277,94 +282,122 @@ namespace IXICore.Activity
                 if (count <= 0) count = 50;
                 lastUsedTime = DateTime.Now;
 
-                byte[] fullFromKey = null;
+                byte[] seed16 = seedHash.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
+
+                byte[] payloadSeedPrefix = StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, seed16);
+
+                // Compute an exclusive upper bound for our range: [0x00|seed16] .. [0x00|seed16|0xFF] (exclusive)
+                byte[] upperBound = StorageIndex.combineKeys(payloadSeedPrefix, oneByteFF);
+
+                // Resolve fromActivityId via secondary index
+                byte[] exactFromPayloadKey = null;
                 if (fromActivityId != null && fromActivityId.Length > 0)
                 {
-                    fullFromKey = idxActivityId.getEntry(fromActivityId, ReadOnlySpan<byte>.Empty);
-                    if (fullFromKey == null || fullFromKey.Length == 0 ||
-                        !hasPrefix(fullFromKey, seedHash))
-                    {
-                        fullFromKey = null;
-                    }
+                    var tsTypeIdKey = idxActivityId.getEntry(fromActivityId, seed16);
+                    if (tsTypeIdKey != null && tsTypeIdKey.Length > 0)
+                        exactFromPayloadKey = StorageIndex.combineKeys(payloadSeedPrefix, tsTypeIdKey);
                 }
 
-                var ro = new ReadOptions();
+                // Use total order and explicit bound.
+                var ro = new ReadOptions().SetTotalOrderSeek(true);
                 if (!descending)
-                    ro.SetPrefixSameAsStart(true);
-                else
-                    ro.SetTotalOrderSeek(true);
+                {
+                    // iterate_upper_bound is only used for forward scans
+                    ro.SetIterateUpperBound(upperBound);
+                }
 
                 using var it = database.NewIterator(activityCF, ro);
 
+                ReadOnlySpan<byte> mustPrefix = payloadSeedPrefix;
+
                 if (!descending)
                 {
-                    if (fullFromKey != null)
+                    if (exactFromPayloadKey != null)
                     {
-                        it.Seek(fullFromKey);
-                        if (it.Valid() && it.Key().AsSpan().SequenceEqual(fullFromKey))
+                        it.Seek(exactFromPayloadKey);
+                        if (it.Valid() && it.Key().AsSpan().SequenceEqual(exactFromPayloadKey))
                             it.Next(); // exclusive
+
+                        while (it.Valid() && !hasPrefix(it.Key(), mustPrefix))
+                            it.Next();
                     }
                     else
                     {
-                        it.Seek(seedHash);
+                        it.Seek(payloadSeedPrefix);
+                        while (it.Valid() && !hasPrefix(it.Key(), mustPrefix))
+                            it.Next();
                     }
 
                     for (; it.Valid(); it.Next())
                     {
-                        var k = it.Key();
-                        if (!hasPrefix(k, seedHash)) break;
+                        var k = it.Key().AsSpan();
+                        if (!hasPrefix(k, mustPrefix)) break;
 
-                        var v = it.Value();
-                        if (v == null || v.Length == 0) continue;
+                        var suffix = k.Slice(1 + 16);
+                        if (suffix.Length < 10) continue;
 
-                        var ao = new ActivityObject(v);
-                        if (typeFilter == null || ao.type == typeFilter.Value)
-                        {
-                            result.Add(ao);
-                            if (result.Count >= count) break;
-                        }
+                        short typeShort = BinaryPrimitives.ReadInt16BigEndian(suffix.Slice(8, 2));
+                        if (typeFilter != null && typeShort != (short)typeFilter.Value) continue;
+
+                        var payload = it.Value();
+                        if (payload == null || payload.Length == 0) continue;
+
+                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seed16, suffix.ToArray()));
+                        byte[] meta = database.Get(metaKey, activityCF);
+
+                        byte[] realId = suffix.Slice(10).ToArray();
+
+                        result.Add(new ActivityObject(payload, seed16, (ActivityType)typeShort, realId, meta));
+                        if (result.Count >= count) break;
                     }
                 }
                 else
                 {
-                    if (fullFromKey != null)
+                    if (exactFromPayloadKey != null)
                     {
-                        it.Seek(fullFromKey);
-                        if (it.Valid() && it.Key().AsSpan().SequenceEqual(fullFromKey))
+                        it.Seek(exactFromPayloadKey);
+                        if (it.Valid() && it.Key().AsSpan().SequenceEqual(exactFromPayloadKey))
                             it.Prev(); // exclusive
                         else if (!it.Valid())
                             it.SeekToLast();
                     }
                     else
                     {
-                        var endProbe = StorageIndex.combineKeys(seedHash, oneByteFF);
-                        it.Seek(endProbe);
+                        it.Seek(upperBound);
                         if (!it.Valid()) it.SeekToLast();
                     }
 
-                    while (it.Valid() && !hasPrefix(it.Key(), seedHash))
+                    while (it.Valid() && !hasPrefix(it.Key(), mustPrefix))
                         it.Prev();
 
                     for (; it.Valid(); it.Prev())
                     {
-                        var k = it.Key();
-                        if (!hasPrefix(k, seedHash)) break;
+                        var k = it.Key().AsSpan();
+                        if (!hasPrefix(k, mustPrefix)) break;
 
-                        var v = it.Value();
-                        if (v == null || v.Length == 0) continue;
+                        var suffix = k.Slice(1 + 16);
+                        if (suffix.Length < 10) continue;
 
-                        var ao = new ActivityObject(v);
-                        if (typeFilter == null || ao.type == typeFilter.Value)
-                        {
-                            result.Add(ao);
-                            if (result.Count >= count) break;
-                        }
+                        short typeShort = BinaryPrimitives.ReadInt16BigEndian(suffix.Slice(8, 2));
+                        if (typeFilter != null && typeShort != (short)typeFilter.Value) continue;
+
+                        var payload = it.Value();
+                        if (payload == null || payload.Length == 0) continue;
+
+                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seed16, suffix.ToArray()));
+                        byte[] meta = database.Get(metaKey, activityCF);
+
+                        byte[] realId = suffix.Slice(10).ToArray();
+
+                        result.Add(new ActivityObject(payload, seed16, (ActivityType)typeShort, realId, meta));
+                        if (result.Count >= count) break;
                     }
                 }
 
                 return result;
             }
         }
+
         static bool hasPrefix(ReadOnlySpan<byte> key, ReadOnlySpan<byte> prefix)
             => key.Length >= prefix.Length && key.Slice(0, prefix.Length).SequenceEqual(prefix);
 
@@ -372,47 +405,46 @@ namespace IXICore.Activity
         {
             lock (rockLock)
             {
-                if (database == null || id == null || id.Length == 0)
+                if (database == null)
                     return false;
 
                 lastUsedTime = DateTime.Now;
 
-                try
+                bool anyUpdated = false;
+                using (var wb = new WriteBatch())
                 {
-                    byte[] activityKey = idxActivityId.getEntry(id, ReadOnlySpan<byte>.Empty);
-                    if (activityKey == null || activityKey.Length == 0)
-                        return false;
-
-                    byte[] cur = database.Get(activityKey, activityCF);
-                    if (cur == null || cur.Length == 0)
-                        return false;
-
-                    var ao = new ActivityObject(cur);
-                    ao.status = status;
-
-                    if (blockHeight > 0UL)
-                        ao.blockHeight = blockHeight;
-
-                    if (timestamp != 0L)
-                        ao.timestamp = timestamp;
-
-                    using (var wb = new WriteBatch())
+                    // Iterate all entries for this id (in case of multiple seed hashes)
+                    foreach (var (indexMem, valueMem) in idxActivityId.getEntriesForKey(id))
                     {
-                        wb.Put(activityKey, ao.getBytes(), activityCF);
+                        var seedHash = indexMem.ToArray();
+                        var tsTypeId = valueMem.ToArray();
 
-                        if (blockHeight > 0UL)
-                            updateMinMax(wb, blockHeight);
+                        var metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seedHash, tsTypeId));
 
-                        database.Write(wb);
+                        long ts;
+                        if (timestamp > 0)
+                        {
+                            ts = timestamp;
+                        }
+                        else
+                        {
+                            var existingMetaEntry = database.Get(metaKey, activityCF);
+                            var parsedMeta = ActivityObject.ParseMetaBytes(existingMetaEntry);
+                            ts = parsedMeta.timestamp;
+                        }
+
+                        byte[] metaBytes = ActivityObject.GetMetaBytes(status, blockHeight, ts);
+                        wb.Put(metaKey, metaBytes, activityCF);
+
+                        updateMinMax(wb, blockHeight);
+                        anyUpdated = true;
                     }
 
-                    return true;
+                    if (anyUpdated)
+                        database.Write(wb);
                 }
-                catch (Exception e)
-                {
-                    Logging.error("Activity: updateStatus failed: {0}", e);
-                    return false;
-                }
+
+                return anyUpdated;
             }
         }
 
@@ -420,37 +452,40 @@ namespace IXICore.Activity
         {
             lock (rockLock)
             {
-                if (database == null || id == null || id.Length == 0 || value == null)
+                if (database == null)
                     return false;
 
                 lastUsedTime = DateTime.Now;
 
-                try
+                bool anyUpdated = false;
+                using (var wb = new WriteBatch())
                 {
-                    byte[] activityKey = idxActivityId.getEntry(id, ReadOnlySpan<byte>.Empty);
-                    if (activityKey == null || activityKey.Length == 0)
-                        return false;
-
-                    byte[] cur = database.Get(activityKey, activityCF);
-                    if (cur == null || cur.Length == 0)
-                        return false;
-
-                    var ao = new ActivityObject(cur);
-                    ao.value = value;
-
-                    using (var wb = new WriteBatch())
+                    foreach (var (indexMem, valueMem) in idxActivityId.getEntriesForKey(id))
                     {
-                        wb.Put(activityKey, ao.getBytes(), activityCF);
-                        database.Write(wb);
+                        var seedHash = indexMem.ToArray();
+                        var tsTypeId = valueMem.ToArray();
+
+                        var payloadKey = StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, StorageIndex.combineKeys(seedHash, tsTypeId));
+
+                        byte[] payload = database.Get(payloadKey, activityCF);
+
+                        short typeShort = BinaryPrimitives.ReadInt16BigEndian(tsTypeId.AsSpan(8, 2));
+                        byte[] realId = tsTypeId.AsSpan(10).ToArray();
+
+                        var ao = new ActivityObject(payload, seedHash, (ActivityType)typeShort, realId, null)
+                        {
+                            value = value
+                        };
+
+                        wb.Put(payloadKey, ao.GetBytes(), activityCF);
+                        anyUpdated = true;
                     }
 
-                    return true;
+                    if (anyUpdated)
+                        database.Write(wb);
                 }
-                catch (Exception e)
-                {
-                    Logging.error("Activity: updateValue failed: {0}", e);
-                    return false;
-                }
+
+                return anyUpdated;
             }
         }
     }
@@ -793,7 +828,7 @@ namespace IXICore.Activity
             }
         }
 
-        public List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[] fromKey = null, int count = 0, bool descending = false)
+        public List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[] fromActivityId = null, int count = 0, bool descending = false)
         {
             lock (openDatabases)
             {
@@ -804,7 +839,7 @@ namespace IXICore.Activity
                     throw new Exception(string.Format("Cannot access activity database."));
                 }
 
-                return db.getActivitiesBySeedHashAndType(seedHash.AsSpan(0, 16).ToArray(), type, fromKey, count, descending);
+                return db.getActivitiesBySeedHashAndType(seedHash.AsSpan(0, 16).ToArray(), type, fromActivityId, count, descending);
             }
         }
 
@@ -848,7 +883,6 @@ namespace IXICore.Activity
             {
                 var db = getDatabase(0);
                 return db.updateValue(id, value);
-                return true;
             }
         }
     }

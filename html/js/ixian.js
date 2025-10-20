@@ -1,4 +1,4 @@
-﻿/*! Ixian Core | MIT License | github.com/ProjectIxian/Ixian-Core */
+﻿/*! Ixian Core | MIT License | github.com/ixian-platform/Ixian-Core */
 
 var primaryAddress = null;
 
@@ -130,7 +130,7 @@ function addressListToString(jsonArr, includeAmounts) {
 
 function getActivity() {
     var activity_type_el = document.getElementById("activity_type");
-    $.getJSON("activity?type=" + activity_type_el.options[activity_type_el.selectedIndex].value + "&descending=true", {})
+    $.getJSON("activity2?type=" + activity_type_el.options[activity_type_el.selectedIndex].value + "&descending=true", {})
         .done(function (data) {
             document.getElementById("payments").innerHTML = "";
             for (var i in data["result"]) {
@@ -164,6 +164,10 @@ function getActivity() {
                     htmlEl.className += " received";
                     htmlEl.getElementsByClassName("pamount")[0].innerHTML = data["result"][i]["value"];
                     htmlEl.getElementsByClassName("pdesc")[0].innerHTML += "<br/>Transaction fee Reward";
+                } else if (type == 400) {
+                    htmlEl.className += " sent";
+                    htmlEl.getElementsByClassName("pamount")[0].innerHTML = data["result"][i]["value"];
+                    htmlEl.getElementsByClassName("pdesc")[0].innerHTML += "<br/>IXI Names";
                 }
                 var date = new Date(data["result"][i]["timestamp"] * 1000);
                 htmlEl.getElementsByClassName("pamount")[0].innerHTML += "<br/><span class=\"pdate\">" + date.toLocaleString() + "</span>";

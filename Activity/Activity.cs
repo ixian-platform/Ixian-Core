@@ -43,7 +43,11 @@ namespace IXICore.Activity
         /// <summary>
         /// Contact request was received.
         /// </summary>
-        ContactRequest = 300
+        ContactRequest = 300,
+        /// <summary>
+        /// IXI Name Management transaction.
+        /// </summary>
+        IxiName = 400
     }
 
     /// <summary>
@@ -188,18 +192,18 @@ namespace IXICore.Activity
             this.status = status;
             this.blockHeight = blockHeight;
         }
+
         /// <summary>
-        /// Reconstructs from serialized bytes (excluding seedHash)
+        /// Reconstructs from serialized bytes
         /// </summary>
-        public ActivityObject(byte[] bytes)
+        public ActivityObject(byte[] bytes, byte[] seedHash, ActivityType type, byte[] id, byte[] metaBytes)
         {
             using (MemoryStream ms = new MemoryStream(bytes))
             using (BinaryReader br = new BinaryReader(ms))
             {
-                type = (ActivityType)br.ReadIxiVarInt();
-
-                int idLen = (int)br.ReadIxiVarUInt();
-                id = br.ReadBytes(idLen);
+                this.seedHash = seedHash;
+                this.type = type;
+                this.id = id;
 
                 int wlLen = (int)br.ReadIxiVarUInt();
                 walletAddress = new Address(br.ReadBytes(wlLen));
@@ -228,24 +232,36 @@ namespace IXICore.Activity
                 int valLen = (int)br.ReadIxiVarUInt();
                 value = new IxiNumber(br.ReadBytes(valLen));
 
-                timestamp = (int)br.ReadIxiVarUInt();
-                status = (ActivityStatus)br.ReadByte();
-                blockHeight = br.ReadIxiVarUInt();
+                if (metaBytes != null)
+                {
+                    var metaData = ParseMetaBytes(metaBytes);
+                    status = metaData.status;
+                    blockHeight = metaData.blockHeight;
+                    timestamp = metaData.timestamp;
+                }
+            }
+        }
+
+        public static (ActivityStatus status, ulong blockHeight, long timestamp) ParseMetaBytes(byte[] metaBytes)
+        {
+            using (MemoryStream ms = new MemoryStream(metaBytes))
+            using (BinaryReader br = new BinaryReader(ms))
+            {
+                var status = (ActivityStatus)br.ReadByte();
+                var blockHeight = br.ReadIxiVarUInt();
+                var timestamp = (int)br.ReadIxiVarUInt();
+                return (status, blockHeight, timestamp);
             }
         }
 
         /// <summary>
-        /// Serialize the object to bytes, excluding seedHash.
+        /// Serialize the object to bytes, excluding seedHash, status, blockheight, timestamp, type and id.
         /// </summary>
-        public byte[] getBytes()
+        public byte[] GetBytes()
         {
             using (MemoryStream ms = new MemoryStream())
             using (BinaryWriter bw = new BinaryWriter(ms))
             {
-                bw.Write(((int)type).GetIxiVarIntBytes());
-
-                bw.Write(id.GetIxiBytes());
-
                 bw.Write(walletAddress.addressNoChecksum.GetIxiBytes());
 
                 bw.Write(addressList.Count.GetIxiVarIntBytes());
@@ -265,9 +281,24 @@ namespace IXICore.Activity
 
                 bw.Write(value.getBytes().GetIxiBytes());
 
-                bw.Write(timestamp.GetIxiVarIntBytes());
+                bw.Flush();
+                return ms.ToArray();
+            }
+        }
+
+        public byte[] GetMetaBytes()
+        {
+            return GetMetaBytes(status, blockHeight, timestamp);
+        }
+
+        public static byte[] GetMetaBytes(ActivityStatus status, ulong blockHeight, long timestamp)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            using (BinaryWriter bw = new BinaryWriter(ms))
+            {
                 bw.Write((byte)status);
                 bw.Write(blockHeight.GetIxiVarIntBytes());
+                bw.Write(timestamp.GetIxiVarIntBytes());
 
                 bw.Flush();
                 return ms.ToArray();
