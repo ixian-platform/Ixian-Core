@@ -553,7 +553,7 @@ namespace IXICore.Activity
                     {
                         if (!Directory.Exists(db_path))
                         {
-                            Logging.info("Activity: Open of '{0} requested with onlyExisting = true, but it does not exist.", db_path);
+                            Logging.trace("Activity: Open of '{0} requested with onlyExisting = true, but it does not exist.", db_path);
                             return null;
                         }
                     }
@@ -836,7 +836,7 @@ namespace IXICore.Activity
 
                 if (db == null)
                 {
-                    throw new Exception(string.Format("Cannot access activity database."));
+                    return new();
                 }
 
                 return db.getActivitiesBySeedHashAndType(seedHash.AsSpan(0, 16).ToArray(), type, fromActivityId, count, descending);
