@@ -1930,7 +1930,7 @@ namespace IXICore.Streaming
 
             if (fm.transactionId == "")
             {
-                SortedDictionary<Address, ToEntry> to_list = new SortedDictionary<Address, ToEntry>(new AddressComparer());
+                Dictionary<Address, ToEntry> to_list = new Dictionary<Address, ToEntry>(new AddressComparer());
 
                 Address from = IxianHandler.getWalletStorage().getPrimaryAddress();
                 IxiNumber price = bot.getMessagePrice(fm.payableDataLen);

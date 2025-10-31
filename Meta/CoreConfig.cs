@@ -139,11 +139,6 @@ namespace IXICore
         public static readonly bool threadLiveCheckEnabled = false;
 
         /// <summary>
-        /// Command to execute when a new transaction is received for this wallet.
-        /// </summary>
-        public static string walletNotifyCommand = "";
-
-        /// <summary>
         /// Unique node identifier
         /// </summary>
         public static byte[] device_id = System.Guid.NewGuid().ToByteArray();

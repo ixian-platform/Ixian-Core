@@ -258,6 +258,11 @@ namespace IXICore.Activity
 
         private void updateMinMax(WriteBatch writeBatch, ulong blockNum)
         {
+            if (blockNum == 0)
+            {
+                return;
+            }
+
             if (minBlockNumber == 0 || blockNum < minBlockNumber)
             {
                 minBlockNumber = blockNum;
@@ -436,12 +441,14 @@ namespace IXICore.Activity
                         byte[] metaBytes = ActivityObject.GetMetaBytes(status, blockHeight, ts);
                         wb.Put(metaKey, metaBytes, activityCF);
 
-                        updateMinMax(wb, blockHeight);
                         anyUpdated = true;
                     }
 
                     if (anyUpdated)
+                    {
+                        updateMinMax(wb, blockHeight);
                         database.Write(wb);
+                    }
                 }
 
                 return anyUpdated;
