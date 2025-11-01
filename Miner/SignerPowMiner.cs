@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian OU
+﻿// Copyright (C) 2017-2025 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -13,41 +13,46 @@
 using IXICore.Meta;
 using IXICore.Utils;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Threading;
 
 namespace IXICore.Miner
 {
-    class SignerPowMiner
+    public class SignerPowMiner
     {
-        public bool pause = false; // Flag to toggle miner activity
+        private const int nonceLength = 64;
 
         IxianKeyPair currentKeyPair = null;
+        ulong keyPairGeneratedBlockHeight = 0;
         Block activeBlock = null;
         private ulong currentBlockNum = 0; // Mining block number
-        public SignerPowSolution lastSignerPowSolution { get; private set; } = null;
+        private SignerPowSolution lastSignerPowSolution = null;
         private ulong startedSolvingBlockHeight = 0; // Started solving time
-        private ulong previousSolutionBlockHeight = 0;
         private IxiNumber solvingDifficulty = 0;
 
+        // Stats
         public ulong lastHashRate { get; private set; } = 0; // Last reported hash rate
         private ulong hashesPerSecond = 0; // Total number of hashes per second
         private DateTime lastStatTime; // Last statistics output time
+        public static long solutionsFound { get; private set; } = 0;
 
+        public bool pause = true; // Flag to toggle miner activity
         private bool started = false;
         private bool shouldStop = false; // flag to signal shutdown of threads
 
 
-        bool blockReadyForMining = false;
-
         [ThreadStatic] private static IxianKeyPair activeKeyPair = null;
         [ThreadStatic] private static byte[] activeBlockChallenge = null;
         [ThreadStatic] private static ulong activeBlockChallengeBlockNum = 0;
+        [ThreadStatic] private static int activeBlockChallengeHeaderLength = 0;
 
         [ThreadStatic] private static byte[] curNonce = null; // Used for random nonce
 
-        public static long solutionsFound { get; private set; } = 0;
+
+        SortedDictionary<ulong, SignerPowSolution> solutions = new();
 
         public SignerPowMiner()
         {
@@ -56,7 +61,7 @@ namespace IXICore.Miner
         }
 
         // Starts the mining threads
-        public bool start(int miningThreads)
+        public bool Start(int miningThreads)
         {
             if (started)
             {
@@ -73,14 +78,14 @@ namespace IXICore.Miner
             shouldStop = false;
 
             // Start primary mining thread
-            Thread manager_thread = new Thread(threadLoop);
+            Thread manager_thread = new Thread(ThreadLoop);
             manager_thread.Name = "PresenceListMiner_Manager_Thread";
             manager_thread.Start();
 
             // Start secondary worker threads
             for (int i = 0; i < miningThreads; i++)
             {
-                Thread worker_thread = new Thread(secondaryThreadLoop);
+                Thread worker_thread = new Thread(SecondaryThreadLoop);
                 worker_thread.Name = "PresenceListMiner_Worker_Thread_#" + i.ToString();
                 worker_thread.Start();
             }
@@ -89,31 +94,22 @@ namespace IXICore.Miner
         }
 
         // Signals all the mining threads to stop
-        public bool stop()
+        public bool Stop()
         {
             shouldStop = true;
             started = false;
             return true;
         }
 
-        private void threadLoop()
+        private void ThreadLoop()
         {
             while (!shouldStop)
             {
                 try
                 {
-                    searchForBlock();
-
-                    // Output mining stats
-                    TimeSpan timeSinceLastStat = DateTime.UtcNow - lastStatTime;
-                    if (timeSinceLastStat.TotalSeconds > 5)
-                    {
-                        lastStatTime = DateTime.UtcNow;
-                        lastHashRate = hashesPerSecond / (ulong)timeSinceLastStat.TotalSeconds;
-                        hashesPerSecond = 0;
-                    }
-
-                    sendFoundSolution();
+                    UpdateActiveBlock();
+                    UpdateStats();
+                    RemoveExpiredSolutions();
                 }
                 catch (Exception e)
                 {
@@ -123,19 +119,38 @@ namespace IXICore.Miner
             }
         }
 
-        private void secondaryThreadLoop()
+        private void ResetStats()
         {
+            lastStatTime = DateTime.UtcNow;
+            lastHashRate = hashesPerSecond;
+            hashesPerSecond = 0;
+        }
+
+        private void UpdateStats()
+        {
+            TimeSpan timeSinceLastStat = DateTime.UtcNow - lastStatTime;
+            if (timeSinceLastStat.TotalSeconds > 5)
+            {
+                lastStatTime = DateTime.UtcNow;
+                lastHashRate = hashesPerSecond / (ulong)timeSinceLastStat.TotalSeconds;
+                hashesPerSecond = 0;
+            }
+        }
+
+        private void SecondaryThreadLoop()
+        {
+            Thread.CurrentThread.IsBackground = true;
             while (!shouldStop)
             {
                 try
                 {
-                    if (blockReadyForMining == false)
+                    if (currentBlockNum == 0)
                     {
                         Thread.Sleep(500);
                         continue;
                     }
 
-                    calculatePow();
+                    CalculateHash();
                 }
                 catch (Exception e)
                 {
@@ -145,16 +160,15 @@ namespace IXICore.Miner
             }
         }
 
-        public void forceSearchForBlock()
+        private void UpdateActiveBlock()
         {
-            blockReadyForMining = false;
-            lastSignerPowSolution = null;
-        }
+            if (pause)
+            {
+                currentBlockNum = 0;
+                ResetStats();
+                return;
+            }
 
-
-        // Returns the most recent fully accepted block
-        private void searchForBlock()
-        {
             Block candidateBlock = IxianHandler.getLastBlock();
 
             if (candidateBlock == null)
@@ -163,96 +177,74 @@ namespace IXICore.Miner
                 return;
             }
 
-            if (pause
-                || PresenceList.myPresenceType == 'W'
-                || candidateBlock.version < BlockVer.v10)
-            {
-                // paused or not synced/worker node or lower than v10
-                blockReadyForMining = false;
-                currentBlockNum = 0;
-                lastStatTime = DateTime.UtcNow;
-                lastHashRate = hashesPerSecond;
-                hashesPerSecond = 0;
-                return;
-            }
+            ulong lastBlockHeight = candidateBlock.blockNum;
+            ulong minCalculationBlockCount = ConsensusConfig.getPlPowMinCalculationBlockTime(IxianHandler.getLastBlockVersion());
 
-            uint blockOffset = 7;
-
-            if (candidateBlock.blockNum <= 14)
+            if (currentBlockNum > 0)
             {
-                candidateBlock = IxianHandler.getBlockHeader(1);
+                // Check if we're mining for at least X blocks and that the blockchain isn't stuck
+                if (solutions.Any(x => x.Key >= startedSolvingBlockHeight)
+                    && lastBlockHeight - startedSolvingBlockHeight >= minCalculationBlockCount
+                    && IxianHandler.getTimeSinceLastBlock() < CoreConfig.blockSignaturePlCheckTimeout)
+                {
+                    // Stop mining on all threads
+                    currentBlockNum = 0;
+                    ResetStats();
+                    return;
+                }
             }
             else
             {
-                candidateBlock = IxianHandler.getBlockHeader(candidateBlock.blockNum - blockOffset);
+                ulong calculationInterval = ConsensusConfig.getPlPowCalculationInterval();
+
+                if (candidateBlock.blockNum + calculationInterval < IxianHandler.getHighestKnownNetworkBlockHeight())
+                {
+                    // Catching up to the network
+                    return;
+                }
+
+                if (lastSignerPowSolution != null
+                    && lastSignerPowSolution.blockNum + calculationInterval > lastBlockHeight
+                    && IxianHandler.getTimeSinceLastBlock() < CoreConfig.blockSignaturePlCheckTimeout)
+                {
+                    // Cooldown
+                    return;
+                }
             }
 
-            if (candidateBlock == null)
-            {
-                // Not ready yet
-                return;
-            }
-
-            solvingDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0);
-
-            if (solvingDifficulty < 0)
-            {
-                Logging.error("SignerPowMiner: Solving difficulty is negative.");
-                return;
-            }
-
-            if (blockReadyForMining
-                && currentBlockNum == candidateBlock.blockNum
+            if (currentBlockNum == candidateBlock.blockNum
                 && activeBlock.blockChecksum.SequenceEqual(candidateBlock.blockChecksum))
             {
                 // already mining this block
                 return;
             }
 
-            activeBlock = candidateBlock;
-            currentBlockNum = candidateBlock.blockNum;
-
-            ulong calculationInterval = ConsensusConfig.getPlPowCalculationInterval(IxianHandler.getLastBlockVersion());
-
-            ulong highestNetworkBlockHeight = IxianHandler.getHighestKnownNetworkBlockHeight();
-            if (candidateBlock.blockNum + calculationInterval + blockOffset < highestNetworkBlockHeight)
+            if (keyPairGeneratedBlockHeight + minCalculationBlockCount < lastBlockHeight)
             {
-                // Catching up to the network
-                return;
+                currentKeyPair = CryptoManager.lib.generateKeys(2048, 2); // TODO move to config
+                keyPairGeneratedBlockHeight = lastBlockHeight;
             }
 
-            var submittedSolution = PresenceList.getPowSolution();
-
-            if (lastSignerPowSolution != null)
+            if (currentBlockNum == 0)
             {
-                if (IxianHandler.getTimeSinceLastBlock() < CoreConfig.blockSignaturePlCheckTimeout
-                    && lastSignerPowSolution.blockNum + calculationInterval > highestNetworkBlockHeight
-                    && (submittedSolution != null && solvingDifficulty <= submittedSolution.difficulty))
-                {
-                    // If the chain isn't stuck and we've already processed PoW within the interval
-                    return;
-                }
-
-                if (previousSolutionBlockHeight == lastSignerPowSolution.blockNum)
-                {
-                    return;
-                }
-
-                previousSolutionBlockHeight = lastSignerPowSolution.blockNum;
+                startedSolvingBlockHeight = lastBlockHeight;
             }
 
-            startedSolvingBlockHeight = highestNetworkBlockHeight;
-
-            currentKeyPair = CryptoManager.lib.generateKeys(2048, 2); // TODO move to config with v11
             activeBlock = candidateBlock;
-            currentBlockNum = candidateBlock.blockNum;
+            currentBlockNum = activeBlock.blockNum;
 
-            blockReadyForMining = true;
+            solvingDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0);
+
+            if (solvingDifficulty < 0)
+            {
+                Logging.error("SignerPowMiner: Solving difficulty is negative.");
+            }
 
             return;
         }
 
-        private byte[] randomNonce(int length)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private byte[] RandomNonce(int length)
         {
             if (curNonce == null)
             {
@@ -276,45 +268,64 @@ namespace IXICore.Miner
             return curNonce;
         }
 
-        private void calculatePow()
+        private byte[] PrepareChallenge(Block block)
         {
-            // PoW = sha3_512sq(BlockNum + BlockChecksum + RecipientAddress + pubKeyHash + Nonce)
-            byte[] nonce = randomNonce(64);
-            if (activeBlockChallengeBlockNum != currentBlockNum)
+            byte[] blockNumBytes = block.blockNum.GetIxiVarIntBytes();
+            byte[] blockChecksum = block.blockChecksum;
+
+            byte[] recipientAddress = IxianHandler.primaryWalletAddress.addressNoChecksum;
+            activeKeyPair = currentKeyPair;
+            byte[] activePubKeyHash;
+            if (activeKeyPair.publicKeyBytes.Length > 64)
             {
-                var block = activeBlock;
-                byte[] blockNumBytes = block.blockNum.GetIxiVarIntBytes();
-                byte[] blockChecksum = block.blockChecksum;
-
-                byte[] recipientAddress = IxianHandler.primaryWalletAddress.addressNoChecksum;
-                activeKeyPair = currentKeyPair;
-                byte[] activePubKeyHash;
-                if (activeKeyPair.publicKeyBytes.Length > 64)
-                {
-                    activePubKeyHash = CryptoManager.lib.sha3_512sq(activeKeyPair.publicKeyBytes);
-                }
-                else
-                {
-                    activePubKeyHash = activeKeyPair.publicKeyBytes;
-                }
-                activeBlockChallengeBlockNum = currentBlockNum;
-
-                activeBlockChallenge = new byte[blockNumBytes.Length + blockChecksum.Length + recipientAddress.Length + activePubKeyHash.Length + 64];
-                System.Buffer.BlockCopy(blockNumBytes, 0, activeBlockChallenge, 0, blockNumBytes.Length);
-                System.Buffer.BlockCopy(blockChecksum, 0, activeBlockChallenge, blockNumBytes.Length, blockChecksum.Length);
-                System.Buffer.BlockCopy(recipientAddress, 0, activeBlockChallenge, blockNumBytes.Length + blockChecksum.Length, recipientAddress.Length);
-                System.Buffer.BlockCopy(activePubKeyHash, 0, activeBlockChallenge, blockNumBytes.Length + blockChecksum.Length + recipientAddress.Length, activePubKeyHash.Length);
+                activePubKeyHash = CryptoManager.lib.sha3_512sq(activeKeyPair.publicKeyBytes);
             }
-            System.Buffer.BlockCopy(nonce, 0, activeBlockChallenge, activeBlockChallenge.Length - 64, nonce.Length);
+            else
+            {
+                activePubKeyHash = activeKeyPair.publicKeyBytes;
+            }
+
+            byte[] challenge = new byte[blockNumBytes.Length + blockChecksum.Length + recipientAddress.Length + activePubKeyHash.Length + 64];
+            Buffer.BlockCopy(blockNumBytes, 0, challenge, 0, blockNumBytes.Length);
+            Buffer.BlockCopy(blockChecksum, 0, challenge, blockNumBytes.Length, blockChecksum.Length);
+            Buffer.BlockCopy(recipientAddress, 0, challenge, blockNumBytes.Length + blockChecksum.Length, recipientAddress.Length);
+            Buffer.BlockCopy(activePubKeyHash, 0, challenge, blockNumBytes.Length + blockChecksum.Length + recipientAddress.Length, activePubKeyHash.Length);
+
+            return challenge;
+        }
+
+        // PoW = sha3_512sq(BlockNum + BlockChecksum + RecipientAddress + pubKeyHash + Nonce)
+        public void CalculateHash(byte[] nonce = null)
+        {
+            if (currentBlockNum == 0)
+            {
+                return;
+            }
+
+            if (nonce == null)
+            {
+                nonce = RandomNonce(nonceLength);
+            }
+
+            var block = activeBlock;
+
+            if (activeBlockChallengeBlockNum != block.blockNum)
+            {
+                activeBlockChallenge = PrepareChallenge(block);
+                activeBlockChallengeBlockNum = block.blockNum;
+                activeBlockChallengeHeaderLength = activeBlockChallenge.Length - nonceLength;
+            }
+
+            nonce.AsSpan().CopyTo(activeBlockChallenge.AsSpan(activeBlockChallengeHeaderLength, nonceLength));
             byte[] hash = CryptoManager.lib.sha3_512sq(activeBlockChallenge);
 
             hashesPerSecond++;
 
-            handleFoundSolution(hash, nonce);
+            ProcessSolution(hash, nonce);
         }
 
-        // Process found solution and pass it to main thread for further processing
-        private void handleFoundSolution(byte[] hash, byte[] nonce)
+        // Process found solution and temporarily store it if valid
+        private void ProcessSolution(byte[] hash, byte[] nonce)
         {
             // pre-validate hash
             if (hash[hash.Length - 1] != 0
@@ -325,68 +336,68 @@ namespace IXICore.Miner
 
             IxiNumber hashDifficulty = SignerPowSolution.hashToDifficulty(hash);
 
-            if (hashDifficulty >= solvingDifficulty)
-            {
-                // valid hash
-                var lastSolution = lastSignerPowSolution;
-                if (lastSolution == null
-                    || lastSolution.blockNum != activeBlockChallengeBlockNum
-                    || (lastSolution.blockNum == activeBlockChallengeBlockNum && hashDifficulty > lastSolution.difficulty))
-                {
-                    Logging.info("SOLUTION FOUND FOR BLOCK #{0} - {1} > {2} - {3}", activeBlock.blockNum, hashDifficulty, solvingDifficulty, Crypto.hashToString(hash));
-
-                    byte[] nonceCopy = new byte[nonce.Length];
-                    Array.Copy(nonce, nonceCopy, nonce.Length);
-
-                    SignerPowSolution signerPow = new SignerPowSolution(IxianHandler.primaryWalletAddress)
-                    {
-                        blockNum = activeBlockChallengeBlockNum,
-                        solution = nonceCopy,
-                        keyPair = activeKeyPair,
-                        signingPubKey = activeKeyPair.publicKeyBytes
-                    };
-
-                    lastSignerPowSolution = signerPow;
-                    solvingDifficulty = hashDifficulty;
-                }
-                solutionsFound++;
-            }
-        }
-
-        // Broadcasts the solution to the network
-        private void sendFoundSolution()
-        {
-            var newSolution = lastSignerPowSolution;
-            if (newSolution == null)
+            if (hashDifficulty < solvingDifficulty)
             {
                 return;
             }
 
-            var solution = PresenceList.getPowSolution();
-            if (solution != null)
-            {
-                if (newSolution.difficulty <= solution.difficulty
-                    && solution.blockNum + ConsensusConfig.getPlPowBlocksValidity(IxianHandler.getLastBlockVersion()) - 1 > IxianHandler.getHighestKnownNetworkBlockHeight()
-                    && solution.difficulty > IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0))
-                {
-                    // If the new solution has a lower difficulty than the previously submitted solution and the previously submitted solution is still valid
+            // valid hash
+            Logging.info("SOLUTION FOUND FOR BLOCK #{0} - {1} > {2} - {3}", activeBlockChallengeBlockNum, hashDifficulty, solvingDifficulty, Crypto.hashToString(hash));
 
-                    // Check if we're mining for at least X minutes and that the blockchain isn't stuck
-                    if (IxianHandler.getHighestKnownNetworkBlockHeight() - startedSolvingBlockHeight >= ConsensusConfig.getPlPowMinCalculationBlockTime(IxianHandler.getLastBlockVersion())
-                        && previousSolutionBlockHeight != newSolution.blockNum
-                        && IxianHandler.getTimeSinceLastBlock() < CoreConfig.blockSignaturePlCheckTimeout)
-                    {
-                        // Reset the blockReadyForMining, to stop mining on all threads
-                        blockReadyForMining = false;
-                        currentBlockNum = 0;
-                    }
-                    return;
-                }
+            if (activeBlockChallengeBlockNum == currentBlockNum)
+            {
+                solvingDifficulty = hashDifficulty;
             }
 
-            PresenceList.setPowSolution(newSolution);
+            byte[] nonceCopy = GC.AllocateUninitializedArray<byte>(nonce.Length);
+            nonce.AsSpan().CopyTo(nonceCopy);
 
-            IxianHandler.onSignerSolutionFound();
+            SignerPowSolution signerPow = new SignerPowSolution(IxianHandler.primaryWalletAddress)
+            {
+                blockNum = activeBlockChallengeBlockNum,
+                solution = nonceCopy,
+                keyPair = activeKeyPair,
+                signingPubKey = activeKeyPair.publicKeyBytes
+            };
+
+            lock (solutions)
+            {
+                lastSignerPowSolution = signerPow;
+                solutions[activeBlockChallengeBlockNum] = signerPow;
+            }
+
+            solutionsFound++;
+        }
+
+        private void RemoveExpiredSolutions()
+        {
+            lock (solutions)
+            {
+                foreach (var solution in solutions.ToList())
+                {
+                    if (solution.Key + ConsensusConfig.getPlPowBlocksValidity(IxianHandler.getLastBlockVersion()) - 1 < IxianHandler.getHighestKnownNetworkBlockHeight())
+                    {
+                        solutions.Remove(solution.Key);
+                    }
+                }
+            }
+        }
+
+        public IEnumerable<SignerPowSolution> GetSolutions(ulong upToBlockNum)
+        {
+            lock (solutions)
+            {
+                return solutions.Values
+                    .Where(x => upToBlockNum == 0 || x.blockNum < upToBlockNum);
+            }
+        }
+
+        public SignerPowSolution? GetBestSolution(ulong upToBlockNum)
+        {
+            lock (solutions)
+            {
+                return GetSolutions(upToBlockNum).OrderByDescending(x => x.difficulty).FirstOrDefault();
+            }
         }
     }
 }

@@ -234,13 +234,9 @@ namespace IXICore
         /// Number of blocks after how many to re-calculate the PL PoW since last solution.
         /// </summary>
         private static readonly ulong plPowCalculationIntervalOld = 40;
-        private static readonly ulong plPowCalculationInterval = 20;
+        private static readonly ulong plPowCalculationInterval = 15;
         public static ulong getPlPowCalculationInterval(int blockVersion = -1)
         {
-            if (blockVersion < BlockVer.v12)
-            {
-                return plPowCalculationIntervalOld;
-            }
             return plPowCalculationInterval;
         }
 
