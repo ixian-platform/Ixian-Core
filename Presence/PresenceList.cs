@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using IXICore.Miner;
 using IXICore.Network;
 using IXICore.Utils;
 using System;
@@ -31,8 +32,8 @@ namespace IXICore
             { 'W', new() }
         };
 
-        public static PresenceAddress curNodePresenceAddress { get; private set; } = null;
-        public static Presence curNodePresence { get; private set; } = null;
+        private static PresenceAddress curNodePresenceAddress = null;
+        private static Presence curNodePresence = null;
 
         // private
         private static Dictionary<char, long> presenceCount = new Dictionary<char, long>() {
@@ -57,13 +58,16 @@ namespace IXICore
 
         private static int keepAliveInterval = CoreConfig.serverKeepAliveInterval;
 
+        private static SignerPowMiner? _miner = null;
+
         // Generate an initial presence list
-        public static void init(string initial_ip, int port, char type, int keep_alive_interval)
+        public static void init(string initial_ip, int port, char type, int keep_alive_interval, SignerPowMiner? miner = null)
         {
             Logging.info("Generating presence list.");
 
             _myPublicAddress = string.Format("{0}:{1}", initial_ip, port);
             _myPresenceType = type;
+            _miner = miner;
 
             // Initialize with the default presence state
             curNodePresenceAddress = new PresenceAddress(CoreConfig.device_id, _myPublicAddress, type, CoreConfig.productVersion, 0, null);
@@ -370,10 +374,26 @@ namespace IXICore
         public static KeepAlive generateKeepAlive(bool force_generate)
         {
             KeepAlive ka;
+            ulong networkBlockHeight = IxianHandler.getHighestKnownNetworkBlockHeight();
+            ulong powValidity = ConsensusConfig.getPlPowBlocksValidity();
             if (force_generate
                 || curNodePresenceAddress.lastSeenTime > Clock.getNetworkTimestamp() + 10
-                || Clock.getNetworkTimestamp() - curNodePresenceAddress.lastSeenTime >= keepAliveInterval)
+                || Clock.getNetworkTimestamp() - curNodePresenceAddress.lastSeenTime >= keepAliveInterval
+                || (curNodePresenceAddress.powSolution != null && curNodePresenceAddress.powSolution.blockNum + powValidity < networkBlockHeight))
             {
+                SignerPowSolution powSolution = null;
+                ulong minValidBlockHeight = 0;
+                if (networkBlockHeight > powValidity)
+                {
+                    minValidBlockHeight = networkBlockHeight - powValidity;
+                }
+
+                powSolution = _miner?.GetSolutions(minValidBlockHeight + 7, 0).FirstOrDefault();
+                if (powSolution == null)
+                {
+                    powSolution = _miner?.GetSolutions(minValidBlockHeight, 0).LastOrDefault();
+                }
+
                 ka = new KeepAlive()
                 {
                     deviceId = CoreConfig.device_id,
@@ -381,10 +401,26 @@ namespace IXICore
                     nodeType = curNodePresenceAddress.type,
                     timestamp = Clock.getNetworkTimestamp(),
                     walletAddress = IxianHandler.getWalletStorage().getPrimaryAddress(),
-                    powSolution = curNodePresenceAddress.powSolution
+                    powSolution = powSolution
                 };
+
+                if (ka.hostName == "")
+                {
+                    return null;
+                }
+
+                if (myPresenceType == 'M'
+                    || myPresenceType == 'H')
+                {
+                    if (ka.powSolution == null)
+                    {
+                        return null;
+                    }
+                }
+
                 ka.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
 
+                curNodePresenceAddress.powSolution = ka.powSolution;
                 curNodePresenceAddress.lastSeenTime = ka.timestamp;
                 curNodePresenceAddress.signature = ka.signature;
             }
@@ -405,7 +441,7 @@ namespace IXICore
             return ka;
         }
 
-        // Sends perioding keepalive network messages
+        // Sends periodic keepalive network messages
         private static void keepAlive()
         {
             try
@@ -424,19 +460,10 @@ namespace IXICore
                         {
                             return;
                         }
-                        if (IxianHandler.publicIP == "")
+                        if (forceSendKeepAlive)
                         {
-                            // do not send KA
-                            i = 0;
-                        }
-                        else
-                        {
-                            if (forceSendKeepAlive)
-                            {
-                                Thread.Sleep(1000);
-                                forceSendKeepAlive = false;
-                                break;
-                            }
+                            forceSendKeepAlive = false;
+                            break;
                         }
                         // Sleep for one second
                         Thread.Sleep(1000);
@@ -450,6 +477,13 @@ namespace IXICore
                     try
                     {
                         KeepAlive ka = generateKeepAlive(false);
+
+                        if (ka == null)
+                        {
+                            forceSendKeepAlive = true;
+                            Thread.Sleep(500);
+                            continue;
+                        }
 
                         byte[] ka_bytes = ka.getBytes();
 
@@ -794,13 +828,6 @@ namespace IXICore
             {
                 return new Dictionary<byte[], Presence>(presences, new ByteArrayComparer()).Values.ToList();
             }
-        }
-
-        public static void setPowSolution(SignerPowSolution powSolution)
-        {
-            curNodePresenceAddress.powSolution = powSolution;
-            generateKeepAlive(true);
-            forceSendKeepAlive = true;
         }
 
         public static SignerPowSolution getPowSolution()
