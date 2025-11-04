@@ -41,7 +41,9 @@ namespace IXICore
         public ulong blockNum;
         public byte[] solution;
         public byte[] signingPubKey;
-        public IxianKeyPair keyPair { private get; set; } // keyPair is not trasmitted over the network
+
+        [JsonIgnore]
+        public IxianKeyPair keyPair; // keyPair is not trasmitted over the network
 
         private Address recipientAddress = null; // solverAddress is not trasmitted over the network
         private byte[] _checksum = null;

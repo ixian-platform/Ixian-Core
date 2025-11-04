@@ -149,6 +149,8 @@ namespace IXICore
                                     || localPA.lastSeenTime + interval < remotePA.lastSeenTime
                                     || (localPA.address != remotePA.address && localPA.lastSeenTime + 10 < remotePA.lastSeenTime))
                                 {
+                                    removePresenceIndex(localPA.type, localPA.lastSeenTime, pr.wallet.addressNoChecksum);
+
                                     localPA.version = remotePA.version;
                                     localPA.address = remotePA.address;
                                     localPA.lastSeenTime = remotePA.lastSeenTime;
@@ -163,7 +165,7 @@ namespace IXICore
                                         presenceCount[remotePA.type]++;
                                         localPA.type = remotePA.type;
                                     }
-                                    addPresenceIndex(localPA, presence);
+                                    addPresenceIndex(localPA, pr);
 
                                     diffPresence.addresses.Add(remotePA);
                                 }
@@ -193,7 +195,7 @@ namespace IXICore
 
                                 presenceCount[remotePA.type]++;
 
-                                addPresenceIndex(remotePA, presence);
+                                addPresenceIndex(remotePA, pr);
 
                                 diffPresence.addresses.Add(remotePA);
                             }
@@ -250,7 +252,12 @@ namespace IXICore
                 return false;
             }
 
-            return inner.Remove(address);
+            var removed = inner.Remove(address);
+            if (removed && inner.Count == 0)
+            {
+                sd.Remove(lastSeenTime);
+            }
+            return removed;
         }
 
         private static void addPresenceIndex(PresenceAddress presenceAddress, Presence presence)
@@ -642,6 +649,8 @@ namespace IXICore
                                 return false;
                             }
 
+                            removePresenceIndex(pa.type, pa.lastSeenTime, listEntry.wallet.addressNoChecksum);
+
                             // Update presence address
                             pa.address = ka.hostName;
                             pa.lastSeenTime = ka.timestamp;
@@ -717,7 +726,7 @@ namespace IXICore
                             continue;
                         }
 
-                        Logging.info("Expired '{0}' lastseen for {1} / {2} / {3}", type, presKV.Value.wallet.ToString(), pa.address, Crypto.hashToString(pa.device));
+                        Logging.trace("Expired '{0}' lastseen for {1} / {2} / {3}", type, presKV.Value.wallet.ToString(), pa.address, Crypto.hashToString(pa.device));
                         removeAddressEntry(presKV.Value.wallet, pa, false);
                     }
                 }
@@ -761,6 +770,12 @@ namespace IXICore
             lock (presences)
             {
                 presences.Clear();
+
+                foreach (var kv in presenceIndexTypeExpiration)
+                {
+                    kv.Value.Clear();
+                }
+
                 foreach (var p in presenceCount)
                 {
                     presenceCount[p.Key] = 0;
@@ -770,7 +785,7 @@ namespace IXICore
 
         public static long countPresences(char type)
         {
-            lock(presenceCount)
+            lock(presences)
             {
                 if (presenceCount.ContainsKey(type))
                 {
@@ -804,17 +819,21 @@ namespace IXICore
         {
             lock (presences)
             {
-                var lastTimestamps = presenceIndexTypeExpiration[type].Values.Take(maxCount);
-                Dictionary<byte[], Presence> presencesByType = new();
-                foreach (var timestampEntries in lastTimestamps.Reverse())
+                Dictionary<byte[], Presence> presencesByType = new(new ByteArrayComparer());
+                foreach (var timestampEntries in presenceIndexTypeExpiration[type].Values.Reverse())
                 {
                     foreach (var presence in timestampEntries)
                     {
-                        presencesByType.Add(presence.Key, presence.Value);
+                        presencesByType.TryAdd(presence.Key, presence.Value);
                         if (presencesByType.Count >= maxCount)
                         {
                             break;
                         }
+                    }
+
+                    if (presencesByType.Count >= maxCount)
+                    {
+                        break;
                     }
                 }
                 return presencesByType.Values.ToList();
