@@ -212,7 +212,8 @@ namespace IXICore.Miner
                     return;
                 }
 
-                if (lastFoundBlockHeight + calculationInterval > lastBlockHeight
+                if (lastBlockHeight > calculationInterval
+                    && lastFoundBlockHeight + calculationInterval > lastBlockHeight
                     && IxianHandler.getTimeSinceLastBlock() < CoreConfig.blockSignaturePlCheckTimeout)
                 {
                     // Cooldown
