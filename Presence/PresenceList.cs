@@ -33,7 +33,7 @@ namespace IXICore
         };
 
         private static PresenceAddress curNodePresenceAddress = null;
-        private static Presence curNodePresence = null;
+        public static Presence curNodePresence { get; private set; } = null;
 
         // private
         private static Dictionary<char, long> presenceCount = new Dictionary<char, long>() {
@@ -52,7 +52,37 @@ namespace IXICore
 
 
         private static string _myPublicAddress = "";
+        public static string myPublicAddress
+        {
+            get { return _myPublicAddress; }
+            set
+            {
+                _myPublicAddress = value;
+                if (curNodePresenceAddress != null)
+                {
+                    if (curNodePresenceAddress.address != value)
+                    {
+                        curNodePresenceAddress.address = value;
+                        generateKeepAlive(true);
+                        forceSendKeepAlive = true;
+                    }
+                }
+            }
+        }
+
         private static char _myPresenceType = 'C';
+        public static char myPresenceType
+        {
+            get { return _myPresenceType; }
+            set
+            {
+                _myPresenceType = value;
+                if (curNodePresenceAddress != null)
+                {
+                    curNodePresenceAddress.type = value;
+                }
+            }
+        }
 
         private static bool running = false;
 
@@ -106,7 +136,13 @@ namespace IXICore
                         {
                             if (remotePA.signature == null)
                             {
-                                Logging.warn("Received presence with no signature: {1} / {2} / {3}", presence.wallet.ToString(), remotePA.address, Crypto.hashToString(remotePA.device));
+                                Logging.warn("Received presence with no signature: {0} / {1} / {2}", presence.wallet.ToString(), remotePA.address, Crypto.hashToString(remotePA.device));
+                                continue;
+                            }
+
+                            if (!IsValidPresenceType(remotePA.type))
+                            {
+                                Logging.warn("Unknown Presence Type '{0}'", remotePA.type);
                                 continue;
                             }
 
@@ -144,10 +180,11 @@ namespace IXICore
                                 {
                                     interval = CoreConfig.relayKeepAliveInterval;
                                 }
+                                int intervalHalved = interval / 2;
 
                                 if (localPA.signature == null
-                                    || localPA.lastSeenTime + interval < remotePA.lastSeenTime
-                                    || (localPA.address != remotePA.address && localPA.lastSeenTime + 10 < remotePA.lastSeenTime))
+                                    || localPA.lastSeenTime + intervalHalved < remotePA.lastSeenTime
+                                    || (localPA.address != remotePA.address && localPA.lastSeenTime + 2 <= remotePA.lastSeenTime))
                                 {
                                     removePresenceIndex(localPA.type, localPA.lastSeenTime, pr.wallet.addressNoChecksum);
 
@@ -220,6 +257,12 @@ namespace IXICore
 
                     foreach (PresenceAddress pa in presence.addresses)
                     {
+                        if (!IsValidPresenceType(pa.type))
+                        {
+                            Logging.warn("Unknown Presence Type '{0}'", pa.type);
+                            continue;
+                        }
+
                         if (pa.type == 'M' || pa.type == 'H')
                         {
                             PeerStorage.addPeerToPeerList(pa.address, presence.wallet, pa.lastSeenTime, 0, 0, 0);
@@ -238,6 +281,19 @@ namespace IXICore
                     return presence;
                 }
             }
+        }
+
+        private static bool IsValidPresenceType(char type)
+        {
+            switch (type)
+            {
+                case 'C':
+                case 'R':
+                case 'M':
+                case 'H':
+                    return true;
+            }
+            return false;
         }
 
         private static bool removePresenceIndex(char type, long lastSeenTime, byte[] address)
@@ -287,8 +343,9 @@ namespace IXICore
 
                         if (address != null)
                         {
-                            addresses_to_remove = listEntry.addresses.FindAll(x => x == address);
-                        }else
+                            addresses_to_remove = listEntry.addresses.FindAll(x => x.device.SequenceEqual(address.device));
+                        }
+                        else
                         {
                             addresses_to_remove = new List<PresenceAddress>(listEntry.addresses);
                         }
@@ -333,7 +390,7 @@ namespace IXICore
         {
             Presence presence = new Presence(bytes);
 
-            if(presence.verify(minDifficulty))
+            if (presence.verify(minDifficulty))
             {
                 return updateEntry(presence, true);
             }
@@ -383,22 +440,27 @@ namespace IXICore
             KeepAlive ka;
             ulong networkBlockHeight = IxianHandler.getHighestKnownNetworkBlockHeight();
             ulong powValidity = ConsensusConfig.getPlPowBlocksValidity();
+            long currentTime = Clock.getNetworkTimestamp();
+            bool timeOverflow = curNodePresenceAddress.lastSeenTime > currentTime + 10;
             if (force_generate
-                || curNodePresenceAddress.lastSeenTime > Clock.getNetworkTimestamp() + 10
-                || Clock.getNetworkTimestamp() - curNodePresenceAddress.lastSeenTime >= keepAliveInterval
+                || timeOverflow
+                || currentTime - curNodePresenceAddress.lastSeenTime >= keepAliveInterval
                 || (curNodePresenceAddress.powSolution != null && curNodePresenceAddress.powSolution.blockNum + powValidity < networkBlockHeight))
             {
-                SignerPowSolution powSolution = null;
+                SignerPowSolution? powSolution = null;
                 ulong minValidBlockHeight = 0;
                 if (networkBlockHeight > powValidity)
                 {
                     minValidBlockHeight = networkBlockHeight - powValidity;
                 }
 
-                powSolution = _miner?.GetSolutions(minValidBlockHeight + 7, 0).FirstOrDefault();
-                if (powSolution == null)
+                if (_miner != null)
                 {
-                    powSolution = _miner?.GetSolutions(minValidBlockHeight, 0).LastOrDefault();
+                    powSolution = _miner.GetSolutions(minValidBlockHeight + 7, 0).FirstOrDefault();
+                    if (powSolution == null)
+                    {
+                        powSolution = _miner.GetSolutions(minValidBlockHeight, 0).LastOrDefault();
+                    }
                 }
 
                 ka = new KeepAlive()
@@ -406,10 +468,16 @@ namespace IXICore
                     deviceId = CoreConfig.device_id,
                     hostName = curNodePresenceAddress.address,
                     nodeType = curNodePresenceAddress.type,
-                    timestamp = Clock.getNetworkTimestamp(),
+                    timestamp = currentTime,
                     walletAddress = IxianHandler.getWalletStorage().getPrimaryAddress(),
                     powSolution = powSolution
                 };
+
+                if (!timeOverflow
+                    && curNodePresenceAddress.lastSeenTime + 2 > ka.timestamp)
+                {
+                    ka.timestamp = curNodePresenceAddress.lastSeenTime + 2;
+                }
 
                 if (ka.hostName == "")
                 {
@@ -559,11 +627,13 @@ namespace IXICore
                 device_id = ka.deviceId;
                 node_type = ka.nodeType;
 
-                if (ka.nodeType == 'C' || ka.nodeType == 'R')
+                if (!IsValidPresenceType(ka.nodeType))
                 {
-                    // all good, continue
+                    Logging.warn("Unknown Presence Type '{0}'", ka.nodeType);
+                    return false;
                 }
-                else if (ka.nodeType == 'M' || ka.nodeType == 'H')
+                
+                if (ka.nodeType == 'M' || ka.nodeType == 'H')
                 {
                     if (ka.version == 1)
                     {
@@ -579,11 +649,6 @@ namespace IXICore
                             }
                         }
                     }
-                }
-                else
-                {
-                    // reject everything else
-                    return false;
                 }
 
                 IxiNumber minSignerPowDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0);
@@ -609,7 +674,7 @@ namespace IXICore
                         return false;
                     }
 
-                    if(!ka.verify(listEntry.pubkey, minSignerPowDifficulty))
+                    if (!ka.verify(listEntry.pubkey, minSignerPowDifficulty))
                     {
                         Logging.warn("[PL] KEEPALIVE tampering for {0} {1}, incorrect Sig.", listEntry.wallet.ToString(), ka.hostName);
                         return false;
@@ -686,7 +751,7 @@ namespace IXICore
                     }
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Logging.error("Exception occurred in receiveKeepAlive: " + e);
                 return false;
@@ -754,12 +819,12 @@ namespace IXICore
 
 
         // Returns the total number of presences in the current list
-        public static long getTotalPresences()
+        public static int getTotalPresences()
         {
-            long total = 0;
+            int total = 0;
             lock (presences)
             {
-                total = presences.LongCount();
+                total = presences.Count;
             }
             return total;
         }
@@ -785,7 +850,7 @@ namespace IXICore
 
         public static long countPresences(char type)
         {
-            lock(presences)
+            lock (presences)
             {
                 if (presenceCount.ContainsKey(type))
                 {
@@ -808,7 +873,7 @@ namespace IXICore
                     return pr;
                 }
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 Logging.error("Exception occurred in getPresenceByAddress: {0}", e);
                 return null;
@@ -852,37 +917,6 @@ namespace IXICore
         public static SignerPowSolution getPowSolution()
         {
             return curNodePresenceAddress.powSolution;
-        }
-
-        public static string myPublicAddress
-        {
-            get { return _myPublicAddress; }
-            set
-            {
-                _myPublicAddress = value;
-                if (curNodePresenceAddress != null)
-                {
-                    if (curNodePresenceAddress.address != value)
-                    {
-                        curNodePresenceAddress.address = value;
-                        generateKeepAlive(true);
-                        forceSendKeepAlive = true;
-                    }
-                }
-            }
-        }
-
-        public static char myPresenceType
-        {
-            get { return _myPresenceType; }
-            set
-            {
-                _myPresenceType = value;
-                if (curNodePresenceAddress != null)
-                {
-                    curNodePresenceAddress.type = value;
-                }
-            }
         }
     }
 }
