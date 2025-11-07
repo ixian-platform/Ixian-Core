@@ -16,6 +16,7 @@ using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Network.Messages;
 using IXICore.RegNames;
+using IXICore.Streaming;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -881,16 +882,21 @@ namespace IXICore
                                 break;
 
                             case ProtocolByeCode.incorrectIp: // incorrect IP
-                                if (IxiUtils.validateIPv4(byeData))
+                                if (PresenceList.myPresenceType == 'M'
+                                    || PresenceList.myPresenceType == 'H'
+                                    || PresenceList.myPresenceType == 'R')
                                 {
-                                    if (NetworkClientManager.getConnectedClients(true).Length < 2
-                                        && NetworkServer.getConnectedClients(true).Length < 2)
+                                    if (IxiUtils.validateIPv4(byeData))
                                     {
-                                        if (!IxianHandler.forceIP)
+                                        if (NetworkClientManager.getConnectedClients(true).Length < 2
+                                            && NetworkServer.getConnectedClients(true).Length < 2)
                                         {
-                                            IxianHandler.publicIP = byeData;
-                                            Logging.warn("Changed internal IP Address to " + byeData + ", reconnecting");
-                                            return;
+                                            if (!IxianHandler.forceIP)
+                                            {
+                                                IxianHandler.publicIP = byeData;
+                                                Logging.warn("Changed internal IP Address to " + byeData + ", reconnecting");
+                                                return;
+                                            }
                                         }
                                     }
                                 }
@@ -899,10 +905,15 @@ namespace IXICore
 
                             case ProtocolByeCode.notConnectable: // not connectable from the internet
                                 NetworkServer.connectable = false;
-                                if (!NetworkServer.isConnectable())
+                                if (PresenceList.myPresenceType == 'M'
+                                    || PresenceList.myPresenceType == 'H'
+                                    || PresenceList.myPresenceType == 'R')
                                 {
-                                    Logging.error("This node must be connectable from the internet, to connect to the network.");
-                                    Logging.error("Please setup uPNP and/or port forwarding on your router for port " + IxianHandler.publicPort + ".");
+                                    if (!NetworkServer.isConnectable())
+                                    {
+                                        Logging.error("This node must be connectable from the internet, to connect to the network.");
+                                        Logging.error("Please setup uPNP and/or port forwarding on your router for port " + IxianHandler.publicPort + ".");
+                                    }
                                 }
                                 break;
 

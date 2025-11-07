@@ -412,12 +412,16 @@ namespace IXICore.Meta
             set
             {
                 _publicPort = value;
-                PresenceList.myPublicAddress = getFullPublicAddress();
             }
         }
 
         public static string getFullPublicAddress()
         {
+            if (string.IsNullOrEmpty(publicIP)
+                || publicPort == 0)
+            {
+                return "";
+            }
             return publicIP + ":" + publicPort;
         }
 

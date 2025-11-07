@@ -62,7 +62,6 @@ namespace IXICore
                 {
                     if (curNodePresenceAddress.address != value)
                     {
-                        curNodePresenceAddress.address = value;
                         generateKeepAlive(true);
                         forceSendKeepAlive = true;
                     }
@@ -95,7 +94,10 @@ namespace IXICore
         {
             Logging.info("Generating presence list.");
 
-            _myPublicAddress = string.Format("{0}:{1}", initial_ip, port);
+            if (!string.IsNullOrEmpty(initial_ip))
+            {
+                _myPublicAddress = string.Format("{0}:{1}", initial_ip, port);
+            }
             _myPresenceType = type;
             _miner = miner;
 
@@ -442,10 +444,12 @@ namespace IXICore
             ulong powValidity = ConsensusConfig.getPlPowBlocksValidity();
             long currentTime = Clock.getNetworkTimestamp();
             bool timeOverflow = curNodePresenceAddress.lastSeenTime > currentTime + 10;
+
             if (force_generate
                 || timeOverflow
                 || currentTime - curNodePresenceAddress.lastSeenTime >= keepAliveInterval
-                || (curNodePresenceAddress.powSolution != null && curNodePresenceAddress.powSolution.blockNum + powValidity < networkBlockHeight))
+                || (curNodePresenceAddress.powSolution != null && curNodePresenceAddress.powSolution.blockNum + powValidity < networkBlockHeight)
+                || curNodePresenceAddress.address != myPublicAddress)
             {
                 SignerPowSolution? powSolution = null;
                 ulong minValidBlockHeight = 0;
@@ -466,7 +470,7 @@ namespace IXICore
                 ka = new KeepAlive()
                 {
                     deviceId = CoreConfig.device_id,
-                    hostName = curNodePresenceAddress.address,
+                    hostName = myPublicAddress,
                     nodeType = curNodePresenceAddress.type,
                     timestamp = currentTime,
                     walletAddress = IxianHandler.getWalletStorage().getPrimaryAddress(),
@@ -495,6 +499,7 @@ namespace IXICore
 
                 ka.sign(IxianHandler.getWalletStorage().getPrimaryPrivateKey());
 
+                curNodePresenceAddress.address = ka.hostName;
                 curNodePresenceAddress.powSolution = ka.powSolution;
                 curNodePresenceAddress.lastSeenTime = ka.timestamp;
                 curNodePresenceAddress.signature = ka.signature;
@@ -511,6 +516,11 @@ namespace IXICore
                     powSolution = curNodePresenceAddress.powSolution,
                     signature = curNodePresenceAddress.signature
                 };
+            }
+
+            if (ka.hostName == "")
+            {
+                return null;
             }
 
             return ka;

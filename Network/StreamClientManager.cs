@@ -247,16 +247,26 @@ namespace IXICore.Network
 
                         if (!netClients.Contains(primaryS2Address))
                         {
-                            primaryS2Address = getConnectedClients(true).First();
                             if (automaticallySetPublicIP)
                             {
-                                var endpoint = streamClients.Find(x => x.getFullAddress(true) == primaryS2Address);
-                                if (endpoint != null)
+                                var connectedClients = getConnectedClients(true);
+                                if (connectedClients.Length > 0)
                                 {
-                                    IxianHandler.publicIP = endpoint.address;
-                                    IxianHandler.publicPort = endpoint.incomingPort;
-                                    PresenceList.forceSendKeepAlive = true;
-                                    Logging.info("Forcing KA from StreamClientManager");
+                                    primaryS2Address = connectedClients.First();
+
+                                    var endpoint = streamClients.Find(x => x.getFullAddress(true) == primaryS2Address);
+                                    if (endpoint != null)
+                                    {
+                                        IxianHandler.publicPort = endpoint.incomingPort;
+                                        IxianHandler.publicIP = endpoint.address;
+                                        PresenceList.forceSendKeepAlive = true;
+                                        Logging.info("Forcing KA from StreamClientManager");
+                                    }
+                                }
+                                else
+                                {
+                                    primaryS2Address = "";
+                                    IxianHandler.publicIP = "";
                                 }
                             }
                         }
@@ -374,11 +384,12 @@ namespace IXICore.Network
 
             string resolved_host = string.Format("{0}:{1}", resolved_server_name, server[1]);
 
-            if (NetworkServer.isRunning())
+            if (NetworkServer.isRunning()
+                && !automaticallySetPublicIP)
             {
                 // Verify against the publicly disclosed ip
                 // Don't connect to self
-                if (!automaticallySetPublicIP && resolved_server_name.Equals(IxianHandler.publicIP, StringComparison.Ordinal))
+                if (resolved_server_name.Equals(IxianHandler.publicIP, StringComparison.Ordinal))
                 {
                     if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
                     {
