@@ -2323,8 +2323,18 @@ namespace IXICore
             if (adjust_amount) //true only if automatically generating from address
             {
                 IxiNumber total_tx_fee = fee;
-                for (int i = 0; i < 2 && transaction.fee != total_tx_fee; i++)
+                for (int i = 0; i < 3 && transaction.fee != total_tx_fee; i++)
                 {
+                    if (relayNodeAddresses != null)
+                    {
+                        relayFee = 0;
+                        foreach (Address relayNodeAddress in relayNodeAddresses)
+                        {
+                            transaction.toList[relayNodeAddress].amount = transaction.fee;
+                            relayFee += transaction.fee;
+                        }
+                    }
+
                     total_tx_fee = transaction.fee;
                     lock (PendingTransactions.pendingTransactions)
                     {
@@ -2335,16 +2345,6 @@ namespace IXICore
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_VERIFY_ERROR, message = "From list is empty" } };
                     }
                     transaction = new Transaction((int)Transaction.Type.Normal, fee, toList, fromList, new Address(pubKey), IxianHandler.getHighestKnownNetworkBlockHeight(), -1, sign_transaction);
-
-                    if (relayNodeAddresses != null)
-                    {
-                        relayFee = 0;
-                        foreach (Address relayNodeAddress in relayNodeAddresses)
-                        {
-                            transaction.toList[relayNodeAddress].amount = transaction.fee;
-                            relayFee += transaction.fee;
-                        }
-                    }
                 }
             }
             else if (auto_fee) // true if user specified both a valid from address and the parameter autofee=true

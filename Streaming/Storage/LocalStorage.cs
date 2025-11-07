@@ -298,7 +298,7 @@ namespace IXICore.Storage
 
                 if (File.Exists(account_filename) == false)
                 {
-                    Logging.error("Cannot read account file.");
+                    Logging.warn("Cannot read account file.");
 
                     // Generate a new wallet
                     return false;
