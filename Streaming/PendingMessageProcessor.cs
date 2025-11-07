@@ -440,10 +440,10 @@ namespace IXICore.Streaming
                         return true;
                     }
                 }
-                return false;
+                return sent;
             }
 
-            return true;
+            return sent;
 
             /*         string pub_k = FriendList.findContactPubkey(msg.recipientAddress);
                      if (pub_k.Length < 1)
