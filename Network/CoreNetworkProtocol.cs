@@ -884,7 +884,8 @@ namespace IXICore
                             case ProtocolByeCode.incorrectIp: // incorrect IP
                                 if (PresenceList.myPresenceType == 'M'
                                     || PresenceList.myPresenceType == 'H'
-                                    || PresenceList.myPresenceType == 'R')
+                                    || PresenceList.myPresenceType == 'R'
+                                    || PresenceList.myPresenceType == 'W')
                                 {
                                     if (IxiUtils.validateIPv4(byeData))
                                     {
