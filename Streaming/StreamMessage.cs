@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Meta;
 using IXICore.Utils;
 using Newtonsoft.Json;
@@ -75,23 +76,35 @@ namespace IXICore
         public int version { get; private set; } = 0;                 // Stream Message version
 
         public StreamMessageCode type;          // Stream Message type
+        [JsonConverter(typeof(AddressConverter))]
         public Address realSender = null;        // Used by group chat bots, isn't transmitted to the network
+        [JsonConverter(typeof(AddressConverter))]
         public Address sender = null;            // Sender wallet
+        
+        [JsonIgnore]
         public Address recipient = null;         // Recipient wallet 
-
+        
+        [JsonIgnore]
         private byte[] transaction = null;       // Unsigned transaction - obsolete, will be removed with v1
 
         [JsonConverter(typeof(StreamMessageDataConverter))]
         public byte[] data = null;              // Actual message data, encrypted or decrypted
+        
+        [JsonIgnore]
         private byte[] sigdata = null;           // Signature data (for S2), encrypted - obsolete, will be removed with v1
-
+        
+        [JsonIgnore]
         public byte[] originalData = null;      // Actual message data as was sent (before decryption)
+        
+        [JsonIgnore]
         public byte[] originalChecksum = null;  // Checksum as it was before decryption
 
+        [JsonIgnore]
         public byte[] signature = null;         // Sender's signature
 
         public StreamMessageEncryptionCode encryptionType;
 
+        [JsonIgnore]
         public bool encrypted = false; // used locally to avoid double encryption of data
 
         public byte[] id;                      // Message unique id - TODO Can probably be removed and a hash used instead

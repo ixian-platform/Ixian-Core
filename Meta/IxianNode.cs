@@ -383,7 +383,7 @@ namespace IXICore.Meta
             {
                 foreach (var wallet in wallets)
                 {
-                    walletList.Add(Base58Check.Base58CheckEncoding.EncodePlain(wallet.Key));
+                    walletList.Add(wallet.Value.getPrimaryAddress().ToString());
                 }
             }
 

@@ -1187,6 +1187,7 @@ namespace IXICore.Streaming
                 {
                     return sendAcceptAdd2(friend);
                 }
+                return true;
             }
             return false;
         }
