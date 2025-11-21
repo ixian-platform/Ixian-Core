@@ -80,8 +80,8 @@ namespace IXICore
         public Address realSender = null;        // Used by group chat bots, isn't transmitted to the network
         [JsonConverter(typeof(AddressConverter))]
         public Address sender = null;            // Sender wallet
-        
-        [JsonIgnore]
+
+        [JsonConverter(typeof(AddressConverter))]
         public Address recipient = null;         // Recipient wallet 
         
         [JsonIgnore]
