@@ -27,6 +27,49 @@ using static IXICore.Transaction;
 
 namespace IXICore
 {
+    public class ByteArrayDictionaryConverter<TValue> : JsonConverter
+    {
+        public override bool CanConvert(System.Type objectType)
+        {
+            return typeof(IDictionary<byte[], TValue>).IsAssignableFrom(objectType);
+        }
+
+        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        {
+            var dictionary = (IDictionary<byte[], TValue>)value;
+            writer.WriteStartObject();
+            foreach (var kvp in dictionary)
+            {
+                // Convert byte[] key to a Base64 string
+                writer.WritePropertyName(Convert.ToBase64String(kvp.Key));
+                serializer.Serialize(writer, kvp.Value);
+            }
+            writer.WriteEndObject();
+        }
+
+        public override object ReadJson(JsonReader reader, System.Type objectType, object existingValue, JsonSerializer serializer)
+        {
+            var dictionary = new Dictionary<byte[], TValue>();
+            if (reader.TokenType == JsonToken.StartObject)
+            {
+                reader.Read();
+                while (reader.TokenType != JsonToken.EndObject)
+                {
+                    if (reader.TokenType == JsonToken.PropertyName)
+                    {
+                        // Convert the Base64 string key back to a byte[]
+                        var key = Convert.FromBase64String((string)reader.Value);
+                        reader.Read();
+                        var value = serializer.Deserialize<TValue>(reader);
+                        dictionary[key] = value;
+                        reader.Read();
+                    }
+                }
+            }
+            return dictionary;
+        }
+    }
+
     //! RPC error codes
     public enum RPCErrorCode
     {
@@ -655,7 +698,9 @@ namespace IXICore
 
         public void sendResponse(HttpListenerResponse responseObject, JsonResponse response)
         {
-            string responseString = JsonConvert.SerializeObject(response, new JsonSerializerSettings() { ReferenceLoopHandling = ReferenceLoopHandling.Ignore });
+            string responseString = JsonConvert.SerializeObject(response, new JsonSerializerSettings() { ReferenceLoopHandling = ReferenceLoopHandling.Ignore,
+                Converters = new List<JsonConverter> { new ByteArrayDictionaryConverter<IxiNumber>() }
+            });
 
             string responseError = "null";
             if (response.error != null)
