@@ -16,7 +16,6 @@ using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Network.Messages;
 using IXICore.RegNames;
-using IXICore.Streaming;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -30,8 +29,11 @@ namespace IXICore
     /// <summary>
     ///  Common functions for manipulating Ixian protocol message.
     /// </summary>
-    public class CoreProtocolMessage
+    public static class CoreProtocolMessage
     {
+        public static ulong bytesForRelayReceived = 0;
+        public static ulong bytesRelayed = 0;
+
         /// <summary>
         /// Prepares and sends the disconnect message to the specified remote endpoint.
         /// </summary>
@@ -130,21 +132,25 @@ namespace IXICore
                     return;
                 }
             }
+
+            uint local_checksum;
             if(raw_message.legacyChecksum != null)
             {
                 // Compute checksum of received data
-                byte[] local_checksum = Crypto.sha512sqTrunc(raw_message.data, 0, 0, 32);
+                byte[] local_legacy_checksum = Crypto.sha512sqTrunc(raw_message.data, 0, 0, 32);
 
                 // Verify the checksum before proceeding
-                if (local_checksum.SequenceEqual(raw_message.legacyChecksum) == false)
+                if (local_legacy_checksum.SequenceEqual(raw_message.legacyChecksum) == false)
                 {
                     Logging.error("Dropped message (invalid legacy checksum)");
                     return;
                 }
-            }else
+                local_checksum = Crc32CAlgorithm.Compute(raw_message.data);
+            }
+            else
             {
                 // Compute checksum of received data
-                uint local_checksum = Crc32CAlgorithm.Compute(raw_message.data);
+                local_checksum = Crc32CAlgorithm.Compute(raw_message.data);
 
                 // Verify the checksum before proceeding
                 if (local_checksum != raw_message.checksum)
@@ -154,11 +160,26 @@ namespace IXICore
                 }
             }
 
-
+            if (code == ProtocolMessageCode.s2data)
+            {
+                bytesForRelayReceived += (ulong)raw_message.data.Length;
+                var sm = new StreamMessage(raw_message.data);
+                if (!IxianHandler.isMyAddress(sm.recipient))
+                {
+                    if (!NetworkServer.forwardMessage(sm.recipient, ProtocolMessageCode.s2data, raw_message.data))
+                    {
+                        // Couldn't forward the message, send failed to client
+                        sendStreamError(sm.sender, sm.recipient, sm.id, endpoint);
+                        return;
+                    }
+                    bytesRelayed += (ulong)raw_message.data.Length;
+                    return;
+                }
+            }
             // Can proceed to parse the data parameter based on the protocol message code.
             // Data can contain multiple elements.
             //parseProtocolMessage(code, data, socket, endpoint);
-            NetworkQueue.receiveProtocolMessage(code, raw_message.data, Crc32CAlgorithm.Compute(raw_message.data), priority, endpoint);
+            NetworkQueue.receiveProtocolMessage(code, raw_message.data, local_checksum, priority, endpoint);
         }
 
         /// <summary>
@@ -1264,6 +1285,27 @@ namespace IXICore
                     }
                     NetworkClientManager.broadcastData(nodeTypes, ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
                 }
+            }
+        }
+
+
+        // Sends an error stream message to a recipient
+        public static void sendStreamError(Address recipient, Address sender, byte[] data, RemoteEndpoint endpoint = null)
+        {
+            StreamMessage message = new StreamMessage();
+            message.type = StreamMessageCode.error;
+            message.recipient = recipient;
+            message.sender = sender;
+            message.data = data;
+            message.encryptionType = StreamMessageEncryptionCode.none;
+
+            if (endpoint != null)
+            {
+                endpoint.sendData(ProtocolMessageCode.s2data, message.getBytes());
+            }
+            else
+            {
+                NetworkServer.forwardMessage(recipient, ProtocolMessageCode.s2data, message.getBytes());
             }
         }
     }

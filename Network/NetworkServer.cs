@@ -382,11 +382,11 @@ namespace IXICore.Network
         {
             if (address == null)
             {
-                Logging.warn("Cannot forward message to null address.");
+                Logging.error("Cannot forward message to null address.");
                 return false;
             }
 
-            Logging.info(">>>> Preparing to forward to {0}", address.ToString());
+            Logging.trace(">>>> Preparing to forward to {0}", address.ToString());
 
             QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, message, null);
             lock (connectedClients)
@@ -405,7 +405,7 @@ namespace IXICore.Network
 
                     if (client_wallet != null && address.SequenceEqual(client_wallet))
                     {
-                        Logging.info(">>>> Forwarding message");
+                        Logging.trace(">>>> Forwarding message");
                         endpoint.sendData(queue_message);
                         return true;
                     }
