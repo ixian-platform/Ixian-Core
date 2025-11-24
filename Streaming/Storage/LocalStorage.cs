@@ -43,6 +43,8 @@ namespace IXICore.Storage
     // Used for storing and retrieving local data for SPIXI
     public class LocalStorage
     {
+        public bool accountRestored = false;
+
         public string nickname = "";
 
         // storage paths
@@ -136,6 +138,16 @@ namespace IXICore.Storage
             storageThread = new Thread(storageLoop);
             storageThread.Name = "Local_Storage_Loop";
             storageThread.Start();
+
+            if (accountRestored)
+            {
+                accountRestored = false;
+                foreach (var friend in FriendList.friends)
+                {
+                    friend.metaData.unreadMessageCount = 0;
+                    friend.saveMetaData();
+                }
+            }
         }
 
         public void stop()
