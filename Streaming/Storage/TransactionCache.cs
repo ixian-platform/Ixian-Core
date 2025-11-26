@@ -27,7 +27,6 @@ namespace IXICore.Storage
         public static ulong lastChange = 0;
 
         // Retrieve a transaction from local storage
-        // Todo: if transaction not found in local storage, send a network-wide request
         public static Transaction getTransaction(byte[] txid)
         {
             // First check the confirmed transactions cache

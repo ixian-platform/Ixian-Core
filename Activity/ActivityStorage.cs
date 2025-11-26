@@ -241,6 +241,13 @@ namespace IXICore.Activity
                 {
                     return false;
                 }
+                byte[] seedHash = activity.seedHash;
+                byte[] seed16 = seedHash.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
+                if (idxActivityId.getEntry(activity.id, seed16) != null)
+                {
+                    return false;
+                }
+
                 lastUsedTime = DateTime.Now;
                 using (WriteBatch writeBatch = new WriteBatch())
                 {
@@ -254,6 +261,34 @@ namespace IXICore.Activity
                 }
             }
             return true;
+        }
+
+        public ActivityObject getActivityById(byte[] id, byte[] seedHash = null)
+        {
+            lock (rockLock)
+            {
+                if (database == null)
+                {
+                    return null;
+                }
+                byte[] seed16 = seedHash?.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
+                foreach (var (indexMem, valueMem) in idxActivityId.getEntriesForKey(id, seed16))
+                {
+                    if (seedHash == null || seedHash.Length == 0 || indexMem.Span.SequenceEqual(seed16))
+                    {
+                        short typeShort = BinaryPrimitives.ReadInt16BigEndian(valueMem.Span.Slice(8, 2));
+
+                        byte[] payloadKey = StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, StorageIndex.combineKeys(indexMem.Span, valueMem.Span));
+                        byte[] payload = database.Get(payloadKey, activityCF);
+
+                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(indexMem.Span, valueMem.Span));
+                        byte[] meta = database.Get(metaKey, activityCF);
+
+                        return new ActivityObject(payload, indexMem.ToArray(), (ActivityType)typeShort, id, meta);
+                    }
+                }
+            }
+            return null;
         }
 
         private void updateMinMax(WriteBatch writeBatch, ulong blockNum)
@@ -735,7 +770,10 @@ namespace IXICore.Activity
 
         public void deleteData()
         {
-            Directory.Delete(pathBase, true);
+            if (Directory.Exists(pathBase))
+            {
+                Directory.Delete(pathBase, true);
+            }
         }
 
         private void closeDatabases()
@@ -864,6 +902,19 @@ namespace IXICore.Activity
                     return true;
                 }
                 return false;
+            }
+        }
+
+        public ActivityObject getActivityById(byte[] id, byte[] seedHash = null)
+        {
+            lock (openDatabases)
+            {
+                var db = getDatabase(0);
+                if (db == null)
+                {
+                    return null;
+                }
+                return db.getActivityById(id, seedHash);
             }
         }
 

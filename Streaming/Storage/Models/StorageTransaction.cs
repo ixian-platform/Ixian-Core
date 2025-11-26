@@ -43,14 +43,14 @@ namespace IXICore.Storage.Models
             timeStamp = (ulong)transaction.timeStamp;
         }
 
-        public StorageTransaction(byte[] bytes)
+        public StorageTransaction(byte[] bytes, bool forceV7Structure)
         {
             using MemoryStream m = new(bytes);
             using BinaryReader reader = new(m);
 
             int data_length = reader.ReadInt32();
             byte[] data = reader.ReadBytes(data_length);
-            transaction = new Transaction(data, true);
+            transaction = new Transaction(data, true, forceV7Structure);
 
             timeStamp = reader.ReadIxiVarUInt();
             fiatValue = reader.ReadIxiNumber();
@@ -59,12 +59,12 @@ namespace IXICore.Storage.Models
             transaction.timeStamp = (long)timeStamp;
         }
 
-        public byte[] getBytes()
+        public byte[] getBytes(bool forceV7Structure)
         {
             using MemoryStream m = new();
             using BinaryWriter writer = new(m);
 
-            byte[] data = transaction.getBytes(true);
+            byte[] data = transaction.getBytes(true, forceV7Structure);
             int data_length = data.Length;
             writer.Write(data_length);
             writer.Write(data);

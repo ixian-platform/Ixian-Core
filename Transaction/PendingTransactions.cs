@@ -21,6 +21,7 @@ namespace IXICore
         public List<Address> relayNodeAddresses;
         public long addedTimestamp;
         public List<byte[]> confirmedNodeList = new List<byte[]>();
+        public List<byte[]> rejectedNodeList = new List<byte[]>();
         public byte[] messageId;
         public Address senderAddress;
 
@@ -109,6 +110,21 @@ namespace IXICore
                     if(pending.confirmedNodeList.Find(x => x.SequenceEqual(address.addressNoChecksum)) == null)
                     {
                         pending.confirmedNodeList.Add(address.addressNoChecksum);
+                    }
+                }
+            }
+        }
+
+        public static void increaseRejectedCount(byte[] txid, Address address)
+        {
+            lock (pendingTransactions)
+            {
+                PendingTransaction pending = pendingTransactions.Find(x => x.transaction.id.SequenceEqual(txid));
+                if (pending != null)
+                {
+                    if (pending.rejectedNodeList.Find(x => x.SequenceEqual(address.addressNoChecksum)) == null)
+                    {
+                        pending.rejectedNodeList.Add(address.addressNoChecksum);
                     }
                 }
             }

@@ -28,7 +28,7 @@ namespace IXICore
     public interface TransactionInclusionCallbacks
     {
         public void receivedBlockHeader(Block blockHeader, bool verified);
-        public void receivedTIVResponse(byte[] txid, bool verified);
+        public void receivedTIVResponse(Transaction tx, bool verified);
     }
 
     /// <summary>
@@ -201,31 +201,12 @@ namespace IXICore
             return false;
         }
 
-        private ulong blockHeightFromTxid(string txid)
-        {
-            ulong txbnum = 0;
-            // Extract the blocknum from the txid
-            try
-            {
-                string[] split_str = txid.Split(new string[] { "-" }, StringSplitOptions.None);
-                txbnum = Convert.ToUInt64(split_str[0]);
-            }
-            catch (Exception e)
-            {
-                Logging.error("TIV exception: {0}", e);
-                return 0;
-            }
-            return txbnum;
-        }
-
         /// <summary>
         ///  Posts a verify transaction inclusion request
         /// </summary>
         /// <param name="txid">transaction id string</param>
         public bool receivedNewTransaction(Transaction t)
         {
-            // TODO verify transaction checksum/validity
-
             lock (txQueue)
             {
                 if (txQueue.Count() > 0)
@@ -233,9 +214,10 @@ namespace IXICore
                     if (txQueue.ContainsKey(t.id))
                     {
                         // Already in the requests queue
-                        if (txQueue[t.id].applied == 0)
+                        if (t.applied != 0
+                            && txQueue[t.id].applied != t.applied)
                         {
-                            txQueue[t.id] = t;
+                            txQueue[t.id].applied = t.applied;
                         }
                         return false;
                     }
@@ -271,11 +253,11 @@ namespace IXICore
                         if(bh.transactions.Contains(tx.id, new ByteArrayComparer()))
                         {
                             // valid
-                            transactionInclusionCallbacks.receivedTIVResponse(tx.id, true);
+                            transactionInclusionCallbacks.receivedTIVResponse(tx, true);
                         }else
                         {
                             // invalid
-                            transactionInclusionCallbacks.receivedTIVResponse(tx.id, false);
+                            transactionInclusionCallbacks.receivedTIVResponse(tx, false);
                         }
 
                     }
@@ -305,12 +287,12 @@ namespace IXICore
                                     if (pitCache[tx.applied].pit.contains(txid))
                                     {
                                         // valid
-                                        transactionInclusionCallbacks.receivedTIVResponse(tx.id, true);
+                                        transactionInclusionCallbacks.receivedTIVResponse(tx, true);
                                     }
                                     else
                                     {
                                         // invalid
-                                        transactionInclusionCallbacks.receivedTIVResponse(tx.id, false);
+                                        transactionInclusionCallbacks.receivedTIVResponse(tx, false);
                                     }
                                 }
                                 else
@@ -342,7 +324,7 @@ namespace IXICore
                 {
                     txQueue.Remove(tx.id);
                     // invalid
-                    transactionInclusionCallbacks.receivedTIVResponse(tx.id, false);
+                    transactionInclusionCallbacks.receivedTIVResponse(tx, false);
                 }
             }
         }

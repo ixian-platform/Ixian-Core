@@ -882,7 +882,7 @@ namespace IXICore.Storage
                         {
                             int data_length = reader.ReadInt32();
                             byte[] data = reader.ReadBytes(data_length);
-                            StorageTransaction storageTransaction = new(data);
+                            StorageTransaction storageTransaction = new(data, version >= 4);
                             TransactionCache.addTransaction(storageTransaction, false);
                         }
 
@@ -892,7 +892,7 @@ namespace IXICore.Storage
                         {
                             int data_length = reader.ReadInt32();
                             byte[] data = reader.ReadBytes(data_length);
-                            StorageTransaction storageTransaction = new(data);
+                            StorageTransaction storageTransaction = new(data, version >= 4);
 
                             TransactionCache.addUnconfirmedTransaction(storageTransaction, false);
                             localStorageCallbacks.receivedNewTransaction(storageTransaction.transaction);
@@ -943,7 +943,7 @@ namespace IXICore.Storage
                 try
                 {
                     // TODO: encrypt written data
-                    int version = 3; // Set the tx cache file version
+                    int version = 4; // Set the tx cache file version
                     writer.Write(version);
 
                     // Write confirmed transaction
@@ -954,7 +954,7 @@ namespace IXICore.Storage
 
                         foreach (StorageTransaction transaction in TransactionCache.transactions)
                         {
-                            byte[] data = transaction.getBytes();
+                            byte[] data = transaction.getBytes(true);
                             int data_length = data.Length;
                             writer.Write(data_length);
                             writer.Write(data);
@@ -969,7 +969,7 @@ namespace IXICore.Storage
 
                         foreach (StorageTransaction transaction in TransactionCache.unconfirmedTransactions)
                         {
-                            byte[] data = transaction.getBytes();
+                            byte[] data = transaction.getBytes(true);
                             int data_length = data.Length;
                             writer.Write(data_length);
                             writer.Write(data);
