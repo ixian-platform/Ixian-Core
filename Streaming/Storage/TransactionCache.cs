@@ -147,6 +147,7 @@ namespace IXICore.Storage
         // Add an unconfirmed storage transaction to local storage
         public static bool addUnconfirmedTransaction(StorageTransaction t, bool writeToFile = true)
         {
+            bool replaced = false;
             lock (unconfirmedTransactions)
             {
                 StorageTransaction cached_tx = null;
@@ -163,6 +164,7 @@ namespace IXICore.Storage
                 if (cached_tx != null)
                 {
                     unconfirmedTransactions.Remove(cached_tx);
+                    replaced = true;
                 }
 
                 // Add new transaction to local storage
@@ -181,7 +183,7 @@ namespace IXICore.Storage
 
             updateCacheChangeStatus();
 
-            return true;
+            return !replaced;
         }
 
         // Add an unconfirmed transaction
