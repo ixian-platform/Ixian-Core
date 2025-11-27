@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Meta;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -61,7 +62,7 @@ namespace IXICore
             }
         }
 
-        public static IxiNumber getPendingSendingTransactionsAmount(Address primary_address)
+        public static IxiNumber getPendingSendingTransactionsAmount()
         {
             IxiNumber amount = 0;
             lock (pendingTransactions)
@@ -70,7 +71,7 @@ namespace IXICore
                 foreach (var entry in txs)
                 {
                     Transaction tx = entry.transaction;
-                    if (primary_address == null || tx.pubKey.addressNoChecksum.SequenceEqual(primary_address.addressNoChecksum))
+                    if (IxianHandler.isMyAddress(tx.pubKey))
                     {
                         amount += tx.amount + tx.fee;
                     }

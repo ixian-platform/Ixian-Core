@@ -1341,8 +1341,7 @@ namespace IXICore
             }
 
             IxiNumber balance = IxianHandler.getWalletStorage(wallet).getMyTotalBalance(IxianHandler.getWalletStorage(wallet).getPrimaryAddress());
-            // TODO TODO TODO TODO adapt the following line for v3 wallets
-            balance -= PendingTransactions.getPendingSendingTransactionsAmount(null);
+            balance -= PendingTransactions.getPendingSendingTransactionsAmount();
             return new JsonResponse { result = balance.ToString(), error = null };
         }
 

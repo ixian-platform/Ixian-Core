@@ -448,6 +448,16 @@ namespace IXICore
             using (BinaryReader r = new BinaryReader(m))
             {
                 ulong block_num = r.ReadIxiVarUInt();
+                if (!pitCache.ContainsKey(block_num))
+                {
+                    return;
+                }
+                Block h = BlockHeaderStorage.getBlockHeader(block_num);
+                if (h == null)
+                {
+                    Logging.warn("TIV: Received PIT information for block {0}, but we do not have that block header in storage!", block_num);
+                    return;
+                }
                 int len = (int)r.ReadIxiVarUInt();
                 if (len > 0)
                 {
@@ -456,12 +466,6 @@ namespace IXICore
                     try
                     {
                         pit.reconstructMinimumTree(pit_data);
-                        Block h = BlockHeaderStorage.getBlockHeader(block_num);
-                        if (h == null)
-                        {
-                            Logging.warn("TIV: Received PIT information for block {0}, but we do not have that block header in storage!", block_num);
-                            return;
-                        }
                         if (!h.receivedPitChecksum.SequenceEqual(pit.calculateTreeHash()))
                         {
                             Logging.error("TIV: Received PIT information for block {0}, but the PIT checksum does not match the one in the block header!", block_num);
