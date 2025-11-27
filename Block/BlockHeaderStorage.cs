@@ -179,8 +179,12 @@ namespace IXICore
                         byte[] dummy_block_num_bytes = BitConverter.GetBytes(dummy_block_header.blockNum);
                         fs.Write(dummy_block_num_bytes, 0, dummy_block_num_bytes.Length);
                     }
-
-                    byte[] block_header_bytes = block_header.getBytes(true, true, true, true);
+                    bool store_signatures = false;
+                    if (block_header.blockNum == 1 || block_header.lastSuperBlockChecksum != null)
+                    {
+                        store_signatures = true;
+                    }
+                    byte[] block_header_bytes = block_header.getBytes(true, true, true, true, store_signatures);
                     byte[] block_header_len_bytes = BitConverter.GetBytes(block_header_bytes.Length);
 
                     fs.Write(block_header_len_bytes, 0, block_header_len_bytes.Length);
