@@ -184,7 +184,7 @@ namespace IXICore
                     {
                         store_signatures = true;
                     }
-                    byte[] block_header_bytes = block_header.getBytes(true, true, true, true, store_signatures);
+                    byte[] block_header_bytes = block_header.getBytes(true, true, true, true, !store_signatures);
                     byte[] block_header_len_bytes = BitConverter.GetBytes(block_header_bytes.Length);
 
                     fs.Write(block_header_len_bytes, 0, block_header_len_bytes.Length);
