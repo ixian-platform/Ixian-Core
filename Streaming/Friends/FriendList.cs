@@ -228,24 +228,8 @@ namespace IXICore.Streaming
 
                     if(tmp_msg != null)
                     {
-                        if (!tmp_msg.localSender)
-                        {
-                            Logging.warn("Message with id {0} was already in message list.", Crypto.hashToString(id));
-                        }else
-                        {
-                            friend.setMessageRead(channel, id);
-                        }
-                        if (messages.Last() == tmp_msg)
-                        {
-                            friend.metaData.setLastMessage(tmp_msg, channel);
-                            friend.metaData.setLastReceivedMessageIds(tmp_msg.id, channel);
-                            friend.saveMetaData();
-                        }
+                        Logging.warn("Message with id {0} was already in message list.", Crypto.hashToString(id));
                         return null;
-                    }else
-                    {
-                        friend.metaData.setLastReceivedMessageIds(friend_message.id, channel);
-                        friend.saveMetaData();
                     }
                 }
                 else if(!local_sender)
@@ -269,6 +253,7 @@ namespace IXICore.Streaming
                 friend_message.read = true;
             }
 
+            friend.metaData.setLastReceivedMessageIds(friend_message.id, channel);
             friend.metaData.setLastMessage(friend_message, channel);
             friend.saveMetaData();
 

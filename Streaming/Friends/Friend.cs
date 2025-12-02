@@ -207,6 +207,7 @@ namespace IXICore.Streaming
         public long requestedPresence = 0;
         public long updatedStreamingNodes = 0;
         public Peer relayNode = null;
+        public long lastSeenTime = 0;
         public int protocolVersion = 0;
 
         public StreamCapabilities streamCapabilities;
@@ -693,6 +694,7 @@ namespace IXICore.Streaming
             {
                 if (!msg.confirmed)
                 {
+                    msg.sent = true;
                     msg.confirmed = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
                 }

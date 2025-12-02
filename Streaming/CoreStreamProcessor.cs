@@ -373,9 +373,8 @@ namespace IXICore.Streaming
             return false;
         }
 
-
         // Called when receiving S2 data from clients
-        public virtual ReceiveDataResponse receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true)
+        public virtual ReceiveDataResponse receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true, bool alert = true)
         {
             if (running == false)
             {
@@ -444,9 +443,10 @@ namespace IXICore.Streaming
                     // TODO Additional checks have to be added here, so that it's not possible to spoof errors (see .sender .reciver attributes in S2 as well) - it will somewhat be improved with protocol-level encryption as well
                     PresenceList.removeAddressEntry(friend.walletAddress);
                     friend.relayNode = null;
+                    friend.updatedStreamingNodes = 0;
+                    friend.requestedPresence = 0;
                     friend.online = false;
                     friend.forcePush = true;
-                    // TODO TODO current friend's keepalive has to be permanently discarded - i.e. save the timestamp
                     return null;
                 }
 
@@ -504,7 +504,7 @@ namespace IXICore.Streaming
                             break;
 
                         default:
-                            sendReceivedConfirmation(friend, sender_address, message.id, -1);
+                            sendReceivedConfirmation(friend, sender_address, message.id, channel);
                             break;
                     }
                 }
@@ -2147,7 +2147,7 @@ namespace IXICore.Streaming
             {
                 count++;
 
-                if (Clock.getNetworkTimestamp() - friend.updatedSectorNodes < CoreConfig.contactSectorNodeIntervalSeconds
+                if (Clock.getTimestamp() - friend.updatedSectorNodes < CoreConfig.contactSectorNodeIntervalSeconds
                     || Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.contactSectorNodeIntervalSeconds)
                 {
                     continue;
@@ -2214,7 +2214,7 @@ namespace IXICore.Streaming
                 }
 
                 if (friend.sectorNodes.Count() == 0
-                    || (Clock.getNetworkTimestamp() - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
+                    || (Clock.getTimestamp() - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
                 {
                     // If sector nodes are not yet initialized or we haven't received contact's presence information and haven't updated presence within the interval
 

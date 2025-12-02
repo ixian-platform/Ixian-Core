@@ -84,7 +84,7 @@ namespace IXICore.Streaming
             lastUpdate = 0;
         }
 
-        public static bool fetchPushMessages(bool force = false, bool fireLocalNotification = false)
+        public static bool fetchPushMessages(bool force = false, bool fireLocalNotification = false, bool alert = true)
         {
             long curTime = Clock.getTimestamp();
             if (force == false && lastUpdate + cooldownPeriod > curTime)
@@ -98,6 +98,7 @@ namespace IXICore.Streaming
             {
                 if (!registerWithPushNotificationServer())
                 {
+                    lastUpdate = 0;
                     return false;
                 }
             }
@@ -121,6 +122,7 @@ namespace IXICore.Streaming
                         {
                             nonce = int.Parse(body.Substring("ERROR: Nonce too low ".Length));
                         }
+                        lastUpdate = 0;
                         return false;
                     }
 
@@ -128,6 +130,7 @@ namespace IXICore.Streaming
                     {
                         pushNotificationAuthKey = null;
                         registerWithPushNotificationServer();
+                        lastUpdate = 0;
                         return false;
                     }
 
@@ -154,12 +157,18 @@ namespace IXICore.Streaming
                                         f.setPublicKey(pk);
                                     }
                                 }
-                                streamProcessor.receiveData(data, null, fireLocalNotification);
+                                streamProcessor.receiveData(data, null, fireLocalNotification, alert);
+                            }
+                            else
+                            {
+                                return false;
                             }
                         }
                         catch (Exception e)
                         {
                             Logging.error("Exception occured in fetchPushMessages while parsing the json response: {0}", e);
+                            lastUpdate = 0;
+                            return false;
                         }
 
                         try
@@ -174,6 +183,8 @@ namespace IXICore.Streaming
                         catch (Exception e)
                         {
                             Logging.error("Exception occured in fetchPushMessages while removing the message from server: {0}", e);
+                            lastUpdate = 0;
+                            return false;
                         }
                     }
 
@@ -182,6 +193,7 @@ namespace IXICore.Streaming
             catch (Exception e)
             {
                 Logging.error("Exception occured in fetchPushMessages: {0}", e);
+                lastUpdate = 0;
                 return false;
             }
 
