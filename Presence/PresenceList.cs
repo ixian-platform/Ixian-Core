@@ -562,7 +562,8 @@ namespace IXICore
 
                     try
                     {
-                        if (NetworkClientManager.getConnectedClients(true).Length < 2)
+                        if (!IxianHandler.isTestNet
+                            && NetworkClientManager.getConnectedClients(true).Length < 2)
                         {
                             forceSendKeepAlive = true;
                             Thread.Sleep(500);
