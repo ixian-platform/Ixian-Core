@@ -138,13 +138,14 @@ namespace IXICore.Streaming
                 if (NetworkServer.getClient(relayAddress) == null)
                 {
                     if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
-                        && friend.relayNode != null)
+                        && friend.relayNode != null
+                        && friend.online)
                     {
                         StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
                     }
                     else
                     {
-                        fetchFriendsPresence(friend);
+                        fetchFriendsPresence(friend, true);
                     }
                 }
                 pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
@@ -941,7 +942,7 @@ namespace IXICore.Streaming
                         }
                         else
                         {
-                            if (!handleMsgReaction(friend, message.sender, message.id, spixi_message.data, channel))
+                            if (!handleMsgReaction(friend, message.sender, message.id, spixi_message.data, channel, message.timestamp))
                             {
                                 return null;
                             }
@@ -1021,14 +1022,15 @@ namespace IXICore.Streaming
             }
             return false;
         }
-        protected bool handleMsgReaction(Friend friend, Address sender, byte[] msg_id, byte[] reaction_data, int channel)
+
+        protected bool handleMsgReaction(Friend friend, Address sender, byte[] msg_id, byte[] reaction_data, int channel, long timestamp)
         {
-            if (friend.addReaction(sender, new ReactionMessage(reaction_data), channel))
+            var rm = new ReactionMessage(reaction_data);
+            if (friend.addReaction(sender, rm, channel))
             {
-                if (friend.metaData.setLastReceivedMessageIds(msg_id, channel))
-                {
-                    friend.saveMetaData();
-                }
+                friend.metaData.setLastReceivedMessageIds(rm.msgId, channel);
+                friend.metaData.setLastMessage(new FriendMessage(msg_id, "&#x2764;&#xFE0F;", timestamp, false, FriendMessageType.reaction), channel);
+                friend.saveMetaData();
                 return true;
             }
             return false;
@@ -2203,18 +2205,28 @@ namespace IXICore.Streaming
             }
         }
 
-        public static void fetchFriendsPresence(Friend friend)
+        public static void fetchFriendsPresence(Friend friend, bool force = false)
         {
             Task.Run(() =>
             {
                 // TODO don't fetch user's presence if they're directly connected; also set online indicator to true if directly connected; it has to go both ways - for incoming and outgoing connections
-                if (Clock.getTimestamp() - friend.requestedPresence < CoreConfig.requestPresenceTimeout)
+
+                long curTimestamp = Clock.getTimestamp();
+
+                if (force)
+                {
+                    if (curTimestamp - friend.requestedPresence < CoreConfig.requestPresenceForcedTimeout)
+                    {
+                        return;
+                    }
+                }
+                else if (curTimestamp - friend.requestedPresence < CoreConfig.requestPresenceTimeout)
                 {
                     return;
                 }
 
                 if (friend.sectorNodes.Count() == 0
-                    || (Clock.getTimestamp() - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
+                    || (curTimestamp - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
                 {
                     // If sector nodes are not yet initialized or we haven't received contact's presence information and haven't updated presence within the interval
 

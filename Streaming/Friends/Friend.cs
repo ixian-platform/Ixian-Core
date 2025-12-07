@@ -125,7 +125,7 @@ namespace IXICore.Streaming
 
         public void setLastMessage(FriendMessage msg, int channel)
         {
-            lastMessage = new FriendMessage(msg.getBytes());
+            lastMessage = msg == null ? null : new FriendMessage(msg.getBytes());
             lastMessageChannel = channel;
         }
 
@@ -663,9 +663,15 @@ namespace IXICore.Streaming
             {
                 if (!msg.read)
                 {
+                    msg.sent = true;
                     msg.confirmed = true;
                     msg.read = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
+                    if (metaData.lastMessage != null && msg.id.SequenceEqual(metaData.lastMessage.id))
+                    {
+                        metaData.setLastMessage(msg, channel);
+                        saveMetaData();
+                    }
                 }
             }
 
@@ -697,6 +703,11 @@ namespace IXICore.Streaming
                     msg.sent = true;
                     msg.confirmed = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
+                    if (metaData.lastMessage != null && msg.id.SequenceEqual(metaData.lastMessage.id))
+                    {
+                        metaData.setLastMessage(msg, channel);
+                        saveMetaData();
+                    }
                 }
             }
 
@@ -724,6 +735,11 @@ namespace IXICore.Streaming
                 {
                     msg.sent = true;
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
+                    if (metaData.lastMessage != null && msg.id.SequenceEqual(metaData.lastMessage.id))
+                    {
+                        metaData.setLastMessage(msg, channel);
+                        saveMetaData();
+                    }
                 }
             }
 
@@ -753,6 +769,11 @@ namespace IXICore.Streaming
                     {
                         msg.errorSending = true;
                         IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
+                        if (metaData.lastMessage != null && msg.id.SequenceEqual(metaData.lastMessage.id))
+                        {
+                            metaData.setLastMessage(msg, channel);
+                            saveMetaData();
+                        }
                     }
                 }
             }
@@ -905,7 +926,21 @@ namespace IXICore.Streaming
                 FriendMessage fm = tmp_messages.Find(x => x.id.SequenceEqual(msg_id));
                 if (fm != null)
                 {
-                    tmp_messages.Remove(fm);
+                    fm.message = "";
+                    if (channel == metaData.lastMessageChannel)
+                    {
+                        for (int i = tmp_messages.Count - 1; i >= 0; i--)
+                        {
+                            if (tmp_messages[i].type != FriendMessageType.standard
+                                || !string.IsNullOrEmpty(tmp_messages[i].message))
+                            {
+                                fm = tmp_messages[i];
+                                break;
+                            }
+                        }
+                        metaData.setLastMessage(fm, channel);
+                        saveMetaData();
+                    }
                     IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
                     return true;
                 }

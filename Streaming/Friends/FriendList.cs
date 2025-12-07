@@ -249,6 +249,7 @@ namespace IXICore.Streaming
 
             if (set_read || old_message)
             {
+                friend_message.sent = true;
                 friend_message.confirmed = true;
                 friend_message.read = true;
             }

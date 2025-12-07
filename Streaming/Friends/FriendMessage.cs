@@ -30,7 +30,8 @@ namespace IXICore.Streaming
         appSessionEnd,
         kicked,
         banned,
-        requestAddSent
+        requestAddSent,
+        reaction
     }
 
     public class FriendMessage

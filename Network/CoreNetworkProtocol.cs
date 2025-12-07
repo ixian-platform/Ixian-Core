@@ -160,7 +160,8 @@ namespace IXICore
                 }
             }
 
-            if (code == ProtocolMessageCode.s2data)
+            if (PresenceList.myPresenceType == 'R'
+                && code == ProtocolMessageCode.s2data)
             {
                 bytesForRelayReceived += (ulong)raw_message.data.Length;
                 var sm = new StreamMessage(raw_message.data);
