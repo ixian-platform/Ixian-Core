@@ -453,7 +453,7 @@ namespace IXICore
                 return false;
             }
 
-            if (NetworkClientManager.getConnectedClients().Count() == 1)
+            if (NetworkClientManager.getConnectedClients(true).Count() < 2)
             {
                 PresenceList.forceSendKeepAlive = true;
             }

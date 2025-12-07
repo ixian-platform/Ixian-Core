@@ -562,7 +562,15 @@ namespace IXICore
 
                     try
                     {
-                        if (StreamClientManager.getConnectedClients(true).Length < 2)
+                        if (NetworkClientManager.getConnectedClients(true).Length < 2)
+                        {
+                            forceSendKeepAlive = true;
+                            Thread.Sleep(500);
+                            continue;
+                        }
+
+                        if (myPresenceType == 'C'
+                            && StreamClientManager.isConnectedTo(myPublicAddress, true) == null)
                         {
                             forceSendKeepAlive = true;
                             Thread.Sleep(500);

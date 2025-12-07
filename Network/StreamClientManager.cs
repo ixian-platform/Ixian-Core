@@ -475,7 +475,7 @@ namespace IXICore.Network
             {
                 foreach (NetworkClient client in streamClients)
                 {
-                    if (client.remoteIP.Address.ToString().Equals(address, StringComparison.Ordinal))
+                    if (client.getFullAddress(true).Equals(address, StringComparison.Ordinal))
                     {
                         if (only_fully_connected && (!client.isConnected() || !client.helloReceived))
                         {
