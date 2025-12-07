@@ -62,7 +62,6 @@ namespace IXICore
                 {
                     if (curNodePresenceAddress.address != value)
                     {
-                        generateKeepAlive(true);
                         forceSendKeepAlive = true;
                     }
                 }
@@ -537,6 +536,7 @@ namespace IXICore
                     TLC.Report();
 
                     int keepalive_interval = keepAliveInterval;
+                    bool force_generate_ka = false;
 
                     // Wait x seconds before rechecking
                     for (int i = 0; i < keepalive_interval; i++)
@@ -548,6 +548,7 @@ namespace IXICore
                         if (forceSendKeepAlive)
                         {
                             forceSendKeepAlive = false;
+                            force_generate_ka = true;
                             break;
                         }
                         // Sleep for one second
@@ -561,7 +562,14 @@ namespace IXICore
 
                     try
                     {
-                        KeepAlive ka = generateKeepAlive(false);
+                        if (StreamClientManager.getConnectedClients(true).Length < 2)
+                        {
+                            forceSendKeepAlive = true;
+                            Thread.Sleep(500);
+                            continue;
+                        }
+
+                        KeepAlive ka = generateKeepAlive(force_generate_ka);
 
                         if (ka == null)
                         {

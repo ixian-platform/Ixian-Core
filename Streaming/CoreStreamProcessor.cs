@@ -2248,6 +2248,11 @@ namespace IXICore.Streaming
                     {
                         // Not connected to contact's sector node
 
+                        if (force)
+                        {
+                            friend.requestedPresence = 0;
+                        }
+
                         if (friend.sectorNodes.Count > 1)
                         {
                             int fromIndex = Random.Shared.Next(friend.sectorNodes.Count - 1);
