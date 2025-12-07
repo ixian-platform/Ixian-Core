@@ -203,6 +203,15 @@ namespace IXICore.Utils
         {
             return value == long.MinValue ? (ulong)long.MaxValue + 1 : (ulong)Math.Abs(value);
         }
+
+        public static bool IsValidUrl(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri? validatedUri))
+            {
+                return (validatedUri.Scheme == Uri.UriSchemeHttp || validatedUri.Scheme == Uri.UriSchemeHttps);
+            }
+            return false;
+        }
     }
 
 

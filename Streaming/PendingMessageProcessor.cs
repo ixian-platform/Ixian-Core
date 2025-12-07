@@ -501,7 +501,7 @@ namespace IXICore.Streaming
                     Logging.error("Unknown exception occurred in messageProcessorLoop: " + e);
                 }
 
-                Thread.Sleep(5000);
+                Thread.Sleep(2500);
             }
         }
 
