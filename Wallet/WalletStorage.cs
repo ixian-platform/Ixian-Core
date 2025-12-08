@@ -1379,22 +1379,6 @@ namespace IXICore
             myKeys.Add(address.addressNoChecksum, kp);
             myAddresses.Add(address.addressNoChecksum, new AddressData() { keyPair = kp, nonce = new byte[1] { 0 } });
 
-
-            Logging.info("Public Key: {0}", Crypto.hashToString(publicKey));
-            Logging.info("Public Node Address: {0}", address.ToString());
-
-            // Wait for any pending log messages to be written
-            Logging.flush();
-
-            Console.WriteLine();
-            Console.Write("Your IXIAN address is ");
-            /*if (OperatingSystem.IsWindows())
-                Console.ForegroundColor = ConsoleColor.Green;*/
-            Console.WriteLine(address.ToString());
-            /*if (OperatingSystem.IsWindows()) 
-                Console.ResetColor();*/
-            Console.WriteLine();
-
             // Write the new wallet data to the file
             if (writeWallet(password))
             {
