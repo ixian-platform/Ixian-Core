@@ -304,6 +304,7 @@ namespace IXICore.Network
         {
             if (running)
             {
+                Logging.info("Network queue already running.");
                 return;
             }
 
@@ -336,6 +337,28 @@ namespace IXICore.Network
         {
             shouldStop = true;
             running = false;
+
+            if (queueHighPriorityThread != null)
+            {
+                queueHighPriorityThread.Interrupt();
+                queueHighPriorityThread.Join();
+                queueHighPriorityThread = null;
+            }
+
+            if (queueMediumPriorityThread != null)
+            {
+                queueMediumPriorityThread.Interrupt();
+                queueMediumPriorityThread.Join();
+                queueMediumPriorityThread = null;
+            }
+
+            if (queueLowPriorityThread != null)
+            {
+                queueLowPriorityThread.Interrupt();
+                queueLowPriorityThread.Join();
+                queueLowPriorityThread = null;
+            }
+
             return true;
         }
 
@@ -362,35 +385,41 @@ namespace IXICore.Network
         {
             // Prepare an special message object to use while receiving and parsing, without locking up the queue messages
             QueueMessageRecv active_message = new QueueMessageRecv();
-
-            while (!shouldStop)
+            try
             {
-                TLC.Report();
-                bool message_found = false;
-                lock (queue)
+                while (!shouldStop)
                 {
-                    if (queue.Count > 0)
+                    TLC.Report();
+                    bool message_found = false;
+                    lock (queue)
                     {
-                        // Pick the oldest message
-                        active_message = queue[0];
-                        message_found = true;
-                        // Remove it from the queue
-                        queue.RemoveAt(0);
+                        if (queue.Count > 0)
+                        {
+                            // Pick the oldest message
+                            active_message = queue[0];
+                            message_found = true;
+                            // Remove it from the queue
+                            queue.RemoveAt(0);
+                        }
+                    }
+
+                    if (message_found)
+                    {
+                        Logging.trace("Received {0} ({1}B) - {2}...", active_message.code, active_message.data.Length, Crypto.hashToString(active_message.data.Take(60).ToArray()));
+                        // Active message set, attempt to parse it
+                        IxianHandler.parseProtocolMessage(active_message.code, active_message.data, active_message.endpoint);
+                    }
+                    else
+                    {
+                        // Sleep for 10ms to prevent cpu waste
+                        Thread.Sleep(10);
                     }
                 }
-
-                if (message_found)
-                {
-                    Logging.trace("Received {0} ({1}B) - {2}...", active_message.code, active_message.data.Length, Crypto.hashToString(active_message.data.Take(60).ToArray()));
-                    // Active message set, attempt to parse it
-                    IxianHandler.parseProtocolMessage(active_message.code, active_message.data, active_message.endpoint);
-                }
-                else
-                {
-                    // Sleep for 10ms to prevent cpu waste
-                    Thread.Sleep(10);
-                }
+            } catch (ThreadInterruptedException)
+            {
+                // Thread interrupted, exit
             }
+
             Logging.info("Network queue thread stopped.");
         }
 

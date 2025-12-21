@@ -54,7 +54,7 @@ namespace IXICore
         ///  using this function, unless you have a very specific need togenerate older Ixian keys.
         /// </remarks>
         /// <param name="keySize">Size of the new RSA key, in bits.</param>
-        /// <param name="skip_header">Legacy parameter to allow generating older Ixian keys.</param>
+        /// <param name="version">Address version.</param>
         /// <returns>A new RSA key pair and associated Ixian data.</returns>
         IxianKeyPair generateKeys(int keySize, int version);
 

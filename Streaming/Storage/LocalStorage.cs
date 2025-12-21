@@ -63,11 +63,7 @@ namespace IXICore.Storage
 
         private int messagesPerFile = 1000;
 
-        private bool started = false;
-
         private bool running = false;
-
-        private bool stopped = true;
 
         private Thread storageThread = null;
 
@@ -121,12 +117,10 @@ namespace IXICore.Storage
 
         public void start()
         {
-            if (started)
+            if (running)
             {
                 return;
             }
-            stopped = false;
-            started = true;
             running = true;
 
             // Read transactions
@@ -152,37 +146,45 @@ namespace IXICore.Storage
 
         public void stop()
         {
-            if (started == false)
+            if (running == false)
             {
                 return;
             }
             running = false;
-            started = false;
-            while (!stopped)
+
+            if (storageThread != null)
             {
-                Thread.Sleep(10);
+                storageThread.Interrupt();
+                storageThread.Join();
+                storageThread = null;
             }
         }
 
         private void storageLoop()
         {
-            while (running)
+            try
             {
-                Thread.Sleep(1000);
-                lock (flushLock)
+                while (running)
                 {
-                    try
+                    Thread.Sleep(1000);
+                    lock (flushLock)
                     {
-                        writePendingMessages();
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Exception occured writing pending messages from storage loop: " + e);
+                        try
+                        {
+                            writePendingMessages();
+                        }
+                        catch (Exception e)
+                        {
+                            Logging.error("Exception occured writing pending messages from storage loop: " + e);
+                        }
                     }
                 }
+            } catch (ThreadInterruptedException)
+            {
+                // Thread interrupted, exit gracefully
             }
+
             flush();
-            stopped = true;
             writeMessagesRequests = new Dictionary<Address, Dictionary<int, WriteRequest>>(new AddressComparer());
             storageThread = null;
         }

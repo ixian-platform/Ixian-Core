@@ -1946,8 +1946,7 @@ namespace IXICore
         ///  Please note that this function only accepts a public key. If the signature is supplied with an address, the public key must somehow be obtained
         ///  prior to calling this function, either by taking it from the Presence List, or querying the network.
         /// </remarks>
-        /// <param name="signature">Signature's byte value.</param>
-        /// <param name="signer_pub_key">Public key of the signer.</param>
+        /// <param name="sig">BlockSignature object.</param>
         /// <returns>True, if the signature validates this block.</returns>
         public bool verifySignature(BlockSignature sig)
         {
@@ -1996,8 +1995,7 @@ namespace IXICore
         /// <summary>
         ///  Adds the provided signature to the block's signature list.
         /// </summary>
-        /// <param name="signature">Byte value of the signature.</param>
-        /// <param name="address_or_pub_key">Address or public key of the signer.</param>
+        /// <param name="sig">BlockSignature object.</param>
         /// <returns>True, if the signature was successfully added. False is returned if the signature was already present, or was not valid.</returns>
         public bool addSignature(BlockSignature sig)
         {
@@ -2044,7 +2042,7 @@ namespace IXICore
         ///  This function accepts either a wallet address or a public key. In the latter case, the public key is returned directly, but in the former case,
         ///  the public key is looked up from the wallet. This allows easy conversion from the signatures field for use in the verify function.
         /// </remarks>
-        /// <param name="address_or_pub_key">Signer address or public key.</param>
+        /// <param name="address">Signer address or public key.</param>
         /// <returns>Public key, matching the given address, or null, if the public key is not known.</returns>
         public byte[] getSignerPubKey(Address address)
         {
@@ -2330,7 +2328,6 @@ namespace IXICore
         ///  to return only the Wallet addresses of all signers. If the parameter `convert_pubkeys` is specified false, then the public
         ///  key lookups aren't performed and only the addresses from the signature list are returned.
         /// </remarks>
-        /// <param name="convert_pubkeys">True if public key signatures should be converted back to their respective Ixian Wallet addresses.</param>
         /// <returns>List of Ixian wallets which have signed this block.</returns>
         public List<(Address address, IxiNumber difficulty)> getSignaturesWalletAddressesWithDifficulty()
         {

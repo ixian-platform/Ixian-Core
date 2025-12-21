@@ -251,7 +251,7 @@ namespace IXICore
             /// </summary>
             /// <remarks>
             ///  The signer, who is being removed, can still validate the transaction that removes their address from the list. The change
-            //   takes effect after the transaction is accepted.
+            ///  takes effect after the transaction is accepted.
             ///  The number of signatures must be equal to or less than the number of distinct allowed signers. A `ChangeMultisigWallet` transaction which would
             ///  make it impossible to use the wallet is invalid, even if it has enough correct signatures.
             /// </remarks>
@@ -2432,6 +2432,7 @@ namespace IXICore
         ///  Adds a signature to the specified multisig wallet.
         ///  This function generates a transaction which adds the specified `allowed_address` to the multisig wallet `tx_from`.
         /// </summary>
+        /// <remarks>
         ///  The transaction fee is paid by `tx_from` - the multisig wallet.
         /// </remarks>
         /// <param name="allowed_address">Address which will be added to `tx_from`.</param>
@@ -2467,6 +2468,7 @@ namespace IXICore
         ///  Deletes a signature from the specified multisig wallet.
         ///  This function generates a transaction which deletes the specified `disallowed_address` from the multisig wallet `tx_from`.
         /// </summary>
+        /// <remarks>
         ///  The transaction fee is paid by `tx_from` - the multisig wallet.
         /// </remarks>
         /// <param name="disallowed_address">Address which will be removed from `tx_from`.</param>
@@ -2503,6 +2505,7 @@ namespace IXICore
         ///  This function generates a transaction which changes the specified multisig wallet `tx_from` with a new minimum
         ///  required signatures value..
         /// </summary>
+        /// <remarks>
         ///  The transaction fee is paid by `tx_from` - the multisig wallet.
         /// </remarks>
         /// <param name="sigs">New minimum required signatures value for `tx_from`.</param>

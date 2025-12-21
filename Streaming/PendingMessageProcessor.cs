@@ -129,7 +129,6 @@ namespace IXICore.Streaming
         public void stop()
         {
             running = false;
-            pendingMessagesThread = null;
             if (offloadedMessagesTask != null)
             {
                 try
@@ -139,6 +138,15 @@ namespace IXICore.Streaming
                 }
                 catch (Exception) { /* ignore */ }
                 offloadedMessagesTask = null;
+            }
+
+            if (pendingMessagesThread != null)
+            {
+                pendingMessagesThread.Interrupt();
+                pendingMessagesThread.Join();
+                pendingMessagesThread = null;
+
+                pendingRecipients.Clear();
             }
         }
 
@@ -490,18 +498,24 @@ namespace IXICore.Streaming
         {
             loadMessageQueue();
 
-            while (running)
+            try
             {
-                try
+                while (running)
                 {
-                    processPendingMessages();
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Unknown exception occurred in messageProcessorLoop: " + e);
-                }
+                    try
+                    {
+                        processPendingMessages();
+                    }
+                    catch (Exception e)
+                    {
+                        Logging.error("Unknown exception occurred in messageProcessorLoop: " + e);
+                    }
 
-                Thread.Sleep(2500);
+                    Thread.Sleep(2500);
+                }
+            }
+            catch (ThreadInterruptedException)
+            {
             }
         }
 

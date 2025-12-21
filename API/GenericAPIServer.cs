@@ -171,6 +171,13 @@ namespace IXICore
             {
                 // Stop the listener
                 listener.Stop();
+
+                if (apiControllerThread != null)
+                {
+                    apiControllerThread.Interrupt();
+                    apiControllerThread.Join();
+                    apiControllerThread = null;
+                }
             }
             catch (Exception)
             {
