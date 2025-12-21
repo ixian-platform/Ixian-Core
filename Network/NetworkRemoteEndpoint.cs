@@ -853,11 +853,12 @@ namespace IXICore.Network
                 msg_id = message.data.GetIxiVarInt(0).num;
                 priority = MessagePriority.high;
             }
-            if(msg_id != 0)
+
+            if (msg_id != 0)
             {
-                lock(requestedMessageIds)
+                lock (requestedMessageIds)
                 {
-                    if(!requestedMessageIds.Contains(msg_id))
+                    if (!requestedMessageIds.Contains(msg_id))
                     {
                         requestedMessageIds.Add(msg_id);
                         if (requestedMessageIds.Count > CoreConfig.maximumRequestedMessageIds)
@@ -906,6 +907,7 @@ namespace IXICore.Network
                 case ProtocolMessageCode.nameRecord:
                 case ProtocolMessageCode.getSectorNodes:
                 case ProtocolMessageCode.sectorNodes:
+                case ProtocolMessageCode.s2data:
                     lock (sendQueueMessagesHighPriority)
                     {
                         addMessageToSendQueue(sendQueueMessagesHighPriority, message);

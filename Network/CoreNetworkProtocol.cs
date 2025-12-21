@@ -160,23 +160,30 @@ namespace IXICore
                 }
             }
 
-            if (PresenceList.myPresenceType == 'R'
-                && code == ProtocolMessageCode.s2data)
+            if (code == ProtocolMessageCode.s2data)
             {
-                bytesForRelayReceived += (ulong)raw_message.data.Length;
-                var sm = new StreamMessage(raw_message.data);
-                if (!IxianHandler.isMyAddress(sm.recipient))
+                if (PresenceList.myPresenceType == 'R')
                 {
-                    if (!NetworkServer.forwardMessage(sm.recipient, ProtocolMessageCode.s2data, raw_message.data))
+                    bytesForRelayReceived += (ulong)raw_message.data.Length;
+                    var sm = new StreamMessage(raw_message.data);
+                    if (!IxianHandler.isMyAddress(sm.recipient))
                     {
-                        // Couldn't forward the message, send failed to client
-                        sendStreamError(sm.sender, sm.recipient, sm.id, endpoint);
+                        if (!NetworkServer.forwardMessage(sm.recipient, ProtocolMessageCode.s2data, raw_message.data))
+                        {
+                            // Couldn't forward the message, send failed to client
+                            sendStreamError(sm.sender, sm.recipient, sm.id, endpoint);
+                            return;
+                        }
+                        bytesRelayed += (ulong)raw_message.data.Length;
                         return;
                     }
-                    bytesRelayed += (ulong)raw_message.data.Length;
-                    return;
                 }
+
+                // Bypass Network Queue and process s2data messages directly for low latency
+                IxianHandler.parseProtocolMessage(code, raw_message.data, endpoint);
+                return;
             }
+
             // Can proceed to parse the data parameter based on the protocol message code.
             // Data can contain multiple elements.
             //parseProtocolMessage(code, data, socket, endpoint);
