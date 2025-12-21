@@ -123,6 +123,7 @@ namespace IXICore.Meta
                 TLC = new ThreadLiveCheck();
                 running = true;
                 thread = new Thread(new ThreadStart(threadLoop));
+                thread.IsBackground = true;
                 thread.Name = "Logging_Thread";
                 thread.Start();
             }
