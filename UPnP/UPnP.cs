@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -11,7 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
-using Open.Nat;
+using Mono.Nat;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -22,173 +22,180 @@ namespace IXICore
 {
     public class UPnP
     {
-        private NatDiscoverer natDiscoverer;
-        private NatDevice routerDevice;
-        private IPAddress mappedLocalIP;
-        private int mappedPublicPort;
+        private INatDevice? _routerDevice;
+        private int _mappedPublicPort;
 
-        public UPnP()
+        private bool AcquireRouterDevice()
         {
-            natDiscoverer = new NatDiscoverer();
-        }
-
-        private bool acquireRouterDevice()
-        {
-            if (routerDevice != null)
+            if (_routerDevice != null)
             {
                 return true;
             }
+
             try
             {
-                CancellationTokenSource cts = new CancellationTokenSource();
-                cts.CancelAfter(4500);
-                Task<NatDevice> devicesDiscoveryTask = natDiscoverer.DiscoverDeviceAsync(PortMapper.Upnp, cts);
-                if (devicesDiscoveryTask.Wait(5000) == true)
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                _routerDevice = DiscoverAsync(cts.Token).GetAwaiter().GetResult();
+
+                if (_routerDevice != null)
                 {
-                    NatDevice device = devicesDiscoveryTask.Result;
-                    Logging.info(String.Format("Found UPnP device: {0}", device.ToString()));
-                    routerDevice = device;
+                    Logging.info($"Found UPnP device: {_routerDevice}");
                     return true;
                 }
             }
-            catch (AggregateException) { }
+            catch { }
+
             return false;
         }
 
-        private Mapping GetPublicPortMappingInternal(int public_port)
+        private static Task<INatDevice> DiscoverAsync(CancellationToken ct)
         {
-            if (acquireRouterDevice() == true)
+            var tcs = new TaskCompletionSource<INatDevice>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            void Handler(object? sender, DeviceEventArgs e)
             {
-                try
-                {
-                    Task<IEnumerable<Mapping>> mappings = routerDevice.GetAllMappingsAsync();
-                    if (mappings.Wait(5000) == true)
-                    {
-                        foreach (Mapping m in mappings.Result)
-                        {
-                            if (m.PublicPort == public_port)
-                            {
-                                return m;
-                            }
-                        }
-                    }
-                }
-                catch (MappingException ex)
-                {
-                    Logging.warn(String.Format("Error while obtaining current port mapping: {0}", ex.Message));
-                }
+                NatUtility.DeviceFound -= Handler;
+                NatUtility.StopDiscovery();
+                tcs.TrySetResult(e.Device);
             }
-            return null;
+
+            NatUtility.DeviceFound += Handler;
+            NatUtility.StartDiscovery();
+
+            ct.Register(() =>
+            {
+                NatUtility.DeviceFound -= Handler;
+                NatUtility.StopDiscovery();
+                tcs.TrySetCanceled(ct);
+            });
+
+            return tcs.Task;
         }
 
-        public async Task<IPAddress> GetExternalIPAddress()
+        private Mapping? GetPublicPortMappingInternal(int publicPort)
         {
-            Logging.info("Attempting to discover external address. This is automatic, if the router supports UPnP.");
-            Logging.info("This may take up to 10 seconds...");
-            if (acquireRouterDevice() == true)
+            if (!AcquireRouterDevice())
             {
-                Logging.info(String.Format("Found UPnP device: {0}", routerDevice.ToString()));
-                try
-                {
-                    IPAddress externalIP = await routerDevice.GetExternalIPAsync();
-                    Logging.info(String.Format("Found external IP address: {0}", externalIP.ToString()));
-                    return externalIP;
-                }
-                catch (Exception ex)
-                {
-                    Logging.warn(String.Format("Error while retrieving the external IP: {0}", ex));
-                }
-            }
-            //
-            Logging.info("UPnP router is not present or is using an incompatible version of the UPnP protocol.");
-            return null;
-        }
-
-        public IPAddress GetPublicPortMapping(int public_port)
-        {
-            if (public_port <= 0 || public_port > 65535)
-            {
-                Logging.error(String.Format("Invalid port number: {0}", public_port));
                 return null;
             }
-            Logging.info(String.Format("Attempting to discover existing NAT port mapping for port {0}.", public_port));
-            if (acquireRouterDevice() == true)
+
+            try
             {
-                Mapping m = GetPublicPortMappingInternal(public_port);
-                return m.PrivateIP;
+                foreach (var m in _routerDevice.GetAllMappings())
+                {
+                    if (m.PublicPort == publicPort)
+                    {
+                        return m;
+                    }
+                }
             }
-            Logging.info("UPnP router is not present or is using an incompatible version of the UPnP protocol.");
+            catch (Exception ex)
+            {
+                Logging.warn($"Error while obtaining current port mapping: {ex.Message}");
+            }
+
             return null;
         }
 
-        public bool MapPublicPort(int public_port, IPAddress local_ip)
+        public async Task<IPAddress?> GetExternalIPAddress()
         {
-            if (public_port <= 0 || public_port > 65535)
+            Logging.info("Attempting to discover external address via UPnP...");
+            Logging.info("This may take up to 10 seconds...");
+
+            if (!AcquireRouterDevice())
             {
-                Logging.error(String.Format("Invalid port number: {0}", public_port));
+                Logging.info("UPnP router not present or incompatible.");
+                return null;
+            }
+
+            try
+            {
+                IPAddress externalIP = await _routerDevice!.GetExternalIPAsync();
+                Logging.info($"Found external IP address: {externalIP}");
+                return await Task.FromResult(externalIP);
+            }
+            catch (Exception ex)
+            {
+                Logging.warn($"Error while retrieving the external IP: {ex}");
+                return null;
+            }
+        }
+
+        public Mapping? GetPublicPortMapping(int publicPort)
+        {
+            if (publicPort <= 0 || publicPort > 65535)
+            {
+                Logging.error($"Invalid port number: {publicPort}");
+                return null;
+            }
+
+            Logging.info($"Attempting to discover existing NAT port mapping for port {publicPort}.");
+
+            return GetPublicPortMappingInternal(publicPort);
+        }
+
+        public bool MapPublicPort(int publicPort, IPAddress localIP)
+        {
+            if (publicPort <= 0 || publicPort > 65535)
+            {
+                Logging.error($"Invalid port number: {publicPort}");
                 return false;
             }
 
-            Logging.info(String.Format("Attempting to map external port {0} to local IP {1}", public_port, local_ip.ToString()));
-            if (acquireRouterDevice() == true)
-            {
-                try
-                {
-                    Mapping m = new Mapping(Protocol.Tcp, local_ip, public_port, public_port, 0, "Ixian DLT automatic port mapping");
-                    Task mapPortTask = routerDevice.CreatePortMapAsync(m);
-                    if (mapPortTask.Wait(5000) == true)
-                    {
-                        Logging.info(String.Format("External port successfully {0} mapped to {1}:{2} via UPnP", public_port, local_ip.ToString(), public_port));
-                        mappedLocalIP = local_ip;
-                        mappedPublicPort = public_port;
-                        return true;
-                    }
-                }
-                catch (MappingException ex)
-                {
-                    Logging.error(String.Format("Error while mapping public port {0} to {1}:{2}: {3}", public_port, local_ip.ToString(), public_port, ex.Message));
-                }
-                catch (Exception e)
-                {
-                    Logging.error(String.Format("Inner exception for uPnP: {0}", e.Message));
-                }
-            }
-            Logging.info("UPnP router is not present or is using an incompatible version of the UPnP protocol.");
-            return false;
-        }
+            Logging.info($"Attempting to map external port {publicPort} to local IP {localIP}");
 
-        // Returns the local mapped IP
-        public string getMappedIP()
-        {
-            return string.Format("{0}", mappedLocalIP);
+            if (!AcquireRouterDevice())
+            {
+                Logging.info("UPnP router not present or incompatible.");
+                return false;
+            }
+
+            try
+            {
+                var mapping = new Mapping(
+                    Protocol.Tcp,
+                    publicPort,
+                    publicPort,
+                    0,
+                    "Ixian DLT automatic port mapping"
+                );
+
+                _routerDevice.CreatePortMap(mapping);
+
+                Logging.info($"External port {publicPort} mapped to {localIP}:{publicPort}");
+                _mappedPublicPort = publicPort;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logging.error($"Error while mapping public port {publicPort}: {ex.Message}");
+                return false;
+            }
         }
 
         public void RemoveMapping()
         {
-            if (routerDevice != null)
+            if (_routerDevice == null)
             {
-                if (mappedLocalIP != null)
+                return;
+            }
+
+            Logging.info($"Removing previously mapped: {_mappedPublicPort} -> {_mappedPublicPort}");
+
+            try
+            {
+                var m = GetPublicPortMappingInternal(_mappedPublicPort);
+                if (m != null)
                 {
-                    Logging.info(String.Format("Removing previously mapped: {0} -> {1}:{2}", mappedPublicPort, mappedLocalIP.ToString(), mappedPublicPort));
-                    try
-                    {
-                        Mapping m = GetPublicPortMappingInternal(mappedPublicPort);
-                        if (m != null)
-                        {
-                            Task deleteMapTask = routerDevice.DeletePortMapAsync(m);
-                            deleteMapTask.Wait(5000);
-                            mappedPublicPort = 0;
-                            mappedLocalIP = null;
-                        }
-                    }
-                    catch (MappingException ex)
-                    {
-                        Logging.error(String.Format("Unable to remove port mapping for public port {0} to {1}:{2}: {3}",
-                            mappedPublicPort,
-                            mappedLocalIP.ToString(), mappedPublicPort,
-                            ex.Message));
-                    }
+                    _routerDevice.DeletePortMap(m);
+                    _mappedPublicPort = 0;
                 }
+            }
+            catch (Exception ex)
+            {
+                Logging.error(
+                    $"Unable to remove port mapping for public port {_mappedPublicPort}: {ex.Message}");
             }
         }
     }
