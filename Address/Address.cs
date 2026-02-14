@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -17,6 +17,173 @@ using System.Linq;
 
 namespace IXICore
 {
+    public class ExtendedAddress
+    {
+        private readonly char extensionDelimiter = '_';
+
+        public Address address { get; private set; }
+        public AddressPaymentFlag flag { get; private set; } = AddressPaymentFlag.Primary;
+        public byte[]? extendedData { get; private set; } = null;
+
+        public ExtendedAddress(Address address, AddressPaymentFlag flag, byte[]? extendedData)
+        {
+            if (flag != AddressPaymentFlag.Primary
+                && address.nonce != null)
+            {
+                throw new Exception("Cannot construct extended address, extended address is not supported for addresses with nonce.");
+            }
+            this.address = address;
+            this.flag = flag;
+            this.extendedData = extendedData;
+        }
+
+        public ExtendedAddress(string base58EncodedExtendedAddress)
+        {
+            string base58EncodedAddress = base58EncodedExtendedAddress;
+            string? flagAndTagPart = null;
+            if (base58EncodedExtendedAddress.Contains(extensionDelimiter))
+            {
+                var s = base58EncodedExtendedAddress.Split(extensionDelimiter);
+                base58EncodedAddress = s[0];
+                flagAndTagPart = s[1];
+            }
+            address = new Address(base58EncodedAddress);
+
+            if (flagAndTagPart != null)
+            {
+                byte[] flagAndTagBytes = Base58Check.Base58CheckEncoding.DecodePlain(flagAndTagPart);
+                if (!CryptoManager.lib.sha3_512sqTrunc(flagAndTagBytes, 0, flagAndTagBytes.Length - 3, 3).SequenceEqual(flagAndTagBytes.Skip(flagAndTagBytes.Length - 3)))
+                {
+                    throw new Exception("Invalid address was specified (flag and tag checksum error).");
+                }
+                flag = (AddressPaymentFlag)flagAndTagBytes[0];
+                if (flagAndTagBytes.Length > 1 + 3)
+                {
+                    extendedData = new byte[flagAndTagBytes.Length - 1 - 3];
+                    Array.Copy(flagAndTagBytes, 1, extendedData, 0, extendedData.Length);
+                }
+            }
+        }
+
+        public ExtendedAddress(byte[] bytes)
+        {
+            using (MemoryStream m = new MemoryStream(bytes))
+            {
+                using (BinaryReader reader = new BinaryReader(m))
+                {
+                    address = new Address(reader.ReadIxiBytes()!);
+                    flag = (AddressPaymentFlag)reader.ReadIxiVarUInt();
+                    extendedData = reader.ReadIxiBytes()!;
+                }
+            }
+        }
+
+        public byte[] GetBytes()
+        {
+            using (MemoryStream m = new MemoryStream())
+            {
+                using (BinaryWriter writer = new BinaryWriter(m))
+                {
+                    writer.WriteIxiBytes(address.addressNoChecksum);
+                    writer.WriteIxiVarInt((int)flag);
+                    writer.WriteIxiBytes(extendedData);
+                }
+                return m.ToArray();
+            }
+        }
+
+
+        /// <summary>
+        /// Converts a binary Address representation into it's textual (base58) form, extended with an Address Flag and a tag. It is used in the Json Api and various clients.
+        /// </summary>
+        /// <returns>Textual representation of the address.</returns>
+        public override string ToString()
+        {
+            var flagAndTagBytes = GetFlagAndTagBytes(flag, extendedData, true);
+            return address.ToString() + extensionDelimiter + Base58Check.Base58CheckEncoding.EncodePlain(flagAndTagBytes);
+        }
+
+        private byte[] GetFlagAndTagBytes(AddressPaymentFlag flag, byte[]? tag, bool includeChecksum)
+        {
+            if (flag != AddressPaymentFlag.Primary
+                && address.nonce != null)
+            {
+                throw new Exception("Cannot convert address to string, extended address is not supported for addresses with nonce.");
+            }
+
+            switch (flag)
+            {
+                case AddressPaymentFlag.Primary:
+                    break;
+                case AddressPaymentFlag.OfflineTag:
+                    break;
+                case AddressPaymentFlag.OfflineAddress:
+                    break;
+                case AddressPaymentFlag.End2End:
+                    break;
+                default:
+                    throw new Exception("Cannot convert address to string, unknown address flag.");
+            }
+            int tagLen = tag != null ? tag.Length : 0;
+            if (tagLen > 16)
+            {
+                throw new Exception("Cannot convert address to string, tag length exceeds maximum allowed size.");
+            }
+
+            byte[] flagAndTag;
+            int checksumLen = includeChecksum ? 3 : 0;
+            flagAndTag = new byte[1 + tagLen + checksumLen];
+            flagAndTag[0] = (byte)flag;
+            if (tagLen > 0)
+            {
+                Buffer.BlockCopy(tag!, 0, flagAndTag, 1, tagLen);
+            }
+
+            if (includeChecksum)
+            {
+                byte[] checksum = CryptoManager.lib.sha3_512sqTrunc(flagAndTag, 0, flagAndTag.Length - checksumLen);
+                Buffer.BlockCopy(checksum, 0, flagAndTag, 1 + tagLen, checksumLen);
+            }
+
+            return flagAndTag;
+        }
+    }
+
+    public enum AddressPaymentFlag
+    {
+        /// <summary>
+        ///  Primary address, no special handling. Intended for legacy and transfers where the recipient is a DLT node.
+        /// </summary>
+        Primary = 0,
+        /// <summary>
+        ///  The recipient is required to be online at the time of the transaction. This type of address consists of a routing
+        ///  address and an optional tag. The sender connects to the recipient and requests payment instructions. The recipient
+        ///  can then provide a one-time payment address for the transaction, allowing for better privacy and security. This
+        ///  type of address is ideal for exchanges and services that require immediate payment. Payment instructions should
+        ///  contain one of the other payment address types, which will be used for the actual transactins.
+        ///  Once payment instructions are provided, the sender prepares the transaction and sends it to the blockchain and
+        ///  directly to the recipient's routing address via Ixian's P2P streaming protocol, ensuring fast and efficient delivery.
+        ///  Tag can be used to provide additional information about the transaction, such as an order ID or a reference number.
+        /// </summary>
+        End2End = 1,
+        /// <summary>
+        ///  The recipient is not required to be online. This type of address consists of an addresses an optional tag. The
+        ///  address is used for routing and to send the transaction directly to the recipient via Ixian's P2P streaming
+        ///  protocol without the need for the recipient to provide a one-time payment address. This type of address is ideal
+        ///  for mobile clients where privacy isn't a concern.
+        ///  Tag can be used to provide additional information about the transaction, such as an order ID or a reference number.
+        /// </summary>
+        OfflineTag = 2,
+        /// <summary>
+        ///  The recipient is not required to be online. This type of address consists of a routing address and actual payment
+        ///  address. The routing address is used to send the transaction directly to the recipient via Ixian's P2P streaming
+        ///  protocol, while the payment address is used to receive the actual funds and can be generated on demand by the
+        ///  recipient for each payment, allowing for better scalability and privacy. This type of address is ideal for mobile
+        ///  clients where privacy is a concern.
+        /// </summary>
+        OfflineAddress = 3,
+    }
+
     /// <summary>
     /// Ixian Wallet Address.
     ///  This class holds a binary value of an Ixian Address and contains functions to encode that information to- or retrieve it from a bytestream.
@@ -36,7 +203,7 @@ namespace IXICore
         /// </summary>
         public int version { get; private set; } = 0;
 
-        private byte[] _addressWithChecksum = null;
+        private byte[]? _addressWithChecksum = null;
         /// <summary>
         ///  Byte value of the address with checksum.
         /// </summary>
@@ -58,9 +225,9 @@ namespace IXICore
         /// <summary>
         ///  Byte value of the address without checksum.
         /// </summary>
-        public byte[] addressNoChecksum { get; private set; } = null;
+        public byte[] addressNoChecksum { get; private set; }
 
-        private byte[] _sectorPrefix = null;
+        private byte[]? _sectorPrefix = null;
         /// <summary>
         ///  Byte value of the sector prefix.
         /// </summary>
@@ -79,9 +246,9 @@ namespace IXICore
         /// <summary>
         ///  Address nonce value. Applicable only for v1 and above.
         /// </summary>
-        public byte[] nonce { get; private set; }
+        public byte[]? nonce { get; private set; }
 
-        public byte[] pubKey { get; private set; }
+        public byte[]? pubKey { get; private set; }
 
         /// <summary>
         ///  Constructs an Ixian address with the given byte value or alternatively from the given public key using a nonce value.
@@ -92,7 +259,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="publicKeyOrAddress">Byte value of the address or of the wallet's public key. See Remarks.</param>
         /// <param name="addressNonce">If the value given for address bytes is a public key, this field is required to specify with actual address to generate.</param>
-        public Address(byte[] publicKeyOrAddress, byte[] addressNonce = null, bool verifyChecksum = true)
+        public Address(byte[] publicKeyOrAddress, byte[]? addressNonce = null, bool verifyChecksum = true)
         {
             version = 0;
 
@@ -153,7 +320,7 @@ namespace IXICore
         {
             version = other.version;
             _addressWithChecksum = IxiUtils.copy(other._addressWithChecksum);
-            addressNoChecksum = IxiUtils.copy(other.addressNoChecksum);
+            addressNoChecksum = IxiUtils.copy(other.addressNoChecksum)!;
             _sectorPrefix = IxiUtils.copy(other._sectorPrefix);
             nonce = IxiUtils.copy(other.nonce);
             pubKey = IxiUtils.copy(other.pubKey);
@@ -171,7 +338,7 @@ namespace IXICore
             Array.Copy(address, addressNoChecksum, addressNoChecksum.Length);
         }
 
-        private byte[] constructAddress_v0(byte[] publicKeyOrAddress, byte[] addressNonce, bool verifyChecksum)
+        private byte[] constructAddress_v0(byte[] publicKeyOrAddress, byte[]? addressNonce, bool verifyChecksum)
         {
             byte[] baseAddress;
             if (publicKeyOrAddress.Length == 33)
@@ -218,7 +385,7 @@ namespace IXICore
             }
         }
 
-        private byte[] constructAddress_v1(byte[] publicKeyOrAddress, byte[] addressNonce, bool verifyChecksum)
+        private byte[] constructAddress_v1(byte[] publicKeyOrAddress, byte[]? addressNonce, bool verifyChecksum)
         {
             byte[] baseAddress;
             if (publicKeyOrAddress.Length == 45)
@@ -263,7 +430,7 @@ namespace IXICore
                 return raw_address;
             }
         }
-        private byte[] constructAddress_v2(byte[] publicKeyOrAddress, byte[] addressNonce, bool verifyChecksum)
+        private byte[] constructAddress_v2(byte[] publicKeyOrAddress, byte[]? addressNonce, bool verifyChecksum)
         {
             byte[] baseAddress;
             if (publicKeyOrAddress.Length == 45)

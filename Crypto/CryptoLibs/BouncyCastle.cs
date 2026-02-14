@@ -201,6 +201,7 @@ namespace IXICore
                 RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(keySize);
                 kp.privateKeyBytes = rsaKeyToBytes(rsa, true, version);
                 kp.publicKeyBytes = rsaKeyToBytes(rsa, false, version);
+                kp.addressBytes = new Address(kp.publicKeyBytes).addressNoChecksum;
 
                 byte[] plain = Encoding.UTF8.GetBytes("Plain text string");
                 if (!testKeys(plain, kp))
