@@ -14,6 +14,7 @@ using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 
 namespace IXICore.Utils
@@ -111,7 +112,7 @@ namespace IXICore.Utils
             return (bytes, bytesRead);
         }
 
-        public static byte[] copy(byte[] source)
+        public static byte[]? copy(byte[]? source)
         {
             if (source == null)
             {
@@ -123,7 +124,7 @@ namespace IXICore.Utils
             return newObj;
         }
 
-        public static Address copy(Address source)
+        public static Address? copy(Address? source)
         {
             if (source == null)
             {
@@ -211,6 +212,40 @@ namespace IXICore.Utils
                 return (validatedUri.Scheme == Uri.UriSchemeHttp || validatedUri.Scheme == Uri.UriSchemeHttps);
             }
             return false;
+        }
+
+        public static byte[]? ReadIxiBytes(this BinaryReader reader)
+        {
+            ulong rawLen = reader.ReadIxiVarUInt();
+            if (rawLen > int.MaxValue)
+            {
+                throw new InvalidDataException("IxiBytes length too large.");
+            }
+
+            int len = (int)rawLen;
+            if (len == 0)
+            {
+                return null;
+            }
+
+            // Allocate buffer once and fill directly
+            byte[] buffer = GC.AllocateUninitializedArray<byte>(len);
+            reader.BaseStream.ReadExactly(buffer);
+
+            return buffer;
+        }
+
+        public static void WriteIxiBytes(this BinaryWriter writer, byte[]? bytes)
+        {
+            if (bytes == null
+                || bytes.Length == 0)
+            {
+                writer.WriteIxiVarInt(0);
+                return;
+            }
+
+            writer.WriteIxiVarInt(bytes.Length);
+            writer.Write(bytes);
         }
     }
 

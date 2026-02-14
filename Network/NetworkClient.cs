@@ -37,7 +37,7 @@ namespace IXICore.Network
 
         private IPEndPoint bindEndpoint = null;
 
-        public NetworkClient(string bindAddress)
+        public NetworkClient(string bindAddress, Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null) : base(handler)
         {
             if (!string.IsNullOrEmpty(bindAddress))
             {
@@ -176,7 +176,7 @@ namespace IXICore.Network
             base.onInitialized();
             try
             {
-                CoreProtocolMessage.sendHelloMessageV6(this, false, Random.Shared.Next());
+                CoreProtocolMessage.sendHelloMessageV6(this, false, Random.Shared.Next(), ephemeralKeyPair);
             }catch(Exception e)
             {
                 if (running)

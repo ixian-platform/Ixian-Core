@@ -276,12 +276,11 @@ namespace IXICore.Network
                         Logging.error("Fatal exception in reconnectClients: {0}", e);
                     }
 
-                    // setup fresh wake signal
-                    var currentWake = wakeSignal;
-                    wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
                     // wait either interval or wake signal
-                    await Task.WhenAny(Task.Delay(reconnectInterval, token), currentWake.Task);
+                    await Task.WhenAny(Task.Delay(reconnectInterval, token), wakeSignal.Task);
+
+                    // setup fresh wake signal
+                    wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 }
             }
             catch (OperationCanceledException)

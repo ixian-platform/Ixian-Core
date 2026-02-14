@@ -478,7 +478,7 @@ namespace IXICore
         /// <param name="endpoint">Remote endpoint to send the message to.</param>
         /// <param name="sendHelloData">True if the message is the first hello sent to the remote node, false if it is a reply to the challenge.</param>
         /// <param name="challenge_response">Response byte-field to the other node's hello challenge</param>
-        public static void sendHelloMessageV6(RemoteEndpoint endpoint, bool sendHelloData, int challenge)
+        public static void sendHelloMessageV6(RemoteEndpoint endpoint, bool sendHelloData, int challenge, IxianKeyPair? keyPair = null)
         {
             using (MemoryStream m = new MemoryStream(1856))
             {
@@ -490,7 +490,11 @@ namespace IXICore
                     writer.WriteIxiVarInt(6);
 
                     // Send the public node address
-                    byte[] address = IxianHandler.getWalletStorage().getPrimaryAddress().addressWithChecksum;
+                    byte[] address = IxianHandler.getWalletStorage().getPrimaryAddress().addressNoChecksum;
+                    if (keyPair != null)
+                    {
+                        address = new Address(keyPair.addressBytes).addressNoChecksum;
+                    }
                     writer.WriteIxiVarInt(address.Length);
                     writer.Write(address);
 
@@ -508,8 +512,16 @@ namespace IXICore
                     writer.Write(CoreConfig.device_id);
 
                     // Send the wallet public key
-                    writer.WriteIxiVarInt(IxianHandler.getWalletStorage().getPrimaryPublicKey().Length);
-                    writer.Write(IxianHandler.getWalletStorage().getPrimaryPublicKey());
+                    if (keyPair != null)
+                    {
+                        writer.WriteIxiVarInt(keyPair.publicKeyBytes.Length);
+                        writer.Write(keyPair.publicKeyBytes);
+                    }
+                    else
+                    {
+                        writer.WriteIxiVarInt(IxianHandler.getWalletStorage().getPrimaryPublicKey().Length);
+                        writer.Write(IxianHandler.getWalletStorage().getPrimaryPublicKey());
+                    }
 
                     // Send listening port
                     writer.WriteIxiVarInt(IxianHandler.publicPort);
@@ -529,7 +541,15 @@ namespace IXICore
                             sigWriter.Write(publicHostname);
                             sigWriter.Write(challenge);
                         }
-                        byte[] signature = CryptoManager.lib.getSignature(mSig.ToArray(), IxianHandler.getWalletStorage().getPrimaryPrivateKey());
+                        byte[] signature;
+                        if (keyPair != null)
+                        {
+                            signature = CryptoManager.lib.getSignature(mSig.ToArray(), keyPair.privateKeyBytes);
+                        }
+                        else
+                        {
+                            signature = CryptoManager.lib.getSignature(mSig.ToArray(), IxianHandler.getWalletStorage().getPrimaryPrivateKey());
+                        }
                         writer.WriteIxiVarInt(signature.Length);
                         writer.Write(signature);
                     }

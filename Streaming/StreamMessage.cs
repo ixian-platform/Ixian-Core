@@ -252,7 +252,7 @@ namespace IXICore
                         int sig_length = (int)reader.ReadIxiVarUInt();
                         if (sig_length > 0)
                             signature = reader.ReadBytes(sig_length);
-
+                            
                         requireRcvConfirmation = reader.ReadBoolean();
 
                         if (serializationType == StreamMessageSerializationType.storage)
@@ -434,6 +434,8 @@ namespace IXICore
 
                     writer.WriteIxiVarInt(timestamp);
 
+                    // TODO add requireRcvConfirmation to checksum in v2
+
                     if (serializationType != StreamMessageSerializationType.checksum)
                     {
                         // Write the sig
@@ -446,7 +448,7 @@ namespace IXICore
                         {
                             writer.WriteIxiVarInt(0);
                         }
-
+                        
                         writer.Write(requireRcvConfirmation);
 
                         if (serializationType == StreamMessageSerializationType.storage)
@@ -468,6 +470,7 @@ namespace IXICore
                     writer.Write(id);
                     writer.WriteIxiVarInt((int)type);
                     writer.WriteIxiVarInt(timestamp);
+                    // TODO add requireRcvConfirmation and any other relevant fields in v2
                 }
                 return m.ToArray();
             }

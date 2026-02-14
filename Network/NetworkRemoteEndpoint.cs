@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -47,7 +47,7 @@ namespace IXICore.Network
             public ProtocolMessageCode code;
             public uint dataLen;
             public uint dataChecksum;
-            public byte[] legacyDataChecksum;
+            public byte[]? legacyDataChecksum;
         }
 
         public string fullAddress = "127.0.0.1:0";
@@ -67,17 +67,17 @@ namespace IXICore.Network
 
         public bool fullyStopped = false;
 
-        public IPEndPoint remoteIP;
+        public IPEndPoint? remoteIP;
         public Socket clientSocket;
         public RemoteEndpointState state;
 
         // Maintain tasks for handling data receiving and sending
-        protected Task recvTask = null;
-        protected Task sendTask = null;
-        protected Task parseTask = null;
+        protected Task? recvTask = null;
+        protected Task? sendTask = null;
+        protected Task? parseTask = null;
 
-        public Presence presence = null;
-        public PresenceAddress presenceAddress = null;
+        public Presence? presence = null;
+        public PresenceAddress? presenceAddress = null;
 
         protected bool running = false;
 
@@ -92,27 +92,34 @@ namespace IXICore.Network
         // Maintain a queue of raw received data
         private Channel<QueueMessageRaw?> recvRawQueueMessages = Channel.CreateUnbounded<QueueMessageRaw?>();
 
-        private byte[] socketReadBuffer = null;
+        private byte[]? socketReadBuffer = null;
 
         protected List<TimeSyncData> timeSyncs = new List<TimeSyncData>();
 
         protected bool enableSendTimeSyncMessages = true;
-
-        private ThreadLiveCheck TLC;
 
         private List<InventoryItem> inventory = new List<InventoryItem>();
         private long inventoryLastSent = 0;
 
         private List<long> requestedMessageIds = new List<long>();
 
-        public Address serverWalletAddress = null;
-        public byte[] serverPubKey = null;
+        public Address? serverWalletAddress = null;
+        public byte[]? serverPubKey = null;
 
-        public byte[] challenge = null;
+        public byte[]? challenge = null;
 
         public int version = 6;
 
         public bool reconnectOnFailure = true;
+
+        protected Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? messageHandler;
+
+        public IxianKeyPair? ephemeralKeyPair = null;
+
+        public RemoteEndpoint(Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null)
+        {
+            messageHandler = handler;
+        }
 
         protected void prepareSocket(Socket socket)
         {
@@ -131,7 +138,7 @@ namespace IXICore.Network
             socket.Blocking = true;
         }
 
-        public void start(Socket socket = null)
+        public void start(Socket? socket = null)
         {
             if (fullyStopped)
             {
@@ -187,28 +194,14 @@ namespace IXICore.Network
 
             try
             {
-                TLC = new ThreadLiveCheck();
-
-                // Start receive thread
-                recvTask = Task.Run(() => recvLoop());
-                recvTask.ContinueWith(t =>
-                {
-                    Logging.error("Exception in task: " + t.Exception);
-                }, TaskContinuationOptions.OnlyOnFaulted);
+                // Start parse thread
+                parseTask = Task.Run(() => parseLoop());
 
                 // Start send thread
                 sendTask = Task.Run(() => sendLoop());
-                sendTask.ContinueWith(t =>
-                {
-                    Logging.error("Exception in task: " + t.Exception);
-                }, TaskContinuationOptions.OnlyOnFaulted);
 
-                // Start parse thread
-                parseTask = Task.Run(() => parseLoop());
-                parseTask.ContinueWith(t =>
-                {
-                    Logging.error("Exception in task: " + t.Exception);
-                }, TaskContinuationOptions.OnlyOnFaulted);
+                // Start receive thread
+                recvTask = Task.Run(() => recvLoop());
             }
             catch (Exception e)
             {
@@ -220,6 +213,11 @@ namespace IXICore.Network
         // Aborts all related endpoint threads and data
         public void stop(bool fully_stopped = true)
         {
+            if (running == false)
+            {
+                return;
+            }
+
             fullyStopped = fully_stopped;
 
             state = RemoteEndpointState.Closed;
@@ -251,7 +249,7 @@ namespace IXICore.Network
             {
                 try
                 {
-                    parseTask.GetAwaiter().GetResult();
+                    //parseTask.GetAwaiter().GetResult();
                 }
                 catch (Exception e)
                 {
@@ -311,7 +309,6 @@ namespace IXICore.Network
                 int messageCount = 0;
                 while (running)
                 {
-                    TLC.Report();
                     // Let the protocol handler receive and handle messages
                     bool message_received = false;
                     try
@@ -485,7 +482,6 @@ namespace IXICore.Network
 
                 while (running)
                 {
-                    TLC.Report();
                     long curTime = Clock.getTimestamp();
                     if (helloReceived == false && curTime - connectionStartTime > 10)
                     {
@@ -619,12 +615,12 @@ namespace IXICore.Network
                 IEnumerable<InventoryItem> items_to_send = null;
                 lock (inventory)
                 {
-                    if (inventory.Count() == 0)
+                    if (inventory.Count == 0)
                     {
                         return;
                     }
                     long cur_time = Clock.getTimestamp();
-                    if (inventory.Count() < CoreConfig.maxInventoryItems && inventoryLastSent > cur_time - CoreConfig.inventoryInterval)
+                    if (inventory.Count < CoreConfig.maxInventoryItems && inventoryLastSent > cur_time - CoreConfig.inventoryInterval)
                     {
                         return;
                     }
@@ -658,7 +654,6 @@ namespace IXICore.Network
         {
             while (running)
             {
-                TLC.Report();
                 try
                 {
                     QueueMessageRaw? active_message_task = await recvRawQueueMessages.Reader.ReadAsync().ConfigureAwait(false);
@@ -717,7 +712,11 @@ namespace IXICore.Network
                             }
                         }
                     }
-                    CoreProtocolMessage.readProtocolMessage(active_message, priority, this);
+                    handleMessage(active_message, priority);
+                }
+                catch (OperationCanceledException)
+                {
+                    // normal shutdown
                 }
                 catch (Exception e)
                 {
@@ -726,6 +725,17 @@ namespace IXICore.Network
                     Logging.error("Exception occurred for client {0} in parseLoopRE: {1} ", getFullAddress(), e);
                 }
             }
+        }
+
+        protected virtual void handleMessage(QueueMessageRaw message, MessagePriority priority)
+        {
+            if (messageHandler != null)
+            {
+                messageHandler(message, priority, this);
+                return;
+            }
+
+            CoreProtocolMessage.readProtocolMessage(message, priority, this);
         }
 
         protected void parseDataInternal(QueueMessageRaw message)
@@ -738,7 +748,7 @@ namespace IXICore.Network
         {
             try
             {
-                byte[] ba = prepareProtocolMessage(code, data, version, checksum);
+                byte[]? ba = prepareProtocolMessage(code, data, version, checksum);
                 NetDump.Instance.appendSent(clientSocket, ba, ba.Length);
                 for (int sentBytes = 0; sentBytes < ba.Length && running;)
                 {
@@ -1389,9 +1399,9 @@ namespace IXICore.Network
         /// <param name="data">Payload for the message.</param>
         /// <param name="checksum">Optional checksum. If not supplied, or if null, this function will calculate it with the default method.</param>
         /// <returns>Serialized message as a byte-field</returns>
-        public static byte[] prepareProtocolMessage(ProtocolMessageCode code, byte[] data,int version, uint checksum)
+        public static byte[]? prepareProtocolMessage(ProtocolMessageCode code, byte[] data,int version, uint checksum)
         {
-            byte[] result = null;
+            byte[]? result = null;
 
             // Prepare the protocol sections
             int data_length = data.Length;

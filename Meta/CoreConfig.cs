@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2025 Ixian
+// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -12,6 +12,12 @@
 
 namespace IXICore
 {
+    public enum P2PTransactionMode
+    {
+        PrimaryAddress = 0,
+        Custom = 1,
+    }
+
     /// <summary>
     /// Basic Ixian (compile-time) configuration values.
     /// </summary>
@@ -20,7 +26,7 @@ namespace IXICore
         /// <summary>
         /// Current version of IxiCore.
         /// </summary>
-        public static readonly string version = "xcore-0.9.7h";
+        public static readonly string version = "xcore-0.9.8-dev";
 
         /// <summary>
         /// Current version of the Ixian network protocol.
@@ -32,13 +38,13 @@ namespace IXICore
         /// Useful for optimized block header sync
         /// Note: Always round last block height to 1000 and subtract 1 (i.e. if last block height is 33234, the correct value is 32999)
         /// </summary>
-        public static ulong bakedBlockHeight = 5589999;
+        public static ulong bakedBlockHeight = 5709999;
 
         /// <summary>
         /// Mainnet block checksum (paired with bakedBlockHeight) of bakedBlockHeight
         /// Useful for optimized block header sync
         /// </summary>
-        public static byte[] bakedBlockChecksum = Crypto.stringToHash("ee1b688494aceeeb4c26a62922d12906f5e1adc7f2ac99a950555d86c4d222d21e80cbca6c5a9d5316bf3cf1e1d7fea6ae62a72fedabda40bd6d9703243d302b");
+        public static byte[] bakedBlockChecksum = Crypto.stringToHash("438c73fd5f795ecf4f418ebdec2cadc303ef71cdd205f4ed03c408af444b5ea8edf9aba1f424af939f80ae92eaf59cbbaa3e360d973688360e6aba7715993705");
 
         /// <summary>
         /// Number of wallets to send in each chunk of data when synchronizing new Master Nodes.
@@ -219,5 +225,7 @@ namespace IXICore
         public static int requestPresenceForcedTimeout = 3;
 
         public static int messageExpirationSeconds = 86400 * 5; // 5 Days
+
+        public static P2PTransactionMode p2pTransactionMode = P2PTransactionMode.PrimaryAddress;
     }
 }
