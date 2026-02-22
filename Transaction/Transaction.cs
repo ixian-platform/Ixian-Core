@@ -88,12 +88,12 @@ namespace IXICore
             /// <summary>
             ///  Optional data included with the transaction. This can be any byte-field. The transaction fee will increase with the amount of data.
             /// </summary>
-            private byte[] _data = null;
+            private byte[]? _data = null;
 
             /// <summary>
             ///  Optional data included with the transaction. This can be any byte-field. The transaction fee will increase with the amount of data.
             /// </summary>
-            public byte[] data
+            public byte[]? data
             {
                 get { return _data; }
                 set
@@ -109,8 +109,8 @@ namespace IXICore
             /// <summary>
             ///  Checksum of optional data included with the transaction.
             /// </summary>
-            private byte[] _dataChecksum = null;
-            public byte[] dataChecksum
+            private byte[]? _dataChecksum = null;
+            public byte[]? dataChecksum
             {
                 get { return _dataChecksum; }
                 set
@@ -141,7 +141,7 @@ namespace IXICore
                 }
             }
 
-            public ToEntry(int txVersion, IxiNumber amount, byte[] data = null, byte[] dataChecksum = null)
+            public ToEntry(int txVersion, IxiNumber amount, byte[]? data = null, byte[]? dataChecksum = null)
             {
                 this.txVersion = txVersion;
                 this.amount = amount;

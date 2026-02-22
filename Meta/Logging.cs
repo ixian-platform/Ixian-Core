@@ -197,7 +197,7 @@ namespace IXICore.Meta
             {
                 if(consoleOutput)
                 {
-                    string formattedMessage = "!!! " + DateTime.Now.ToString("MM-dd HH:mm:ss.ffff") + "|" + log_severity + "|" + Thread.CurrentThread.ManagedThreadId + ": " + log_message;
+                    string formattedMessage = "* " + DateTime.Now.ToString("MM-dd HH:mm:ss.ffff") + "|" + log_severity + "|" + Thread.CurrentThread.ManagedThreadId + ": " + log_message;
                     Console.WriteLine(formattedMessage);
                 }
 
