@@ -1,0 +1,35 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <DefineConstants>$(DefineConstants);__ROCKS_DB_SHARP__</DefineConstants>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>UnitTests</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  
+  <Import Project="..\IXICore.projitems" Label="Shared" />
+  
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+    <PackageReference Include="MSTest.TestFramework" Version="4.1.0" />
+    <PackageReference Include="MSTest.TestAdapter" Version="4.1.0" />
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    <PackageReference Include="FluentCommandLineParser-netstandard" Version="1.4.3.13" />
+    <PackageReference Include="Mono.Nat" Version="3.0.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="RocksDB" Version="10.4.2.64152" />
+  </ItemGroup>
+  
+  <PropertyGroup>
+    <AssemblyName>IxiCoreUnitTests</AssemblyName>
+    <AssemblyTitle>Ixian Core Unit Tests</AssemblyTitle>
+    <AssemblyDescription></AssemblyDescription>
+    <AssemblyCompany>Ixian</AssemblyCompany>
+    <Product>Ixian Core Unit Tests</Product>
+    <Copyright>Copyright © 2026 Ixian</Copyright>
+    <VersionPrefix>1.0.0.0</VersionPrefix>
+    <PackageProjectUrl>https://www.ixian.io</PackageProjectUrl>
+    <CLSCompliant>true</CLSCompliant>
+    <ComVisible>false</ComVisible>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,34 @@
+name: .NET
+
+on:
+  push:
+    branches: [ 'master', 'development' ]
+
+defaults:
+  run:
+    working-directory: Ixian-Core
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Ixian-Core
+      uses: actions/checkout@v4
+      with:
+        path: Ixian-Core
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: '10.0.x'
+
+    - name: Restore dependencies
+      run: dotnet restore
+
+    - name: Building Ixian-Core
+      run: dotnet build
+
+    - name: Running Unit Tests
+      run: dotnet test IXICore.sln --verbosity normal
