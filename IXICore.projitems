@@ -13,8 +13,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Activity\ActivityStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Activity\IActivityStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Address\Address.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Address\AddressClient.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Address\AddressMatcher.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)API\GenericAPIServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Block\Block.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Block\BlockHeaderStorage.cs" />
@@ -87,12 +85,18 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\Friend.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendList.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Friends\FriendMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\IXISocket.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\IXISocketConnections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\MessageCrypto.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AppProtocolsMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\RequestAdd2Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptAdd2Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\KeysMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\Keys2Message.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionSend.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionSendRequest.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionSendResponse.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\OfflinePushMessages.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\PendingMessageProcessor.cs" />

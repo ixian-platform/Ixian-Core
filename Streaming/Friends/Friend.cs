@@ -148,6 +148,13 @@ namespace IXICore.Streaming
         }
     }
 
+    public enum FriendType
+    {
+        Normal = 0,
+        Temporary = 1,
+        Payment = 2
+    }
+
     public enum FriendState
     {
         RequestSent,
@@ -220,8 +227,11 @@ namespace IXICore.Streaming
         [JsonIgnore]
         public byte[] aesSalt = null;
 
-        public Friend(FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
+        public FriendType type = FriendType.Normal;
+
+        public Friend(FriendType friend_type, FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
         {
+            type = friend_type;
             state = friend_state;
             walletAddress = wallet;
             publicKey = public_key;
@@ -250,7 +260,6 @@ namespace IXICore.Streaming
 
         public Friend(byte[] bytes, int version = 5)
         {
-
             using (MemoryStream m = new MemoryStream(bytes))
             {
                 using (BinaryReader reader = new BinaryReader(m))
@@ -350,6 +359,7 @@ namespace IXICore.Streaming
                                 aesSalt = reader.ReadBytes(aes_salt_len);
                             }
                         }
+
                         if (version >= 8)
                         {
                             streamCapabilities = (StreamCapabilities)reader.ReadInt32();
@@ -365,6 +375,11 @@ namespace IXICore.Streaming
                         {
                             streamCapabilities = StreamCapabilities.Incoming | StreamCapabilities.Outgoing | StreamCapabilities.IPN | StreamCapabilities.Apps;
                         }
+
+                        if (version >= 9)
+                        {
+                            type = (FriendType)reader.ReadInt32();
+                        }
                     } catch (Exception e)
                     {
                         Logging.error("Exception in Friend deserialization: " + e);
@@ -379,7 +394,7 @@ namespace IXICore.Streaming
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    writer.Write(8);
+                    writer.Write(9);
 
                     writer.Write(walletAddress.addressNoChecksum.Length);
                     writer.Write(walletAddress.addressNoChecksum);
@@ -475,6 +490,8 @@ namespace IXICore.Streaming
                         writer.Write((byte)proto.Length);
                         writer.Write(proto);
                     }
+
+                    writer.Write((int)type);
                 }
                 return m.ToArray();
             }
@@ -996,6 +1013,11 @@ namespace IXICore.Streaming
 
         public void save()
         {
+            if (type == FriendType.Temporary)
+            {
+                return;
+            }
+
             lock (saveLock)
             {
                 string base_path = Path.Combine(FriendList.accountsPath, walletAddress.ToString());
@@ -1021,6 +1043,11 @@ namespace IXICore.Streaming
 
         public void saveMetaData()
         {
+            if (type == FriendType.Temporary)
+            {
+                return;
+            }
+
             lock (saveLock)
             {
                 string base_path = Path.Combine(FriendList.accountsPath, walletAddress.ToString());

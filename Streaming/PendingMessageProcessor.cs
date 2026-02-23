@@ -71,6 +71,7 @@ namespace IXICore.Streaming
                         PendingRecipient pr = new PendingRecipient(friend.walletAddress);
                         pendingRecipients.Add(pr);
                         var file_arr = Directory.GetFiles(dir_path).OrderBy(x => x);
+                        int pendingMessageCount = 0;
                         foreach (string file_path in file_arr)
                         {
                             PendingMessage pm = null;
@@ -85,11 +86,17 @@ namespace IXICore.Streaming
                             if (pm != null && pr.messageQueue.Find(x => x.id.SequenceEqual(pm.streamMessage.id)) == null)
                             {
                                 pr.messageQueue.Add(new PendingMessageHeader { id = pm.streamMessage.id, filePath = file_path, sendToServer = pm.sendToServer });
+                                pendingMessageCount++;
                             }
                             else
                             {
                                 File.Delete(file_path);
                             }
+                        }
+                        if (friend.type == FriendType.Payment
+                            && pendingMessageCount == 0)
+                        {
+                            FriendList.removeFriend(friend);
                         }
                     }
                     catch (Exception e)
@@ -284,6 +291,13 @@ namespace IXICore.Streaming
                         if (File.Exists(tmp_msg_header.filePath))
                         {
                             File.Delete(tmp_msg_header.filePath);
+
+                            if (friend.type == FriendType.Payment
+                                && pending_recipient.messageQueue.Count == 0)
+                            {
+                                FriendList.removeFriend(friend);
+                            }
+
                             return true;
                         }
                     }

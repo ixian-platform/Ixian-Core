@@ -64,6 +64,12 @@ namespace IXICore
         getAppProtocols = 43,
         appProtocols = 44,
         appProtocolData = 45,
+        transactionSendRequest = 46,
+        transactionSendResponse = 47,
+        transactionSend = 48,
+        transactionRequest = 49,
+        openSecureConnection = 50,
+        closeSecureConnection = 51,
         reserved = 0xF0, // 0xF0-0xFF reserved for custom apps/services
     }
 

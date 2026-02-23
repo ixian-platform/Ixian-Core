@@ -14,6 +14,8 @@ using IXICore.Activity;
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.RegNames;
+using IXICore.Streaming;
+using IXICore.Streaming.Models;
 using IXICore.Utils;
 using Newtonsoft.Json;
 using System;
@@ -23,6 +25,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using static IXICore.Transaction;
 
 namespace IXICore
@@ -114,22 +117,22 @@ namespace IXICore
 
     public class JsonRpcRequest
     {
-        public string id = null;
-        public string method = null;
+        public string? id = null;
+        public string? method = null;
         public Dictionary<string, object> @params = null;
     }
 
     public class JsonError
     {
         public int code = 0;
-        public string message = null;
+        public string? message = null;
     }
 
     public class JsonResponse
     {
-        public object result = null;
-        public JsonError error = null;
-        public string id = null;
+        public object? result = null;
+        public JsonError? error = null;
+        public string? id = null;
     }
 
     public class GenericAPIServer
@@ -520,10 +523,19 @@ namespace IXICore
                 response = onRelaySectors();
             }
 
-
             if (methodName.Equals("getSectorNodes", StringComparison.OrdinalIgnoreCase))
             {
                 response = onGetSectorNodes(parameters);
+            }
+
+            if (methodName.Equals("extendAddress", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onExtendAddress(parameters).Result;
+            }
+
+            if (methodName.Equals("resolveExtendedAddress", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onResolveExtendedAddress(parameters).Result;
             }
 
             return response;
@@ -887,9 +899,16 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_IN_WARMUP, message = String.Format("There was an error while creating the transaction: The node isn't ready to process this request yet.") } };
             }
 
+            byte[]? requestId = null;
+            if (parameters.ContainsKey("requestId"))
+            {
+                requestId = Crypto.stringToHash((string)parameters["requestId"]);
+            }
+
             object r = createTransactionHelper(parameters);
-            Transaction transaction = null;
-            List<Address> relayNodeAddresses = null;
+            Transaction transaction;
+            List<Address> relayNodeAddresses;
+            List<ExtendedAddress> extendedAddresses;
             if (r is JsonResponse)
             {
                 // there was an error
@@ -900,6 +919,7 @@ namespace IXICore
                 TransactionWithRelays helperResponse = (TransactionWithRelays)r;
                 transaction = helperResponse.transaction;
                 relayNodeAddresses = helperResponse.relayNodeAddresses;
+                extendedAddresses = helperResponse.extendedAddresses;
             }
             else
             {
@@ -913,7 +933,7 @@ namespace IXICore
                     }
                 };
             }
-            if (IxianHandler.addTransaction(transaction, relayNodeAddresses, true))
+            if (IxianHandler.addTransaction(transaction, relayNodeAddresses, extendedAddresses, requestId, true))
             {
                 PendingTransactions.addPendingLocalTransaction(transaction, relayNodeAddresses);
                 return new JsonResponse { result = transaction.toDictionary(), error = null };
@@ -1044,7 +1064,21 @@ namespace IXICore
 
             List<Address> relayNodeAddresses = new() { new Address((string)parameters["relayNodeAddress"]) };
 
-            if (IxianHandler.addTransaction(raw_transaction, relayNodeAddresses, true))
+            if (!parameters.ContainsKey("extendedAddresses"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "extendedAddresses parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+
+            List<ExtendedAddress> extendedAddresses = new() { new ExtendedAddress((string)parameters["extendedAddresses"]) };
+
+            byte[]? requestId = null;
+            if (parameters.ContainsKey("requestId"))
+            {
+                requestId = Crypto.stringToHash((string)parameters["requestId"]);
+            }
+
+            if (IxianHandler.addTransaction(raw_transaction, relayNodeAddresses, extendedAddresses, requestId, true))
             {
                 PendingTransactions.addPendingLocalTransaction(raw_transaction, relayNodeAddresses);
                 return new JsonResponse { result = raw_transaction.toDictionary(), error = null };
@@ -1837,7 +1871,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
                 PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
@@ -1870,7 +1904,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
                 PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
@@ -1932,7 +1966,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
                 PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
@@ -1989,7 +2023,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
                 PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
@@ -2055,7 +2089,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "An unknown error occurred while funding the transaction" } };
             }
 
-            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, true))
+            if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
                 PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
@@ -2293,25 +2327,35 @@ namespace IXICore
 
             IxiNumber to_amount = 0;
             Dictionary<Address, ToEntry> toList = new Dictionary<Address, ToEntry>(new AddressComparer());
+            List<ExtendedAddress> extendedAddresses = new List<ExtendedAddress>();
             string[] to_split = ((string)parameters["to"]).Split('-');
             if (to_split.Length > 0)
             {
                 foreach (string single_to in to_split)
                 {
                     string[] single_to_split = single_to.Split('_');
-                    byte[] single_to_address = Base58Check.Base58CheckEncoding.DecodePlain(single_to_split[0]);
-                    if (!Address.validateChecksum(single_to_address))
+                    ExtendedAddress? single_to_address;
+                    try
+                    {
+                        single_to_address = new ExtendedAddress(string.Join('_', single_to_split.Take(single_to_split.Length - 1)));
+                        single_to_address = CoreStreamProcessor.resolveExtendedAddress(single_to_address).Result;
+                        if (single_to_address == null)
+                        {
+                            return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_ADDRESS_OR_KEY, message = "Unable to resolve extended address" } };
+                        }
+                    } catch
                     {
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_ADDRESS_OR_KEY, message = "Invalid to address was specified" } };
                     }
-                    IxiNumber singleToAmount = new IxiNumber(single_to_split[1]);
+                    IxiNumber singleToAmount = new IxiNumber(single_to_split.Last());
                     if (singleToAmount < 0 || singleToAmount == 0)
                     {
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_PARAMS, message = "Invalid to amount was specified" } };
                     }
                     to_amount += singleToAmount;
-                    ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()), singleToAmount, null, null);
-                    toList.Add(new Address(single_to_address), toEntry);
+                    ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()), singleToAmount, single_to_address.Tag, null);
+                    toList.Add(single_to_address.PaymentAddress, toEntry);
+                    extendedAddresses.Add(single_to_address);
                 }
             }
 
@@ -2424,7 +2468,7 @@ namespace IXICore
             }
 
             // the transaction appears valid
-            return new TransactionWithRelays(transaction, relayNodeAddresses);
+            return new TransactionWithRelays(transaction, relayNodeAddresses, extendedAddresses);
         }
 
         public JsonResponse onPl()
@@ -2477,17 +2521,107 @@ namespace IXICore
 
             return new JsonResponse { result = relayList, error = error };
         }
+
+        public async Task<JsonResponse> onExtendAddress(Dictionary<string, object> parameters)
+        {
+            JsonError error = null;
+            // Check for required parameters
+            if (!parameters.ContainsKey("flag"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "flag parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+            AddressPaymentFlag flag = (AddressPaymentFlag)int.Parse((string)parameters["flag"]);
+
+            if (!parameters.ContainsKey("tag"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "tag parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+            byte[] tag = Crypto.stringToHash((string)parameters["tag"]);
+
+            ExtendedAddress extendedAddress;
+            switch (flag)
+            {
+                case AddressPaymentFlag.Primary:
+                case AddressPaymentFlag.End2End:
+                case AddressPaymentFlag.OfflineTag:
+                    try
+                    {
+                        extendedAddress = new ExtendedAddress(IxianHandler.primaryWalletAddress, flag, tag);
+                    }
+                    catch (Exception e)
+                    {
+                        error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "cannot construct extended address: " + e.Message };
+                        return new JsonResponse { result = null, error = error };
+                    }
+                    break;
+                case AddressPaymentFlag.OfflineAddress:
+                    try
+                    {
+                        if (!parameters.ContainsKey("paymentAddress"))
+                        {
+                            error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "paymentAddress parameter is missing" };
+                            return new JsonResponse { result = null, error = error };
+                        }
+                        Address paymentAddress = new Address((string)parameters["paymentAddress"]);
+                        extendedAddress = new ExtendedAddress(IxianHandler.primaryWalletAddress, paymentAddress, tag);
+                    }
+                    catch (Exception e)
+                    {
+                        error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "cannot construct extended address: " + e.Message };
+                        return new JsonResponse { result = null, error = error };
+                    }
+                    break;
+                default:
+                    error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "Invalid flag value" };
+                    return new JsonResponse { result = null, error = error };
+            }
+
+            return new JsonResponse { result = extendedAddress.ToString(), error = null };
+        }
+
+        public async Task<JsonResponse> onResolveExtendedAddress(Dictionary<string, object> parameters)
+        {
+            JsonError error = null;
+            // Check for required parameters
+            if (!parameters.ContainsKey("extendedAddress"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "extendedAddress parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+            string extendedAddressStr = (string)parameters["extendedAddress"];
+            ExtendedAddress extendedAddress;
+            try
+            {
+                extendedAddress = new ExtendedAddress(extendedAddressStr);
+            }
+            catch (Exception e)
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "extendedAddress parameter is invalid: " + e.Message };
+                return new JsonResponse { result = null, error = error };
+            }
+            ExtendedAddress? resolvedAddress = await CoreStreamProcessor.resolveExtendedAddress(extendedAddress);
+            if (resolvedAddress == null)
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "Could not resolve the extended address" };
+                return new JsonResponse { result = null, error = error };
+            }
+            return new JsonResponse { result = resolvedAddress.ToString(), error = null };
+        }
     }
 
     internal class TransactionWithRelays
     {
         public Transaction transaction { get; private set; }
         public List<Address> relayNodeAddresses { get; private set; }
+        public List<ExtendedAddress> extendedAddresses { get; private set; }
 
-        public TransactionWithRelays(Transaction transaction, List<Address> relayNodeAddresses)
+        public TransactionWithRelays(Transaction transaction, List<Address> relayNodeAddresses, List<ExtendedAddress> extendedAddresses)
         {
             this.transaction = transaction;
             this.relayNodeAddresses = relayNodeAddresses;
+            this.extendedAddresses = extendedAddresses;
         }
     }
 }

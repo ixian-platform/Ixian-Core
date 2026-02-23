@@ -19,48 +19,97 @@ namespace IXICore
 {
     public class ExtendedAddress
     {
-        private readonly char extensionDelimiter = '_';
+        private readonly char _extensionDelimiter = '_';
+        private readonly int _checksumLen = 3;
 
-        public Address address { get; private set; }
-        public AddressPaymentFlag flag { get; private set; } = AddressPaymentFlag.Primary;
-        public byte[]? extendedData { get; private set; } = null;
+        public Address RoutingAddress { get; private set; }
+        public Address PaymentAddress { get; private set; }
+        public AddressPaymentFlag Flag { get; private set; } = AddressPaymentFlag.Primary;
+        public byte[]? Tag { get; private set; } = null;
 
-        public ExtendedAddress(Address address, AddressPaymentFlag flag, byte[]? extendedData)
+        public ExtendedAddress(Address address, AddressPaymentFlag flag, byte[]? tag)
         {
-            if (flag != AddressPaymentFlag.Primary
-                && address.nonce != null)
+            if (flag == AddressPaymentFlag.OfflineAddress)
+            {
+                throw new Exception("Cannot construct extended address, offline address flag is not supported for this constructor.");
+            }
+
+            if (address.nonce != null)
             {
                 throw new Exception("Cannot construct extended address, extended address is not supported for addresses with nonce.");
             }
-            this.address = address;
-            this.flag = flag;
-            this.extendedData = extendedData;
+
+            RoutingAddress = address;
+            PaymentAddress = address;
+            Flag = flag;
+            Tag = tag;
+
+            if (tag != null && tag.Length > 16)
+            {
+                throw new Exception("Cannot construct extended address, tag length cannot be longer than 16 bytes.");
+            }
+        }
+
+        public ExtendedAddress(Address routingAddress, Address paymentAddress, byte[]? tag)
+        {
+            if (routingAddress.nonce != null)
+            {
+                throw new Exception("Cannot construct extended address, extended address is not supported for addresses with nonce.");
+            }
+
+            RoutingAddress = routingAddress;
+            PaymentAddress = paymentAddress;
+            Flag = AddressPaymentFlag.OfflineAddress;
+            Tag = tag;
+
+            if (tag != null && tag.Length > 16)
+            {
+                throw new Exception("Cannot construct extended address, tag length cannot be longer than 16 bytes.");
+            }
         }
 
         public ExtendedAddress(string base58EncodedExtendedAddress)
         {
             string base58EncodedAddress = base58EncodedExtendedAddress;
-            string? flagAndTagPart = null;
-            if (base58EncodedExtendedAddress.Contains(extensionDelimiter))
+            string? extendedData = null;
+            if (base58EncodedExtendedAddress.Contains(_extensionDelimiter))
             {
-                var s = base58EncodedExtendedAddress.Split(extensionDelimiter);
+                var s = base58EncodedExtendedAddress.Split(_extensionDelimiter);
                 base58EncodedAddress = s[0];
-                flagAndTagPart = s[1];
+                extendedData = s[1];
             }
-            address = new Address(base58EncodedAddress);
+            PaymentAddress = new Address(base58EncodedAddress);
+            RoutingAddress = PaymentAddress;
 
-            if (flagAndTagPart != null)
+            if (extendedData != null)
             {
-                byte[] flagAndTagBytes = Base58Check.Base58CheckEncoding.DecodePlain(flagAndTagPart);
-                if (!CryptoManager.lib.sha3_512sqTrunc(flagAndTagBytes, 0, flagAndTagBytes.Length - 3, 3).SequenceEqual(flagAndTagBytes.Skip(flagAndTagBytes.Length - 3)))
+                byte[] extendedDataBytes = Base58Check.Base58CheckEncoding.DecodePlain(extendedData);
+                if (!CryptoManager.lib.sha3_512sqTrunc(extendedDataBytes, 0, extendedDataBytes.Length - _checksumLen, _checksumLen).SequenceEqual(extendedDataBytes.Skip(extendedDataBytes.Length - _checksumLen)))
                 {
-                    throw new Exception("Invalid address was specified (flag and tag checksum error).");
+                    throw new Exception("Invalid address was specified (extended data checksum error).");
                 }
-                flag = (AddressPaymentFlag)flagAndTagBytes[0];
-                if (flagAndTagBytes.Length > 1 + 3)
+                Flag = (AddressPaymentFlag)extendedDataBytes[0];
+                if (Flag == AddressPaymentFlag.OfflineAddress)
                 {
-                    extendedData = new byte[flagAndTagBytes.Length - 1 - 3];
-                    Array.Copy(flagAndTagBytes, 1, extendedData, 0, extendedData.Length);
+                    byte[] routingAddressBytes = new byte[Address.addressVersionLengths[extendedDataBytes[1]]];
+                    Array.Copy(extendedDataBytes, 1, routingAddressBytes, 0, routingAddressBytes.Length);
+                    RoutingAddress = new Address(routingAddressBytes);
+
+                    Tag = new byte[extendedDataBytes.Length - routingAddressBytes.Length - 1 - _checksumLen];
+                    Array.Copy(extendedDataBytes, 1 + routingAddressBytes.Length, Tag, 0, Tag.Length);
+                }
+                else
+                {
+                    if (extendedDataBytes.Length > 1 + _checksumLen)
+                    {
+                        Tag = new byte[extendedDataBytes.Length - 1 - _checksumLen];
+                        Array.Copy(extendedDataBytes, 1, Tag, 0, Tag.Length);
+                    }
+                }
+
+                if (Tag != null && Tag.Length > 16)
+                {
+                    throw new Exception("Cannot construct extended address, tag length cannot be longer than 16 bytes.");
                 }
             }
         }
@@ -71,9 +120,19 @@ namespace IXICore
             {
                 using (BinaryReader reader = new BinaryReader(m))
                 {
-                    address = new Address(reader.ReadIxiBytes()!);
-                    flag = (AddressPaymentFlag)reader.ReadIxiVarUInt();
-                    extendedData = reader.ReadIxiBytes()!;
+                    PaymentAddress = new Address(reader.ReadIxiBytes()!);
+                    RoutingAddress = PaymentAddress;
+                    Flag = (AddressPaymentFlag)reader.ReadIxiVarUInt();
+                    if (Flag == AddressPaymentFlag.OfflineAddress)
+                    {
+                        RoutingAddress = new Address(reader.ReadIxiBytes()!);
+                    }
+                    Tag = reader.ReadIxiBytes()!;
+
+                    if (Tag != null && Tag.Length > 16)
+                    {
+                        throw new Exception("Cannot construct extended address, tag length cannot be longer than 16 bytes.");
+                    }
                 }
             }
         }
@@ -84,9 +143,13 @@ namespace IXICore
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    writer.WriteIxiBytes(address.addressNoChecksum);
-                    writer.WriteIxiVarInt((int)flag);
-                    writer.WriteIxiBytes(extendedData);
+                    writer.WriteIxiBytes(PaymentAddress.addressNoChecksum);
+                    writer.WriteIxiVarInt((int)Flag);
+                    if (Flag == AddressPaymentFlag.OfflineAddress)
+                    {
+                        writer.WriteIxiBytes(RoutingAddress.addressNoChecksum);
+                    }
+                    writer.WriteIxiBytes(Tag);
                 }
                 return m.ToArray();
             }
@@ -94,58 +157,44 @@ namespace IXICore
 
 
         /// <summary>
-        /// Converts a binary Address representation into it's textual (base58) form, extended with an Address Flag and a tag. It is used in the Json Api and various clients.
+        /// Converts a binary Address representation into its textual (base58) form, extended with an Address Flag and a tag.
+        /// It is used in the JSON API and various clients.
         /// </summary>
         /// <returns>Textual representation of the address.</returns>
         public override string ToString()
         {
-            var flagAndTagBytes = GetFlagAndTagBytes(flag, extendedData, true);
-            return address.ToString() + extensionDelimiter + Base58Check.Base58CheckEncoding.EncodePlain(flagAndTagBytes);
+            var extendedDataBytes = GetExtendedData(true);
+            return PaymentAddress.ToString() + _extensionDelimiter + Base58Check.Base58CheckEncoding.EncodePlain(extendedDataBytes);
         }
 
-        private byte[] GetFlagAndTagBytes(AddressPaymentFlag flag, byte[]? tag, bool includeChecksum)
+        private byte[] GetExtendedData(bool includeChecksum)
         {
-            if (flag != AddressPaymentFlag.Primary
-                && address.nonce != null)
+            using (MemoryStream m = new MemoryStream())
             {
-                throw new Exception("Cannot convert address to string, extended address is not supported for addresses with nonce.");
-            }
+                using (BinaryWriter writer = new BinaryWriter(m))
+                {
+                    writer.WriteIxiVarInt((int)Flag);
+                    if (Flag == AddressPaymentFlag.OfflineAddress)
+                    {
+                        writer.Write(RoutingAddress.addressNoChecksum);
+                    }
+                    if (Tag != null)
+                    {
+                        writer.Write(Tag);
+                    }
+                }
+                byte[] extendedDataWithoutChecksum = m.ToArray();
+                if (!includeChecksum)
+                {
+                    return extendedDataWithoutChecksum;
+                }
+                byte[] extendedData = new byte[extendedDataWithoutChecksum.Length + _checksumLen];
+                byte[] checksum = CryptoManager.lib.sha3_512sqTrunc(extendedDataWithoutChecksum, 0, 0, _checksumLen);
+                Buffer.BlockCopy(extendedDataWithoutChecksum, 0, extendedData, 0, extendedDataWithoutChecksum.Length);
+                Buffer.BlockCopy(checksum, 0, extendedData, extendedDataWithoutChecksum.Length, _checksumLen);
 
-            switch (flag)
-            {
-                case AddressPaymentFlag.Primary:
-                    break;
-                case AddressPaymentFlag.OfflineTag:
-                    break;
-                case AddressPaymentFlag.OfflineAddress:
-                    break;
-                case AddressPaymentFlag.End2End:
-                    break;
-                default:
-                    throw new Exception("Cannot convert address to string, unknown address flag.");
+                return extendedData;
             }
-            int tagLen = tag != null ? tag.Length : 0;
-            if (tagLen > 16)
-            {
-                throw new Exception("Cannot convert address to string, tag length exceeds maximum allowed size.");
-            }
-
-            byte[] flagAndTag;
-            int checksumLen = includeChecksum ? 3 : 0;
-            flagAndTag = new byte[1 + tagLen + checksumLen];
-            flagAndTag[0] = (byte)flag;
-            if (tagLen > 0)
-            {
-                Buffer.BlockCopy(tag!, 0, flagAndTag, 1, tagLen);
-            }
-
-            if (includeChecksum)
-            {
-                byte[] checksum = CryptoManager.lib.sha3_512sqTrunc(flagAndTag, 0, flagAndTag.Length - checksumLen);
-                Buffer.BlockCopy(checksum, 0, flagAndTag, 1 + tagLen, checksumLen);
-            }
-
-            return flagAndTag;
         }
     }
 
@@ -198,6 +247,7 @@ namespace IXICore
     /// 
     public class Address
     {
+        public static int[] addressVersionLengths = [33, 45, 45];
         /// <summary>
         /// Version of the Ixian Address.
         /// </summary>

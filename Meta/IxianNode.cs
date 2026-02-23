@@ -61,7 +61,7 @@ namespace IXICore.Meta
         public abstract Block getLastBlock();
         public abstract ulong getLastBlockHeight();
         public abstract int getLastBlockVersion();
-        public abstract bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, bool force_broadcast);
+        public abstract bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast);
         public abstract bool isAcceptingConnections();
         public abstract Wallet getWallet(Address id);
         public abstract IxiNumber getWalletBalance(Address id);
@@ -203,10 +203,10 @@ namespace IXICore.Meta
             return handlerClass.getLastBlockVersion();
         }
 
-        public static bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, bool force_broadcast)
+        public static bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast)
         {
             verifyHandler();
-            return handlerClass.addTransaction(tx, relayNodeAddresses, force_broadcast);
+            return handlerClass.addTransaction(tx, relayNodeAddresses, extendedAddresses, requestId, force_broadcast);
         }
 
         public static bool isAcceptingConnections()
