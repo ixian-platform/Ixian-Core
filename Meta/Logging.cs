@@ -310,12 +310,10 @@ namespace IXICore.Meta
             }
             catch (ThreadInterruptedException)
             {
-                running = false;
             }
             catch (Exception e)
             {
                 Console.WriteLine("Logging exception: {0}", e);
-                running = false;
             }
         }
 

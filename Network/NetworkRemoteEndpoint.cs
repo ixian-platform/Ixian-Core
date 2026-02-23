@@ -116,6 +116,8 @@ namespace IXICore.Network
 
         public IxianKeyPair? ephemeralKeyPair = null;
 
+        private object startLock = new object();
+
         public RemoteEndpoint(Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null)
         {
             messageHandler = handler;
@@ -140,162 +142,163 @@ namespace IXICore.Network
 
         public void start(Socket? socket = null)
         {
-            if (fullyStopped)
+            lock (startLock)
             {
-                Logging.error("Can't start a fully stopped RemoteEndpoint");
-                return;
-            }
+                if (fullyStopped)
+                {
+                    Logging.error("Can't start a fully stopped RemoteEndpoint");
+                    return;
+                }
 
-            if (running)
-            {
-                Logging.error("Can't start already running RemoteEndpoint");
-                return;
-            }
+                if (running)
+                {
+                    Logging.error("Can't start already running RemoteEndpoint");
+                    return;
+                }
 
-            running = true;
+                running = true;
 
-            if (socket != null)
-            {
-                clientSocket = socket;
-            }
-            if (clientSocket == null)
-            {
-                Logging.error("Could not start NetworkRemoteEndpoint, socket is null");
-                return;
-            }
+                if (socket != null)
+                {
+                    clientSocket = socket;
+                }
+                if (clientSocket == null)
+                {
+                    Logging.error("Could not start NetworkRemoteEndpoint, socket is null");
+                    return;
+                }
 
-            prepareSocket(clientSocket);
+                prepareSocket(clientSocket);
 
-            remoteIP = (IPEndPoint)clientSocket.RemoteEndPoint;
-            address = remoteIP.Address.ToString();
-            if (remoteIP.Address.IsIPv4MappedToIPv6 && address.StartsWith("::FFFF:", StringComparison.OrdinalIgnoreCase))
-            {
-                address = address.Substring(7);
-            }
-            fullAddress = address + ":" + remoteIP.Port;
-            presence = null;
-            presenceAddress = null;
+                remoteIP = (IPEndPoint)clientSocket.RemoteEndPoint;
+                address = remoteIP.Address.ToString();
+                if (remoteIP.Address.IsIPv4MappedToIPv6 && address.StartsWith("::FFFF:", StringComparison.OrdinalIgnoreCase))
+                {
+                    address = address.Substring(7);
+                }
+                fullAddress = address + ":" + remoteIP.Port;
+                presence = null;
+                presenceAddress = null;
 
-            connectionStartTime = Clock.getTimestamp();
+                connectionStartTime = Clock.getTimestamp();
 
-            lock (subscribedFilters)
-            {
-                subscribedFilters.Clear();
-            }
+                lock (subscribedFilters)
+                {
+                    subscribedFilters.Clear();
+                }
 
-            lastDataReceivedTime = Clock.getTimestamp();
-            lastDataSentTime = Clock.getTimestamp();
+                lastDataReceivedTime = Clock.getTimestamp();
+                lastDataSentTime = Clock.getTimestamp();
 
-            state = RemoteEndpointState.Established;
+                state = RemoteEndpointState.Established;
 
-            timeDifference = 0;
-            timeSyncComplete = false;
-            timeSyncs.Clear();
+                timeDifference = 0;
+                timeSyncComplete = false;
+                timeSyncs.Clear();
 
-            try
-            {
-                // Start parse thread
-                parseTask = Task.Run(() => parseLoop());
+                try
+                {
+                    // Start parse thread
+                    parseTask = Task.Run(() => parseLoop());
 
-                // Start send thread
-                sendTask = Task.Run(() => sendLoop());
+                    // Start send thread
+                    sendTask = Task.Run(() => sendLoop());
 
-                // Start receive thread
-                recvTask = Task.Run(() => recvLoop());
-            }
-            catch (Exception e)
-            {
-                Logging.error("Error starting remote endpoint: {0}", e.Message);
-                stop();
+                    // Start receive thread
+                    recvTask = Task.Run(() => recvLoop());
+                }
+                catch (Exception e)
+                {
+                    Logging.error("Error starting remote endpoint: {0}", e.Message);
+                    stop();
+                }
             }
         }
 
         // Aborts all related endpoint threads and data
         public void stop(bool fully_stopped = true)
         {
-            if (running == false)
+            lock (startLock)
             {
-                return;
-            }
+                fullyStopped = fully_stopped;
 
-            fullyStopped = fully_stopped;
+                state = RemoteEndpointState.Closed;
+                running = false;
 
-            state = RemoteEndpointState.Closed;
-            running = false;
-
-            try
-            {
-                recvRawQueueMessages.Writer.TryWrite(null);
-            }
-            catch (Exception e)
-            {
-                Logging.error("Error while stopping " + e);
-            }
-
-            if (sendTask != null)
-            {
                 try
                 {
-                    sendTask.GetAwaiter().GetResult();
+                    recvRawQueueMessages.Writer.TryWrite(null);
                 }
                 catch (Exception e)
                 {
                     Logging.error("Error while stopping " + e);
                 }
-                sendTask = null;
-            }
 
-            if (parseTask != null)
-            {
-                try
+                if (sendTask != null)
                 {
-                    //parseTask.GetAwaiter().GetResult();
+                    try
+                    {
+                        sendTask.GetAwaiter().GetResult();
+                    }
+                    catch (Exception e)
+                    {
+                        Logging.error("Error while stopping " + e);
+                    }
+                    sendTask = null;
                 }
-                catch (Exception e)
+
+                if (parseTask != null)
                 {
-                    Logging.error("Error while stopping " + e);
+                    try
+                    {
+                        parseTask.GetAwaiter().GetResult();
+                    }
+                    catch (Exception e)
+                    {
+                        Logging.error("Error while stopping " + e);
+                    }
+                    parseTask = null;
                 }
-                parseTask = null;
-            }
 
-            disconnect();
+                disconnect();
 
-            if (recvTask != null)
-            {
-                try
+                if (recvTask != null)
                 {
-                    recvTask.GetAwaiter().GetResult();
+                    try
+                    {
+                        recvTask.GetAwaiter().GetResult();
+                    }
+                    catch (Exception e)
+                    {
+                        Logging.error("Error while stopping " + e);
+                    }
+                    recvTask = null;
                 }
-                catch (Exception e)
+
+                lock (sendQueueMessagesHighPriority)
                 {
-                    Logging.error("Error while stopping " + e);
+                    sendQueueMessagesHighPriority.Clear();
                 }
-                recvTask = null;
-            }
 
-            lock (sendQueueMessagesHighPriority)
-            {
-                sendQueueMessagesHighPriority.Clear();
-            }
+                lock (sendQueueMessagesNormalPriority)
+                {
+                    sendQueueMessagesNormalPriority.Clear();
+                }
 
-            lock (sendQueueMessagesNormalPriority)
-            {
-                sendQueueMessagesNormalPriority.Clear();
-            }
+                lock (sendQueueMessagesLowPriority)
+                {
+                    sendQueueMessagesLowPriority.Clear();
+                }
 
-            lock (sendQueueMessagesLowPriority)
-            {
-                sendQueueMessagesLowPriority.Clear();
-            }
+                lock (subscribedFilters)
+                {
+                    subscribedFilters.Clear();
+                }
 
-            lock (subscribedFilters)
-            {
-                subscribedFilters.Clear();
-            }
-
-            lock (inventory)
-            {
-                inventory.Clear();
+                lock (inventory)
+                {
+                    inventory.Clear();
+                }
             }
         }
 
