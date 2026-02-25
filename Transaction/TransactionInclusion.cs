@@ -529,7 +529,6 @@ namespace IXICore
                                 break;
                             }
                             processed = true;
-                            Thread.Yield();
                             blockCnt++;
                         }
                         Logging.info("Processed {0} block headers in {1}ms.", blockCnt, Clock.getTimestampMillis() - startTime);

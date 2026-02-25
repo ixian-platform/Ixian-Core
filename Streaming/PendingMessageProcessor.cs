@@ -41,7 +41,7 @@ namespace IXICore.Streaming
         bool running = false;
 
         List<PendingRecipient> pendingRecipients = new List<PendingRecipient>();
-        Channel<OffloadedMessage> msgQueue = null;
+        Channel<OffloadedMessage>? msgQueue = null;
 
         string storagePath = "MsgQueue";
 
@@ -74,7 +74,7 @@ namespace IXICore.Streaming
                         int pendingMessageCount = 0;
                         foreach (string file_path in file_arr)
                         {
-                            PendingMessage pm = null;
+                            PendingMessage? pm = null;
                             try
                             {
                                 pm = new PendingMessage(file_path);
@@ -180,7 +180,7 @@ namespace IXICore.Streaming
                 {
                     continue;
                 }
-                List<PendingMessageHeader> message_headers = null;
+                List<PendingMessageHeader>? message_headers = null;
                 if (!friend.online)
                 {
                     message_headers = recipient.messageQueue.FindAll(x => x.sendToServer);
@@ -235,7 +235,7 @@ namespace IXICore.Streaming
             {
                 pm.filePath = tmp_msg_header.filePath;
             }
-            PendingRecipient tmp_recipient = null;
+            PendingRecipient? tmp_recipient = null;
             lock (pendingRecipients)
             {
                 tmp_recipient = pendingRecipients.Find(x => x.address.SequenceEqual(msg.recipient));
@@ -281,10 +281,10 @@ namespace IXICore.Streaming
         {
             lock (pendingRecipients)
             {
-                PendingRecipient pending_recipient = pendingRecipients.Find(x => x.address.SequenceEqual(friend.walletAddress));
+                PendingRecipient? pending_recipient = pendingRecipients.Find(x => x.address.SequenceEqual(friend.walletAddress));
                 if (pending_recipient != null)
                 {
-                    PendingMessageHeader tmp_msg_header = pending_recipient.messageQueue.Find(x => x.id.SequenceEqual(msg_id));
+                    PendingMessageHeader? tmp_msg_header = pending_recipient.messageQueue.Find(x => x.id.SequenceEqual(msg_id));
                     if (tmp_msg_header != null)
                     {
                         pending_recipient.messageQueue.Remove(tmp_msg_header);
