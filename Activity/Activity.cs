@@ -57,12 +57,13 @@ namespace IXICore.Activity
     {
         Pending = 1,
         Final = 2,
-        Error = 3
+        Error = 3,
+        Reverted = 4
     }
 
     public class AddressConverter : JsonConverter<Address>
     {
-        public override void WriteJson(JsonWriter writer, Address value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, Address? value, JsonSerializer serializer)
         {
             if (value == null)
             {
@@ -73,7 +74,7 @@ namespace IXICore.Activity
             writer.WriteValue(value.ToString());
         }
 
-        public override Address ReadJson(JsonReader reader, Type objectType, Address existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override Address? ReadJson(JsonReader reader, Type objectType, Address? existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)
                 return null;
@@ -89,7 +90,7 @@ namespace IXICore.Activity
 
     public class TXIDConverter : JsonConverter<byte[]>
     {
-        public override void WriteJson(JsonWriter writer, byte[] value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, byte[]? value, JsonSerializer serializer)
         {
             if (value == null)
             {
@@ -100,7 +101,7 @@ namespace IXICore.Activity
             writer.WriteValue(Transaction.getTxIdString(value));
         }
 
-        public override byte[] ReadJson(JsonReader reader, Type objectType, byte[] existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override byte[]? ReadJson(JsonReader reader, Type objectType, byte[]? existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             if (reader.TokenType == JsonToken.Null)
                 return null;
@@ -115,7 +116,7 @@ namespace IXICore.Activity
 
     public class AddressIxiNumberDictConverter : JsonConverter<IDictionary<Address, IxiNumber>>
     {
-        public override void WriteJson(JsonWriter writer, IDictionary<Address, IxiNumber> value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, IDictionary<Address, IxiNumber>? value, JsonSerializer serializer)
         {
             writer.WriteStartObject();
             if (value != null)
@@ -129,7 +130,7 @@ namespace IXICore.Activity
             writer.WriteEndObject();
         }
 
-        public override IDictionary<Address, IxiNumber> ReadJson(JsonReader reader, Type objectType, IDictionary<Address, IxiNumber> existingValue, bool hasExistingValue, JsonSerializer serializer)
+        public override IDictionary<Address, IxiNumber> ReadJson(JsonReader reader, Type objectType, IDictionary<Address, IxiNumber>? existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
             var dict = new Dictionary<Address, IxiNumber>();
             if (reader.TokenType == JsonToken.Null)
@@ -162,7 +163,7 @@ namespace IXICore.Activity
         [JsonConverter(typeof(AddressIxiNumberDictConverter))]
         public IDictionary<Address, IxiNumber> addressList { get; set; }
         public ActivityType type { get; set; }
-        public byte[] data { get; set; }
+        public byte[]? data { get; set; }
 
         [JsonConverter(typeof(IxiNumberConverter))]
         public IxiNumber value { get; set; }
@@ -175,7 +176,7 @@ namespace IXICore.Activity
                               byte[] id,
                               IDictionary<Address, IxiNumber> addressList,
                               ActivityType type,
-                              byte[] data,
+                              byte[]? data,
                               IxiNumber value,
                               long timestamp,
                               ActivityStatus status,

@@ -1,4 +1,5 @@
-﻿using IXICore.Utils;
+﻿using IXICore.Meta;
+using IXICore.Utils;
 using System.IO;
 
 namespace IXICore.Storage.Models
@@ -30,7 +31,7 @@ namespace IXICore.Storage.Models
             transaction = tx;
             if (transaction.timeStamp == 0)
             {
-                Block bh = BlockHeaderStorage.getBlockHeader(transaction.applied);
+                Block bh = IxianHandler.getBlockHeader(transaction.applied);
                 if (bh != null)
                 {
                     transaction.timeStamp = bh.timestamp;

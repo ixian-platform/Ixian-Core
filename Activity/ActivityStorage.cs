@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -27,12 +27,13 @@ namespace IXICore.Activity
     class RocksDBInternal
     {
         public string dbPath { get; private set; }
-        private RocksDb database = null;
+        private RocksDb? database = null;
         // global column families
-        private ColumnFamilyHandle metaCF;
-        private ColumnFamilyHandle activityCF;
+        private ColumnFamilyHandle? metaCF;
+        private ColumnFamilyHandle? activityCF;
 
-        private StorageIndex idxActivityId;
+        private StorageIndex? idxActivityId;
+        private StorageIndex? idxBlockHeightActivityId;
 
         private readonly object rockLock = new object();
 
@@ -58,7 +59,7 @@ namespace IXICore.Activity
         }
         public DateTime lastUsedTime { get; private set; }
         // Caches (shared with other rocksDb
-        private Cache blockCache = null;
+        private Cache blockCache;
 
         public RocksDBInternal(string dbPath, Cache blockCache)
         {
@@ -130,6 +131,13 @@ namespace IXICore.Activity
                         .SetWriteBufferSize(64UL << 10)
                         .SetMaxWriteBufferNumber(1)
                     },
+                    { "index_block_height_activity_id", new ColumnFamilyOptions()
+                        .SetBlockBasedTableFactory(activityBbto)
+                        .SetWriteBufferSize(16UL << 20)
+                        .SetMaxWriteBufferNumber(2)
+                        .SetMinWriteBufferNumberToMerge(1)
+                        .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
+                    },
                     { "index_activity_id", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
                         .SetWriteBufferSize(16UL << 20)
@@ -145,6 +153,7 @@ namespace IXICore.Activity
                 activityCF = database.GetColumnFamily("activity");
                 metaCF = database.GetColumnFamily("meta");
 
+                idxBlockHeightActivityId = new StorageIndex("index_block_height_activity_id", database);
                 idxActivityId = new StorageIndex("index_activity_id", database);
 
                 // read initial meta values
@@ -205,6 +214,7 @@ namespace IXICore.Activity
                 // free all column families
                 activityCF = null;
                 metaCF = null;
+                idxBlockHeightActivityId = null;
                 idxActivityId = null;
 
                 database.Dispose();
@@ -223,7 +233,8 @@ namespace IXICore.Activity
                     {
                         database.CompactRange(null, null, activityCF);
                         database.CompactRange(null, null, metaCF);
-                        database.CompactRange(null, null, idxActivityId.rocksIndexHandle);
+                        database.CompactRange(null, null, idxBlockHeightActivityId!.rocksIndexHandle);
+                        database.CompactRange(null, null, idxActivityId!.rocksIndexHandle);
                     }
                 }
                 catch (Exception e)
@@ -243,7 +254,7 @@ namespace IXICore.Activity
                 }
                 byte[] seedHash = activity.seedHash;
                 byte[] seed16 = seedHash.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
-                if (idxActivityId.getEntry(activity.id, seed16) != null)
+                if (idxActivityId!.getEntry(activity.id, seed16) != null)
                 {
                     return false;
                 }
@@ -255,7 +266,7 @@ namespace IXICore.Activity
                     byte[] key = StorageIndex.combineKeys(activity.seedHash, timestampTypeIdKey);
                     writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, key), activity.GetBytes(), activityCF);
                     writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_META, key), activity.GetMetaBytes(), activityCF);
-                    idxActivityId.addIndexEntry(activity.id, activity.seedHash, timestampTypeIdKey);
+                    idxActivityId.addIndexEntry(activity.id, activity.seedHash, timestampTypeIdKey, writeBatch);
                     updateMinMax(writeBatch, activity.blockHeight);
                     database.Write(writeBatch);
                 }
@@ -263,7 +274,7 @@ namespace IXICore.Activity
             return true;
         }
 
-        public ActivityObject getActivityById(byte[] id, byte[] seedHash = null)
+        public ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null)
         {
             lock (rockLock)
             {
@@ -271,8 +282,8 @@ namespace IXICore.Activity
                 {
                     return null;
                 }
-                byte[] seed16 = seedHash?.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
-                foreach (var (indexMem, valueMem) in idxActivityId.getEntriesForKey(id, seed16))
+                byte[]? seed16 = seedHash?.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
+                foreach (var (indexMem, valueMem) in idxActivityId!.getEntriesForKey(id, seed16))
                 {
                     if (seedHash == null || seedHash.Length == 0 || indexMem.Span.SequenceEqual(seed16))
                     {
@@ -310,7 +321,7 @@ namespace IXICore.Activity
             }
         }
 
-        public List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? typeFilter, byte[] fromActivityId = null, int count = 0, bool descending = false)
+        public List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? typeFilter, byte[]? fromActivityId = null, int count = 0, bool descending = false)
         {
             lock (rockLock)
             {
@@ -330,10 +341,10 @@ namespace IXICore.Activity
                 byte[] upperBound = StorageIndex.combineKeys(payloadSeedPrefix, oneByteFF);
 
                 // Resolve fromActivityId via secondary index
-                byte[] exactFromPayloadKey = null;
+                byte[]? exactFromPayloadKey = null;
                 if (fromActivityId != null && fromActivityId.Length > 0)
                 {
-                    var tsTypeIdKey = idxActivityId.getEntry(fromActivityId, seed16);
+                    var tsTypeIdKey = idxActivityId!.getEntry(fromActivityId, seed16);
                     if (tsTypeIdKey != null && tsTypeIdKey.Length > 0)
                         exactFromPayloadKey = StorageIndex.combineKeys(payloadSeedPrefix, tsTypeIdKey);
                 }
@@ -441,6 +452,28 @@ namespace IXICore.Activity
         static bool hasPrefix(ReadOnlySpan<byte> key, ReadOnlySpan<byte> prefix)
             => key.Length >= prefix.Length && key.Slice(0, prefix.Length).SequenceEqual(prefix);
 
+        public bool revertTransactionsByBlockHeight(ulong blockHeight)
+        {
+            lock (rockLock)
+            {
+                if (database == null)
+                    return false;
+
+                lastUsedTime = DateTime.Now;
+
+                bool anyUpdated = false;
+                using (var wb = new WriteBatch())
+                {
+                    foreach (var (indexMem, valueMem) in idxBlockHeightActivityId!.getEntriesForKey(blockHeight.GetBytesBE()))
+                    {
+                        var id = indexMem.ToArray();
+                        updateStatus(id, ActivityStatus.Reverted, blockHeight);
+                    }
+                }
+                return anyUpdated;
+            }
+        }
+
         public bool updateStatus(byte[] id, ActivityStatus status, ulong blockHeight, long timestamp = 0)
         {
             lock (rockLock)
@@ -454,27 +487,32 @@ namespace IXICore.Activity
                 using (var wb = new WriteBatch())
                 {
                     // Iterate all entries for this id (in case of multiple seed hashes)
-                    foreach (var (indexMem, valueMem) in idxActivityId.getEntriesForKey(id))
+                    foreach (var (indexMem, valueMem) in idxActivityId!.getEntriesForKey(id))
                     {
                         var seedHash = indexMem.ToArray();
                         var tsTypeId = valueMem.ToArray();
 
                         var metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seedHash, tsTypeId));
 
-                        long ts;
-                        if (timestamp > 0)
+                        var existingMetaEntry = database.Get(metaKey, activityCF);
+                        var parsedMeta = ActivityObject.ParseMetaBytes(existingMetaEntry);
+                        long ts = timestamp;
+                        if (timestamp == 0)
                         {
-                            ts = timestamp;
-                        }
-                        else
-                        {
-                            var existingMetaEntry = database.Get(metaKey, activityCF);
-                            var parsedMeta = ActivityObject.ParseMetaBytes(existingMetaEntry);
                             ts = parsedMeta.timestamp;
+                        }
+                        if (parsedMeta.blockHeight != 0)
+                        {
+                            idxBlockHeightActivityId!.delIndexEntry(parsedMeta.blockHeight.GetBytesBE(), id, wb);
                         }
 
                         byte[] metaBytes = ActivityObject.GetMetaBytes(status, blockHeight, ts);
                         wb.Put(metaKey, metaBytes, activityCF);
+
+                        if (blockHeight != 0)
+                        {
+                            idxBlockHeightActivityId!.addIndexEntry(blockHeight.GetBytesBE(), id, Array.Empty<byte>(), wb);
+                        }
 
                         anyUpdated = true;
                     }
@@ -502,7 +540,7 @@ namespace IXICore.Activity
                 bool anyUpdated = false;
                 using (var wb = new WriteBatch())
                 {
-                    foreach (var (indexMem, valueMem) in idxActivityId.getEntriesForKey(id))
+                    foreach (var (indexMem, valueMem) in idxActivityId!.getEntriesForKey(id))
                     {
                         var seedHash = indexMem.ToArray();
                         var tsTypeId = valueMem.ToArray();
@@ -543,7 +581,7 @@ namespace IXICore.Activity
         private long minDiskSpace = 1L * 1024L * 1024L * 1024L;
 
         // Runtime stuff
-        private Cache commonBlockCache = null;
+        private Cache? commonBlockCache = null;
         private Queue<RocksDBInternal> reopenCleanupList = new Queue<RocksDBInternal>();
         private DateTime lastReopenOptimize = DateTime.Now;
 
@@ -563,7 +601,7 @@ namespace IXICore.Activity
             this.maxBlocksPerDatabase = maxBlocksPerDatabase;
         }
 
-        private RocksDBInternal getDatabase(ulong blockNum, bool onlyExisting = false)
+        private RocksDBInternal? getDatabase(ulong blockNum, bool onlyExisting = false)
         {
             if (running == false)
             {
@@ -571,7 +609,7 @@ namespace IXICore.Activity
             }
             // Open or create the db which should contain blockNum
             ulong baseBlockNum = maxBlocksPerDatabase > 0 ? blockNum / maxBlocksPerDatabase : 0;
-            RocksDBInternal db = null;
+            RocksDBInternal db;
             lock (openDatabases)
             {
                 if (openDatabases.ContainsKey(baseBlockNum))
@@ -595,15 +633,14 @@ namespace IXICore.Activity
                     {
                         if (!Directory.Exists(db_path))
                         {
-                            Logging.trace("Activity: Open of '{0} requested with onlyExisting = true, but it does not exist.", db_path);
                             return null;
                         }
                     }
 
                     Logging.info("Activity: Opening a database for activity {0} - {1}.", baseBlockNum * maxBlocksPerDatabase, (baseBlockNum * maxBlocksPerDatabase) + maxBlocksPerDatabase - 1);
-                    db = new RocksDBInternal(db_path, commonBlockCache);
-                    openDatabases.Add(baseBlockNum, db);
+                    db = new RocksDBInternal(db_path, commonBlockCache!);
                     db.openDatabase();
+                    openDatabases.Add(baseBlockNum, db);
 
                     if (openDatabases.Count > maxOpenDatabases)
                     {
@@ -692,6 +729,10 @@ namespace IXICore.Activity
                     if (db.Value.isOpen
                         && (DateTime.Now - db.Value.lastUsedTime).TotalSeconds >= closeAfterSeconds)
                     {
+                        if (db.Value.maxBlockNumber == 0)
+                        {
+                            continue;
+                        }
                         if (db.Value.maxBlockNumber >= highestBlockNum)
                         {
                             // never close the databases within redacted window
@@ -759,7 +800,7 @@ namespace IXICore.Activity
 
         private void closeOldestDatabase()
         {
-            var oldestDb = openDatabases.OrderBy(x => x.Value.lastUsedTime).Where(x => x.Value.isOpen && x.Value.maxBlockNumber < highestBlockNum).FirstOrDefault();
+            var oldestDb = openDatabases.OrderBy(x => x.Value.lastUsedTime).Where(x => x.Value.isOpen && x.Value.maxBlockNumber > 0 && x.Value.maxBlockNumber < highestBlockNum).FirstOrDefault();
             if (oldestDb.Value != null)
             {
                 oldestDb.Value.closeDatabase();
@@ -868,12 +909,12 @@ namespace IXICore.Activity
             lock (openDatabases)
             {
                 var db = getDatabase(oldest_db, true);
-                lowestBlockNum = db.minBlockNumber;
+                lowestBlockNum = db != null ? db.minBlockNumber : 0;
                 return lowestBlockNum;
             }
         }
 
-        public List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[] fromActivityId = null, int count = 0, bool descending = false)
+        public List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[]? fromActivityId = null, int count = 0, bool descending = false)
         {
             lock (openDatabases)
             {
@@ -893,7 +934,7 @@ namespace IXICore.Activity
             lock (openDatabases)
             {
                 var db = getDatabase(0);
-                if (db.insertActivity(activity))
+                if (db!.insertActivity(activity))
                 {
                     if (activity.blockHeight > getHighestBlockInStorage())
                     {
@@ -905,7 +946,7 @@ namespace IXICore.Activity
             }
         }
 
-        public ActivityObject getActivityById(byte[] id, byte[] seedHash = null)
+        public ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null)
         {
             lock (openDatabases)
             {
@@ -918,12 +959,21 @@ namespace IXICore.Activity
             }
         }
 
+        public bool revertTransactionsByBlockHeight(ulong blockHeight)
+        {
+            lock (openDatabases)
+            {
+                var db = getDatabase(0);
+                return db!.revertTransactionsByBlockHeight(blockHeight);
+            }
+        }
+
         public bool updateStatus(byte[] id, ActivityStatus status, ulong blockHeight, long timestamp = 0)
         {
             lock (openDatabases)
             {
                 var db = getDatabase(0);
-                if (db.updateStatus(id, status, blockHeight, timestamp))
+                if (db!.updateStatus(id, status, blockHeight, timestamp))
                 {
                     if (blockHeight > getHighestBlockInStorage())
                     {
@@ -940,7 +990,7 @@ namespace IXICore.Activity
             lock (openDatabases)
             {
                 var db = getDatabase(0);
-                return db.updateValue(id, value);
+                return db!.updateValue(id, value);
             }
         }
     }

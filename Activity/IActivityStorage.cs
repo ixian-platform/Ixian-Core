@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -20,13 +20,15 @@ namespace IXICore.Activity
         public abstract void stopStorage();
         public abstract void deleteData();
 
-        public abstract List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[] fromActivityId = null, int count = 0, bool descending = false);
+        public abstract List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[]? fromActivityId = null, int count = 0, bool descending = false);
 
         public abstract bool insertActivity(ActivityObject activity);
-        public abstract ActivityObject getActivityById(byte[] id, byte[] seedHash = null);
+        public abstract ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null);
 
         public abstract bool updateStatus(byte[] id, ActivityStatus status, ulong blockHeight, long timestamp = 0);
         public abstract bool updateValue(byte[] id, IxiNumber value);
+
+        public abstract bool revertTransactionsByBlockHeight(ulong blockHeight);
 
     }
 }

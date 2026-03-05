@@ -41,6 +41,9 @@ namespace IXICore
         public ulong blockNum;
         public byte[] solution;
         public byte[] signingPubKey;
+        
+        // Optional, populated manually
+        public byte[]? blockHash;
 
         [JsonIgnore]
         public IxianKeyPair keyPair; // keyPair is not trasmitted over the network
@@ -53,8 +56,11 @@ namespace IXICore
             {
                 if (_checksum == null)
                 {
-                    var targetBlockHash = IxianHandler.getBlockHash(blockNum);
-                    _checksum = solutionToHash(solution, blockNum, targetBlockHash, recipientAddress, signingPubKey);
+                    if (blockHash == null)
+                    {
+                        blockHash = IxianHandler.getBlockHash(blockNum);
+                    }
+                    _checksum = solutionToHash(solution, blockNum, blockHash, recipientAddress, signingPubKey);
                 }
                 return _checksum;
             }
