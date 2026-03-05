@@ -35,7 +35,7 @@ namespace IXICore.Streaming.Models
             {
                 using (BinaryReader reader = new BinaryReader(m))
                 {
-                    Transaction = new Transaction(reader.ReadIxiBytes()!);
+                    Transaction = new Transaction(reader.ReadIxiBytes()!, true, true);
                     RequestId = reader.ReadIxiBytes();
                     PubKey = reader.ReadIxiBytes();
                 }
@@ -48,7 +48,7 @@ namespace IXICore.Streaming.Models
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    writer.WriteIxiBytes(Transaction.getBytes());
+                    writer.WriteIxiBytes(Transaction.getBytes(true, true));
                     writer.WriteIxiBytes(RequestId);
                     writer.WriteIxiBytes(PubKey);
                 }

@@ -617,6 +617,8 @@ namespace IXICore.Streaming
                     {
                         case SpixiMessageCode.transactionSend:
                             break;
+                        case SpixiMessageCode.msgReceived:
+                            break;
                         default:
                             Logging.error("Temporary friend {0} sent invalid message type {1}", sender_address.ToString(), spixi_message.type);
                             return null;
@@ -1142,7 +1144,7 @@ namespace IXICore.Streaming
 
                     case SpixiMessageCode.transactionSend:
                         {
-                            var ts = new TransactionSend(message.data);
+                            var ts = new TransactionSend(spixi_message.data);
                             if (message.encryptionType != StreamMessageEncryptionCode.spixi1
                                 && message.encryptionType != StreamMessageEncryptionCode.spixi2
                                 && (friend.publicKey == null || !message.verifySignature(ts.PubKey)))
@@ -1159,7 +1161,7 @@ namespace IXICore.Streaming
 
                     case SpixiMessageCode.transactionRequest:
                         {
-                            var tr = new TransactionSend(message.data);
+                            var tr = new TransactionRequest(spixi_message.data);
                             if (message.encryptionType != StreamMessageEncryptionCode.spixi1
                                 && message.encryptionType != StreamMessageEncryptionCode.spixi2
                                 && (friend.publicKey == null || !message.verifySignature(tr.PubKey)))
@@ -2916,7 +2918,7 @@ namespace IXICore.Streaming
             byte[]? pubKey = null;
             if (friend.handshakeStatus != 3)
             {
-                pubKey = friend.publicKey;
+                pubKey = IxianHandler.getWalletStorage().getPrimaryPublicKey();
             }
             SpixiMessage spixiMsg = new SpixiMessage();
             spixiMsg.type = SpixiMessageCode.transactionSend;
@@ -2941,7 +2943,7 @@ namespace IXICore.Streaming
             byte[]? pubKey = null;
             if (friend.handshakeStatus != 3)
             {
-                pubKey = friend.publicKey;
+                pubKey = IxianHandler.getWalletStorage().getPrimaryPublicKey();
             }
             SpixiMessage spixiMsg = new SpixiMessage();
             spixiMsg.type = SpixiMessageCode.transactionRequest;
