@@ -13,6 +13,7 @@
 #if __ROCKS_DB_SHARP__
 
 using IXICore.Meta;
+using IXICore.Storage;
 using IXICore.Utils;
 using RocksDbSharp;
 using System;

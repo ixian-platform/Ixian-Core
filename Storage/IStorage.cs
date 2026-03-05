@@ -27,9 +27,9 @@ namespace IXICore
             protected string pathBase;
             // Threading
             protected CancellationTokenSource? ctsLoop;
-            private Task storageTask;
+            private Task? storageTask;
             private TaskCompletionSource wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
-            private ThreadLiveCheck TLC;
+            private ThreadLiveCheck? TLC;
             private long lastCleanupPass = Clock.getTimestamp();
 
             protected enum QueueStorageCode
@@ -324,14 +324,14 @@ namespace IXICore
             /// </summary>
             /// <param name="block_num">Block from which to read Transactions.</param>
             /// <returns>Collection with matching Transactions.</returns>
-            public abstract IEnumerable<Transaction> getTransactionsInBlock(ulong block_num, short tx_type = -1);
-            public abstract IEnumerable<byte[]> getTransactionsBytesInBlock(ulong block_num, short tx_type = -1);
+            public abstract IEnumerable<Transaction>? getTransactionsInBlock(ulong block_num, short tx_type = -1);
+            public abstract IEnumerable<byte[]>? getTransactionsBytesInBlock(ulong block_num, short tx_type = -1);
             //
             // Remove
             public abstract bool removeBlock(ulong block_num);
             public abstract bool removeTransaction(byte[] txid, ulong block_num);
 
-            public abstract (byte[] blockChecksum, IxiNumber totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blocknum);
+            public abstract (byte[]? blockChecksum, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blocknum);
             //
             // Prepare and cleanup
             protected abstract bool prepareStorageInternal(bool optimize);

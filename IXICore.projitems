@@ -135,7 +135,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\NetDump.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Utils\StorageIndex.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Storage\StorageIndex.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Wordlist.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\WordlistSources.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Wallet\Wallet.cs" />

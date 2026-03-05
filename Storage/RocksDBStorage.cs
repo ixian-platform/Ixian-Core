@@ -29,17 +29,17 @@ namespace IXICore
         class RocksDBInternal
         {
             public string dbPath { get; private set; }
-            private RocksDb database = null;
+            private RocksDb? database = null;
             // global column families
-            private ColumnFamilyHandle rocksCFBlocks;
-            private ColumnFamilyHandle rocksCFTransactions;
-            private ColumnFamilyHandle rocksCFMeta;
+            private ColumnFamilyHandle? rocksCFBlocks = null;
+            private ColumnFamilyHandle? rocksCFTransactions = null;
+            private ColumnFamilyHandle? rocksCFMeta = null;
             // index column families
             // block
-            private StorageIndex idxBlocksChecksum;
+            private StorageIndex? idxBlocksChecksum = null;
             // transaction
-            private StorageIndex idxTXAppliedType;
-            private StorageIndex idxAddressTXs;
+            private StorageIndex? idxTXAppliedType = null;
+            private StorageIndex? idxAddressTXs = null;
             private readonly object rockLock = new object();
 
             private readonly byte[] BLOCKS_KEY_HEADER = new byte[] { 0 };
@@ -71,7 +71,7 @@ namespace IXICore
             }
             public DateTime lastUsedTime { get; private set; }
             // Caches (shared with other rocksDb
-            private Cache blockCache = null;
+            private Cache blockCache;
 
             public RocksDBInternal(string dbPath, Cache blockCache)
             {
@@ -336,7 +336,7 @@ namespace IXICore
                 var blockNumBytes = sb.blockNum.GetBytesBE();
 
                 byte[] blockMetaBytes = getBlockMetaBytes(sb.getFrozenSignatureCount(), sb.getTotalSignerDifficulty(), sb.powField);
-                idxBlocksChecksum.addIndexEntry(blockNumBytes, sb.blockChecksum, blockMetaBytes, writeBatch);
+                idxBlocksChecksum!.addIndexEntry(blockNumBytes, sb.blockChecksum, blockMetaBytes, writeBatch);
 
                 idxBlocksChecksum.addIndexEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX, sb.blockChecksum, writeBatch);
             }
@@ -365,15 +365,15 @@ namespace IXICore
 
                 foreach (var from in st.fromList)
                 {
-                    idxAddressTXs.addIndexEntry(new Address(st.pubKey.addressNoChecksum, from.Key).addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(st.applied, txIdBytesShort), Array.Empty<byte>(), writeBatch);
+                    idxAddressTXs!.addIndexEntry(new Address(st.pubKey.addressNoChecksum, from.Key).addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(st.applied, txIdBytesShort), Array.Empty<byte>(), writeBatch);
                 }
 
                 foreach (var to in st.toList)
                 {
-                    idxAddressTXs.addIndexEntry(to.Key.addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(st.applied, txIdBytesShort), Array.Empty<byte>(), writeBatch);
+                    idxAddressTXs!.addIndexEntry(to.Key.addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(st.applied, txIdBytesShort), Array.Empty<byte>(), writeBatch);
                 }
 
-                idxTXAppliedType.addIndexEntry(st.applied.GetBytesBE(), typeAndTxIDToBytes((byte)st.type, txIdBytesShort), Array.Empty<byte>(), writeBatch);
+                idxTXAppliedType!.addIndexEntry(st.applied.GetBytesBE(), typeAndTxIDToBytes((byte)st.type, txIdBytesShort), Array.Empty<byte>(), writeBatch);
             }
 
             private void updateMinMax(WriteBatch writeBatch, ulong blockNum)
@@ -396,7 +396,7 @@ namespace IXICore
                 {
                     if (database == null)
                     {
-                        return false;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     lastUsedTime = DateTime.Now;
                     using (WriteBatch writeBatch = new WriteBatch())
@@ -416,7 +416,7 @@ namespace IXICore
                 {
                     if (database == null)
                     {
-                        return false;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     lastUsedTime = DateTime.Now;
                     using (WriteBatch writeBatch = new WriteBatch())
@@ -429,13 +429,13 @@ namespace IXICore
                 return true;
             }
 
-            public Block getBlock(ulong blockNum)
+            public Block? getBlock(ulong blockNum)
             {
                 lock (rockLock)
                 {
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     if (blockNum < minBlockNumber || blockNum > maxBlockNumber)
                     {
@@ -446,7 +446,7 @@ namespace IXICore
 
                     var blockNumBytes = blockNum.GetBytesBE();
 
-                    var blockChecksum = idxBlocksChecksum.getEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX);
+                    var blockChecksum = idxBlocksChecksum!.getEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX);
                     if (blockChecksum == null)
                     {
                         return null;
@@ -456,13 +456,13 @@ namespace IXICore
                 }
             }
 
-            public byte[] getBlockBytes(ulong blocknum, bool asBlockHeader)
+            public byte[]? getBlockBytes(ulong blocknum, bool asBlockHeader)
             {
                 lock (rockLock)
                 {
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     if (blocknum < minBlockNumber || blocknum > maxBlockNumber)
                     {
@@ -471,7 +471,7 @@ namespace IXICore
 
                     lastUsedTime = DateTime.Now;
 
-                    var blockHash = idxBlocksChecksum.getEntry(blocknum.GetBytesBE(), BLOCKS_KEY_PRIMARY_INDEX);
+                    var blockHash = idxBlocksChecksum!.getEntry(blocknum.GetBytesBE(), BLOCKS_KEY_PRIMARY_INDEX);
                     if (blockHash == null)
                     {
                         return null;
@@ -508,34 +508,34 @@ namespace IXICore
                 }
             }
 
-            public Block getBlockByHash(ReadOnlySpan<byte> checksum)
+            public Block? getBlockByHash(ReadOnlySpan<byte> checksum)
             {
                 if (database == null)
                 {
-                    return null;
+                    throw new Exception($"Database {dbPath} is not open.");
                 }
 
                 lastUsedTime = DateTime.Now;
                 return getBlockByHash(checksum, null);
             }
 
-            private Block getBlockByHash(ReadOnlySpan<byte> checksum, ReadOnlySpan<byte> blockMetaBytes)
+            private Block? getBlockByHash(ReadOnlySpan<byte> checksum, ReadOnlySpan<byte> blockMetaBytes)
             {
                 lock (rockLock)
                 {
-                    byte[] blockBytes = database.Get(StorageIndex.combineKeys(checksum, BLOCKS_KEY_HEADER), rocksCFBlocks);
+                    byte[] blockBytes = database!.Get(StorageIndex.combineKeys(checksum, BLOCKS_KEY_HEADER), rocksCFBlocks);
                     if (blockBytes != null)
                     {
                         byte[] txIDsBytes = database.Get(StorageIndex.combineKeys(checksum, BLOCKS_KEY_TXS), rocksCFBlocks);
                         Block b = new Block(checksum.ToArray(), blockBytes, txIDsBytes);
                         (int sigCount, IxiNumber totalSignerDifficulty, byte[] powField) blockMeta;
-                        if (blockMetaBytes != null)
+                        if (blockMetaBytes.Length > 0)
                         {
                             blockMeta = parseBlockMetaBytes(blockMetaBytes.ToArray());
                         }
                         else
                         {
-                            blockMeta = parseBlockMetaBytes(idxBlocksChecksum.getEntry(b.blockNum.GetBytesBE(), b.blockChecksum));
+                            blockMeta = parseBlockMetaBytes(idxBlocksChecksum!.getEntry(b.blockNum.GetBytesBE(), b.blockChecksum));
                         }
 
                         b.totalSignerDifficulty = blockMeta.totalSignerDifficulty;
@@ -556,7 +556,7 @@ namespace IXICore
             }
 
 
-            private Transaction getTransactionInternal(ReadOnlySpan<byte> txid)
+            private Transaction? getTransactionInternal(ReadOnlySpan<byte> txid)
             {
                 var txBytes = getTransactionBytesInternal(txid);
                 if (txBytes != null)
@@ -583,7 +583,7 @@ namespace IXICore
             private byte[] getTransactionBytesInternal(ReadOnlySpan<byte> txid)
             {
                 lastUsedTime = DateTime.Now;
-                return database.Get(txid, rocksCFTransactions);
+                return database!.Get(txid, rocksCFTransactions);
             }
 
 
@@ -592,7 +592,7 @@ namespace IXICore
                 lastUsedTime = DateTime.Now;
 
                 var ro = new ReadOptions().SetPrefixSameAsStart(true);
-                var iter = database.NewIterator(rocksCFTransactions, ro);
+                var iter = database!.NewIterator(rocksCFTransactions, ro);
 
                 try
                 {
@@ -615,25 +615,25 @@ namespace IXICore
                 }
             }
 
-            public Transaction getTransaction(byte[] txid)
+            public Transaction? getTransaction(byte[] txid)
             {
                 lock (rockLock)
                 {
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     return getTransactionInternal(txid);
                 }
             }
 
-            public byte[] getTransactionBytes(byte[] txid)
+            public byte[]? getTransactionBytes(byte[] txid)
             {
                 lock (rockLock)
                 {
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     return getTransactionBytesInternal(txid);
                 }
@@ -646,17 +646,17 @@ namespace IXICore
                     List<Transaction> txs = new List<Transaction>();
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     lastUsedTime = DateTime.Now;
                     IEnumerable<(ReadOnlyMemory<byte> index, ReadOnlyMemory<byte> value)> entries;
                     if (blockNum == 0)
                     {
-                        entries = idxAddressTXs.getEntriesForKey(addr.AsMemory(0, 16));
+                        entries = idxAddressTXs!.getEntriesForKey(addr.AsMemory(0, 16));
                     }
                     else
                     {
-                        entries = idxAddressTXs.getEntriesForKey(addr.AsMemory(0, 16), blockNum.GetBytesBE());
+                        entries = idxAddressTXs!.getEntriesForKey(addr.AsMemory(0, 16), blockNum.GetBytesBE());
                     }
                     foreach (var i in entries)
                     {
@@ -677,17 +677,17 @@ namespace IXICore
                     List<Transaction> txs = new List<Transaction>();
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     lastUsedTime = DateTime.Now;
                     IEnumerable<(ReadOnlyMemory<byte> index, ReadOnlyMemory<byte> value)> entries;
                     if (txType == -1)
                     {
-                        entries = idxTXAppliedType.getEntriesForKey(blockNum.GetBytesBE());
+                        entries = idxTXAppliedType!.getEntriesForKey(blockNum.GetBytesBE());
                     }
                     else
                     {
-                        entries = idxTXAppliedType.getEntriesForKey(blockNum.GetBytesBE(), new byte[] { (byte)txType });
+                        entries = idxTXAppliedType!.getEntriesForKey(blockNum.GetBytesBE(), new byte[] { (byte)txType });
                     }
 
                     foreach (var txid in entries)
@@ -709,17 +709,17 @@ namespace IXICore
                     List<byte[]> txs = new List<byte[]>();
                     if (database == null)
                     {
-                        return null;
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     lastUsedTime = DateTime.Now;
                     IEnumerable<(ReadOnlyMemory<byte> index, ReadOnlyMemory<byte> value)> entries;
                     if (txType == -1)
                     {
-                        entries = idxTXAppliedType.getEntriesForKey(blockNum.GetBytesBE());
+                        entries = idxTXAppliedType!.getEntriesForKey(blockNum.GetBytesBE());
                     }
                     else
                     {
-                        entries = idxTXAppliedType.getEntriesForKey(blockNum.GetBytesBE(), new byte[] { (byte)txType });
+                        entries = idxTXAppliedType!.getEntriesForKey(blockNum.GetBytesBE(), new byte[] { (byte)txType });
                     }
 
                     foreach (var txid in entries)
@@ -738,7 +738,7 @@ namespace IXICore
             {
                 lock (rockLock)
                 {
-                    Block block = getBlock(blockNum);
+                    Block? block = getBlock(blockNum);
                     if (block != null)
                     {
                         lastUsedTime = DateTime.Now;
@@ -758,11 +758,11 @@ namespace IXICore
                             writeBatch.Delete(StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), rocksCFBlocks);
                             writeBatch.Delete(StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_TXS), rocksCFBlocks);
 
-                            idxBlocksChecksum.delIndexEntry(blockNumBytes, blockChecksum, writeBatch);
+                            idxBlocksChecksum!.delIndexEntry(blockNumBytes, blockChecksum, writeBatch);
 
                             idxBlocksChecksum.delIndexEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX, writeBatch);
 
-                            database.Write(writeBatch);
+                            database!.Write(writeBatch);
 
                             if (blockNum == maxBlockNumber)
                             {
@@ -795,7 +795,7 @@ namespace IXICore
 
             private bool removeTransactionInternal(ReadOnlySpan<byte> txid)
             {
-                Transaction tx = getTransactionInternal(txid);
+                Transaction? tx = getTransactionInternal(txid);
                 if (tx != null)
                 {
                     using (WriteBatch writeBatch = new WriteBatch())
@@ -803,7 +803,7 @@ namespace IXICore
                         writeBatch.Delete(txid, rocksCFTransactions);
                         var txIdBytesShort = txid.Slice(0, 16);
                         removeTransactionIndexes(tx, txIdBytesShort, writeBatch);
-                        database.Write(writeBatch);
+                        database!.Write(writeBatch);
                     }
                     return true;
                 }
@@ -815,13 +815,13 @@ namespace IXICore
                 // remove it from indexes
                 foreach (var f in tx.fromList.Keys)
                 {
-                    idxAddressTXs.delIndexEntry(new Address(tx.pubKey.addressNoChecksum, f).addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(tx.applied, txIdBytesShort), writeBatch);
+                    idxAddressTXs!.delIndexEntry(new Address(tx.pubKey.addressNoChecksum, f).addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(tx.applied, txIdBytesShort), writeBatch);
                 }
                 foreach (var t in tx.toList.Keys)
                 {
-                    idxAddressTXs.delIndexEntry(t.addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(tx.applied, txIdBytesShort), writeBatch);
+                    idxAddressTXs!.delIndexEntry(t.addressNoChecksum.AsSpan(0, 16), blockHeightAndTxIDToBytes(tx.applied, txIdBytesShort), writeBatch);
                 }
-                idxTXAppliedType.delIndexEntry(tx.applied.GetBytesBE(), typeAndTxIDToBytes((byte)tx.type, txIdBytesShort), writeBatch);
+                idxTXAppliedType!.delIndexEntry(tx.applied.GetBytesBE(), typeAndTxIDToBytes((byte)tx.type, txIdBytesShort), writeBatch);
             }
 
             public bool removeTransaction(byte[] txid)
@@ -833,24 +833,24 @@ namespace IXICore
                 }
             }
 
-            public (byte[] blockChecksum, IxiNumber totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
+            public (byte[]? blockChecksum, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
             {
                 lock (rockLock)
                 {
                     if (database == null)
                     {
-                        return (null, null);
+                        throw new Exception($"Database {dbPath} is not open.");
                     }
                     lastUsedTime = DateTime.Now;
 
                     var blockNumBytes = blockNum.GetBytesBE();
 
-                    var blockChecksum = idxBlocksChecksum.getEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX);
+                    var blockChecksum = idxBlocksChecksum!.getEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX);
                     if (blockChecksum == null)
                     {
                         return (null, null);
                     }
-                    var blockMeta = idxBlocksChecksum.getEntry(blockNumBytes, blockChecksum);
+                    var blockMeta = idxBlocksChecksum!.getEntry(blockNumBytes, blockChecksum);
                     if (blockMeta == null)
                     {
                         return (null, null);
@@ -871,9 +871,9 @@ namespace IXICore
                             database.CompactRange(null, null, rocksCFBlocks);
                             database.CompactRange(null, null, rocksCFTransactions);
                             database.CompactRange(null, null, rocksCFMeta);
-                            database.CompactRange(null, null, idxBlocksChecksum.rocksIndexHandle);
-                            database.CompactRange(null, null, idxAddressTXs.rocksIndexHandle);
-                            database.CompactRange(null, null, idxTXAppliedType.rocksIndexHandle);
+                            database.CompactRange(null, null, idxBlocksChecksum!.rocksIndexHandle);
+                            database.CompactRange(null, null, idxAddressTXs!.rocksIndexHandle);
+                            database.CompactRange(null, null, idxTXAppliedType!.rocksIndexHandle);
                         }
                     }
                     catch (Exception e)
@@ -899,7 +899,7 @@ namespace IXICore
             private long minDiskSpace = 1L * 1024L * 1024L * 1024L;
 
             // Runtime stuff
-            private Cache commonBlockCache = null;
+            private Cache? commonBlockCache = null;
             private Queue<RocksDBInternal> reopenCleanupList = new Queue<RocksDBInternal>();
             private DateTime lastReopenOptimize = DateTime.Now;
 
@@ -962,7 +962,7 @@ namespace IXICore
                         }
 
                         Logging.info("RocksDB: Opening a database for blocks {0} - {1}.", baseBlockNum * maxBlocksPerDatabase, (baseBlockNum * maxBlocksPerDatabase) + maxBlocksPerDatabase - 1);
-                        db = new RocksDBInternal(db_path, commonBlockCache);
+                        db = new RocksDBInternal(db_path, commonBlockCache!);
                         db.openDatabase();
                         openDatabases.Add(baseBlockNum, db);
 
@@ -1249,7 +1249,7 @@ namespace IXICore
                 lock (openDatabases)
                 {
                     var db = getDatabase(oldest_db * maxBlocksPerDatabase, true);
-                    lowestBlockNum = db.minBlockNumber;
+                    lowestBlockNum = db!.minBlockNumber;
                     return lowestBlockNum;
                 }
             }
@@ -1259,6 +1259,10 @@ namespace IXICore
                 lock (openDatabases)
                 {
                     var db = getDatabase(block.blockNum);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", block.blockNum));
+                    }
                     if (db.insertBlock(block))
                     {
                         if (block.blockNum > getHighestBlockInStorage())
@@ -1281,6 +1285,10 @@ namespace IXICore
                         throw new Exception(string.Format("Cannot insert transaction {0}, applied is 0.", transaction.getTxIdString()));
                     }
                     var db = getDatabase(transaction.applied);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", transaction.applied));
+                    }
                     return db.insertTransaction(transaction);
                 }
             }
@@ -1370,7 +1378,7 @@ namespace IXICore
                                 throw new Exception(string.Format("Cannot access database for block {0}", db_blocknum));
                             }
 
-                            Transaction tx = db.getTransaction(txid);
+                            Transaction? tx = db.getTransaction(txid);
                             if (tx != null)
                             {
                                 return tx;
@@ -1447,7 +1455,7 @@ namespace IXICore
                                 throw new Exception(string.Format("Cannot access database for block {0}", db_blocknum));
                             }
 
-                            byte[] tx = db.getTransactionBytes(txid);
+                            byte[]? tx = db.getTransactionBytes(txid);
                             if (tx != null)
                             {
                                 return tx;
@@ -1470,7 +1478,7 @@ namespace IXICore
                 }
             }
 
-            public IEnumerable<Transaction> getTransactionsByAddress(byte[] addr, ulong superBlockNum, ulong blockNum = 0)
+            public IEnumerable<Transaction>? getTransactionsByAddress(byte[] addr, ulong superBlockNum, ulong blockNum = 0)
             {
                 lock (openDatabases)
                 {
@@ -1481,11 +1489,15 @@ namespace IXICore
                         return null;
                     }
                     var db = getDatabase(superBlockNum, true);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", superBlockNum));
+                    }
                     return db.getTransactionsByAddress(addr, blockNum);
                 }
             }
 
-            public override IEnumerable<Transaction> getTransactionsInBlock(ulong blockNum, short tx_type = -1)
+            public override IEnumerable<Transaction>? getTransactionsInBlock(ulong blockNum, short tx_type = -1)
             {
                 lock (openDatabases)
                 {
@@ -1496,11 +1508,15 @@ namespace IXICore
                         return null;
                     }
                     var db = getDatabase(blockNum, true);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", blockNum));
+                    }
                     return db.getTransactionsInBlock(blockNum, tx_type);
                 }
             }
 
-            public override IEnumerable<byte[]> getTransactionsBytesInBlock(ulong blockNum, short tx_type = -1)
+            public override IEnumerable<byte[]>? getTransactionsBytesInBlock(ulong blockNum, short tx_type = -1)
             {
                 lock (openDatabases)
                 {
@@ -1511,6 +1527,10 @@ namespace IXICore
                         return null;
                     }
                     var db = getDatabase(blockNum, true);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", blockNum));
+                    }
                     return db.getTransactionsBytesInBlock(blockNum, tx_type);
                 }
             }
@@ -1526,6 +1546,10 @@ namespace IXICore
                         return false;
                     }
                     var db = getDatabase(blockNum, true);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", blockNum));
+                    }
                     if (db.removeBlock(blockNum))
                     {
                         if (blockNum == highestBlockNum)
@@ -1553,11 +1577,15 @@ namespace IXICore
                         return false;
                     }
                     var db = getDatabase(blockNum, true);
+                    if (db == null)
+                    {
+                        throw new Exception(string.Format("Cannot access database for block {0}", blockNum));
+                    }
                     return db.removeTransaction(txid);
                 }
             }
 
-            public override (byte[] blockChecksum, IxiNumber totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
+            public override (byte[]? blockChecksum, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
             {
                 lock (openDatabases)
                 {

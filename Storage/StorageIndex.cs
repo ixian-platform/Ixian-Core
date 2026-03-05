@@ -16,7 +16,7 @@ using RocksDbSharp;
 using System;
 using System.Collections.Generic;
 
-namespace IXICore.Utils
+namespace IXICore.Storage
 {
     class StorageIndex
     {
@@ -28,11 +28,8 @@ namespace IXICore.Utils
             rocksIndexHandle = db.GetColumnFamily(cf_name);
         }
 
-        public static byte[] combineKeys(ReadOnlySpan<byte> key1, ReadOnlySpan<byte> key2 = default)
+        public static byte[] combineKeys(ReadOnlySpan<byte> key1, ReadOnlySpan<byte> key2)
         {
-            if (key2 == default)
-                key2 = ReadOnlySpan<byte>.Empty;
-
             int size = key1.Length + key2.Length;
 
             var combined = GC.AllocateUninitializedArray<byte>(size);
