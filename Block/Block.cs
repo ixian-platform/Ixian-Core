@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2025 Ixian
+// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -789,6 +789,7 @@ namespace IXICore
                                 ulong tmpSignerDiff = reader.ReadIxiVarUInt();
                                 if (version >= BlockVer.v10)
                                 {
+                                    // TODO replace this with full diff
                                     totalSignerDifficulty = SignerPowSolution.bitsToDifficulty(tmpSignerDiff);
                                 }
                             }
@@ -851,7 +852,8 @@ namespace IXICore
                             }
                         }
 
-                        if (txIDBytes != null)
+                        if (txIDBytes != null
+                            && txIDBytes.Length > 0)
                         {
                             setTransactionIDsFromBytes(txIDBytes);
                         }
@@ -1951,7 +1953,7 @@ namespace IXICore
         public bool verifySignature(BlockSignature sig)
         {
             byte[] dataToVerify = blockChecksum;
-            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1).version >= BlockVer.v10)
+            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)
             {
                 if (sig.powSolution == null)
                 {
@@ -1974,8 +1976,8 @@ namespace IXICore
                 dataToVerify = CryptoManager.lib.sha3_512sq(dataToVerify);
             }
 
-            byte[] publicKey = null;
-            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1).version >= BlockVer.v10)
+            byte[]? publicKey = null;
+            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)
             {
                 publicKey = sig.powSolution.signingPubKey;
             }
@@ -1984,7 +1986,8 @@ namespace IXICore
                 publicKey = getSignerPubKey(sig.recipientPubKeyOrAddress);
             }
 
-            if (!CryptoManager.lib.verifySignature(dataToVerify, publicKey, sig.signature))
+            if (publicKey == null
+                || !CryptoManager.lib.verifySignature(dataToVerify, publicKey, sig.signature))
             {
                 Logging.error("VerifySig: invalid sig");
                 return false;
@@ -2044,7 +2047,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="address">Signer address or public key.</param>
         /// <returns>Public key, matching the given address, or null, if the public key is not known.</returns>
-        public byte[] getSignerPubKey(Address address)
+        public byte[]? getSignerPubKey(Address address)
         {
             if (compacted)
             {
@@ -2127,7 +2130,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="skip_sig_verification">False for simpler, non-cryptographic verification.</param>
         /// <returns>True if all signatures are valid and (optionally) match the block's checksum.</returns>
-        public bool verifySignatures(Block local_block, bool skip_sig_verification = false)
+        public bool verifySignatures(Block? local_block, bool skip_sig_verification = false)
         {
             if (compacted)
             {
@@ -2613,6 +2616,7 @@ namespace IXICore
                         {
                             writer.WriteIxiVarInt(0);
                             writer.WriteIxiVarInt(signatureCount);
+                            // TODO replace this with full diff
                             writer.WriteIxiVarInt(SignerPowSolution.difficultyToBits(totalSignerDifficulty));
                         }
                         else

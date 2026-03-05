@@ -13,6 +13,7 @@
 using IXICore.Inventory;
 using IXICore.Meta;
 using IXICore.Network;
+using IXICore.Storage;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -29,6 +30,7 @@ namespace IXICore
     {
         public void receivedBlockHeader(Block blockHeader, bool verified);
         public void receivedTIVResponse(Transaction tx, bool verified);
+        public void blockReorg(Block blockHeader);
     }
 
     /// <summary>
@@ -44,7 +46,7 @@ namespace IXICore
     }
     class TransactionInclusion
     {
-        private Thread tiv_thread = null;
+        private Thread? tiv_thread = null;
         private bool running = false;
 
         Dictionary<byte[], Transaction> txQueue = new Dictionary<byte[], Transaction>(new ByteArrayComparer()); // List of all transactions that should be verified
@@ -52,7 +54,7 @@ namespace IXICore
         long pitRequestTimeout = 5; // timeout (seconds) before PIT for a specific block is re-requested
         long pitCachePruneInterval = 30; // interval how often pit cache is checked and uninteresting entries removed (to save memory)
 
-        Block lastBlockHeader = null;
+        Block? lastBlockHeader = null;
 
         long lastRequestedBlockTime = 0;
         long lastPITPruneTime = 0;
@@ -62,48 +64,35 @@ namespace IXICore
         bool pruneBlocks = true;
 
         ulong startingBlockHeight = 0;
-        byte[] startingBlockChecksum = null;
+        byte[]? startingBlockChecksum = null;
 
         public ulong blockHeadersToRequestInChunk = 250;
 
-        private TransactionInclusionCallbacks transactionInclusionCallbacks = null;
+        private TransactionInclusionCallbacks transactionInclusionCallbacks;
 
         private bool useGetBlockHeaders = true;
 
-        public TransactionInclusion(TransactionInclusionCallbacks transactionInclusionCallbacks, bool useGetBlockHeaders)
+        private IStorage blockStorage;
+
+        public TransactionInclusion(IStorage blockStorage, TransactionInclusionCallbacks transactionInclusionCallbacks, bool useGetBlockHeaders)
         {
             this.useGetBlockHeaders = useGetBlockHeaders;
             this.transactionInclusionCallbacks = transactionInclusionCallbacks;
+            this.blockStorage = blockStorage;
         }
 
-        public void start(string block_header_storage_path = "", bool compacted = false, bool pruneBlocks = true)
+        public void start(ulong starting_block_height, byte[]? starting_block_checksum, bool pruneBlocks = true)
         {
-            // this method should be improved
-            ulong block_height = 0;
-            byte[] block_checksum = null;
-            if(!IxianHandler.isTestNet)
-            {
-                block_height = CoreConfig.bakedBlockHeight;
-                block_checksum = CoreConfig.bakedBlockChecksum;
-            }
-            start(block_header_storage_path, block_height, block_checksum, compacted, pruneBlocks);
-        }
-
-        public void start(string block_header_storage_path, ulong starting_block_height, byte[] starting_block_checksum, bool compacted, bool pruneBlocks = true)
-        {
-            this.pruneBlocks = pruneBlocks;
-
             if (running)
             {
                 return;
             }
 
             running = true;
+            this.pruneBlocks = pruneBlocks;
 
             startingBlockHeight = starting_block_height;
             startingBlockChecksum = starting_block_checksum;
-
-            BlockHeaderStorage.init(block_header_storage_path, compacted);
 
             // Start the thread
             tiv_thread = new Thread(onUpdate);
@@ -115,20 +104,7 @@ namespace IXICore
         {
             try
             {
-                try
-                {
-                    BlockHeaderStorage.initCache();
-                }
-                catch (ThreadInterruptedException)
-                {
-                    throw;
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Exception occurred in BlockHeaderStorage.init: " + e);
-                }
-
-                Block last_block_header = BlockHeaderStorage.getLastBlockHeader();
+                Block? last_block_header = blockStorage.getBlock(blockStorage.getHighestBlockInStorage());
 
                 if (last_block_header != null && last_block_header.blockNum > startingBlockHeight)
                 {
@@ -136,7 +112,9 @@ namespace IXICore
                 }
                 else
                 {
-                    BlockHeaderStorage.deleteCache();
+                    blockStorage.stopStorage();
+                    blockStorage.deleteData();
+                    blockStorage.prepareStorage(false);
                     lastBlockHeader = new Block() { blockNum = startingBlockHeight, blockChecksum = startingBlockChecksum };
                 }
 
@@ -172,8 +150,6 @@ namespace IXICore
             }
             running = false;
 
-            BlockHeaderStorage.stop();
-
             // Force stopping of thread
             if (tiv_thread == null)
                 return;
@@ -193,7 +169,7 @@ namespace IXICore
                 lastRequestedBlockTime = currentTime;
 
                 // request next blocks
-                requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk, endpoint);
+                requestBlockHeaders(lastBlockHeader!.blockNum + 1, blockHeadersToRequestInChunk, endpoint);
 
                 return true;
             }
@@ -239,7 +215,7 @@ namespace IXICore
                 var tmp_txQueue = txQueue.Values.Where(x => x.applied != 0 && x.applied <= lastBlockHeader.blockNum).ToArray();
                 foreach(var tx in tmp_txQueue)
                 {
-                    Block bh = BlockHeaderStorage.getBlockHeader(tx.applied);
+                    Block? bh = blockStorage.getBlock(tx.applied);
                     if(bh is null)
                     {
                         // TODO: need to wait for the block to arrive, or re-request
@@ -271,7 +247,7 @@ namespace IXICore
                                 // Note: PIT has been verified against the block header when it was received, so additional verification is not needed here.
                                 // Note: the PIT we have cached might have been requested for different txids (the current txid could have been added later)
                                 // For that reason, the list of TXIDs we requested is stored together with the cached PIT
-                                byte[] txid = null;
+                                byte[] txid;
                                 if(bh.version < BlockVer.v8)
                                 {
                                     txid = UTF8Encoding.UTF8.GetBytes(tx.getTxIdString());
@@ -376,17 +352,131 @@ namespace IXICore
             }
         }
 
+        /// <summary>
+        /// - Check previous block hash
+        /// - Check version
+        /// - Check signer bits (if superblock)
+        /// - Check superblock segments (if superblock)
+        /// - Check timestamp (with some tolerance, to prevent time manipulation)
+        /// - Verify signatures
+        /// - Check signature count
+        /// - Check total difficulty
+        /// - Check sigfreeze checksum
+        /// </summary>
+        /// <param name="header"></param>
+        /// <param name="previousBlockHeader"></param>
+        /// <returns></returns>
+        private bool verifyBlockHeader(Block header, Block? previousBlockHeader)
+        {
+            if (header.version < IxianHandler.getLastBlockVersion())
+            {
+                Logging.error("TIV: Invalid block header version. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                return false;
+            }
+
+            // Advanced verification for Blocks v10+
+            if (header.version < BlockVer.v10)
+            {
+                return true;
+            }
+
+            populateBlockSignatures(header);
+
+            //return true;
+
+            if (header.timestamp + ConsensusConfig.minBlockTimeDifference < previousBlockHeader.timestamp)
+            {
+                Logging.error("TIV: Invalid block header timestamp. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                return false;
+            }
+
+            /*if (header.signatures != null
+                && !header.verifySignatures(null, false))
+            {
+                Logging.error("TIV: Invalid block header signature. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                return false;
+            }*/
+
+            // Signature difficulty verification
+            Block? lastSuperBlock = null;
+            bool isSuperBlock = header.blockNum % ConsensusConfig.superblockInterval == 0;
+            if (isSuperBlock)
+            {
+                lastSuperBlock = blockStorage.getBlock(header.blockNum - ConsensusConfig.superblockInterval);
+                if (lastSuperBlock != null)
+                {
+                    if (SignerPowSolution.bitsToDifficulty(header.signerBits) > SignerPowSolution.bitsToDifficulty(lastSuperBlock.signerBits) * 4)
+                    {
+                        Logging.error("TIV: Block header signer difficulty is too high compared to the previous superblock. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                        return false;
+                    }
+                    else if (SignerPowSolution.bitsToDifficulty(header.signerBits) < SignerPowSolution.bitsToDifficulty(lastSuperBlock.signerBits) / 4)
+                    {
+                        Logging.error("TIV: Block header signer difficulty is too low compared to the previous superblock. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                        return false;
+                    }
+                    // TODO verify sig count
+                }
+            }
+            else
+            {
+                lastSuperBlock = blockStorage.getBlock((header.blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
+                // TODO verify sig count
+            }
+
+            if (lastSuperBlock != null)
+            {
+                var requiredDifficulty = (SignerPowSolution.bitsToDifficulty(lastSuperBlock.signerBits) * ConsensusConfig.networkSignerDifficultyConsensusRatio) / 100;
+                if (header.getTotalSignerDifficulty() < requiredDifficulty)
+                {
+                    Logging.error("TIV: Block header does not meet minimum signer difficulty. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                    return false;
+                }
+            }
+            //
+            return true;
+        }
+
+        private void populateBlockSignatures(Block header)
+        {
+            bool isSuperBlock = header.blockNum % ConsensusConfig.superblockInterval == 0;
+            if (isSuperBlock)
+            {
+                foreach (var sig in header.signatures)
+                {
+                    sig.powSolution.blockHash = header.superBlockSegments[sig.powSolution.blockNum].blockChecksum;
+                }
+            }
+            else
+            {
+                Block? lastSuperBlock = blockStorage.getBlock((header.blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
+                foreach (var sig in header.signatures)
+                {
+                    lastSuperBlock.superBlockSegments.TryGetValue(sig.powSolution.blockNum, out SuperBlockSegment? seg);
+                    sig.powSolution.blockHash = seg?.blockChecksum;
+                    if (sig.powSolution.blockHash == null)
+                    {
+                        sig.powSolution.blockHash = IxianHandler.getBlockHash(sig.powSolution.blockNum);
+                    }
+                }
+            }
+        }
+
         private bool processBlockHeader(Block header)
         {
-            if (lastBlockHeader != null && lastBlockHeader.blockChecksum != null && !header.lastBlockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
+            if (lastBlockHeader != null
+                && lastBlockHeader.blockChecksum != null
+                && !header.lastBlockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
             {
                 Logging.warn("TIV: Invalid last block checksum");
 
-                // discard the block
+                // revert the block
 
-                // TODO require previous block to get verifications from 3 nodes
-                // if in verification mode, detect liar and flag him
-                // below is an implementation that's good enough for now
+                if (!verifyBlockHeader(header, null))
+                {
+                    Logging.error("TIV: Invalid block header received, and it failed verification. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                    return false;
+                }
 
                 if (lastBlockHeader.blockNum > 100
                     && minBlockHeightReorg < lastBlockHeader.blockNum - 100)
@@ -394,7 +484,13 @@ namespace IXICore
                     minBlockHeightReorg = lastBlockHeader.blockNum - 100;
                 }
 
-                Block prev_header = BlockHeaderStorage.getBlockHeader(minBlockHeightReorg);
+                if (minBlockHeightReorg >= lastBlockHeader.blockNum)
+                {
+                    Logging.error("TIV: Reorg detected, but the block height reorg limit was reached. Please resolve manually. Block number: {0}, min reorg height: {1}", lastBlockHeader.blockNum, minBlockHeightReorg);
+                    return false;
+                }
+
+                Block? prev_header = blockStorage.getBlock(lastBlockHeader.blockNum - 1);
 
                 if(prev_header == null)
                 {
@@ -406,35 +502,40 @@ namespace IXICore
                 ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
                 ConsensusConfig.minRedactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
 
+                transactionInclusionCallbacks.blockReorg(lastBlockHeader);
+
                 return false;
             }
 
-            if (!header.calculateChecksum().SequenceEqual(header.blockChecksum))
+            if (!verifyBlockHeader(header, lastBlockHeader))
             {
-                Logging.warn("TIV: Invalid block checksum");
+                Logging.error("TIV: Invalid block header received, and it failed verification. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 return false;
             }
 
-            lastBlockHeader = header;
-
-            ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
-            ConsensusConfig.minRedactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
-
-            if(BlockHeaderStorage.saveBlockHeader(lastBlockHeader))
+            if (blockStorage.insertBlock(header))
             {
+                lastBlockHeader = header;
+
+                ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
+                ConsensusConfig.minRedactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
+
                 if (pruneBlocks)
                 {
                     // Cleanup every n blocks
-                    if ((header.blockNum > CoreConfig.maxBlockHeadersPerDatabase * 5) && header.blockNum % CoreConfig.maxBlockHeadersPerDatabase == 0)
+                    if ((header.blockNum > CoreConfig.maxBlockHeadersPerDatabase * 11)
+                        && header.blockNum % CoreConfig.maxBlockHeadersPerDatabase == 0)
                     {
-                        BlockHeaderStorage.removeAllBlocksBefore(header.blockNum - (CoreConfig.maxBlockHeadersPerDatabase * 5));
+                        blockStorage.redactBlockStorage(header.blockNum - (CoreConfig.maxBlockHeadersPerDatabase * 11));
                     }
                 }
+
+                transactionInclusionCallbacks.receivedBlockHeader(lastBlockHeader, true);
+
+                return true;
             }
 
-            transactionInclusionCallbacks.receivedBlockHeader(lastBlockHeader, true);
-
-            return true;
+            return false;
         }
 
         /// <summary>
@@ -452,7 +553,7 @@ namespace IXICore
                 {
                     return;
                 }
-                Block h = BlockHeaderStorage.getBlockHeader(block_num);
+                Block? h = blockStorage.getBlock(block_num);
                 if (h == null)
                 {
                     Logging.warn("TIV: Received PIT information for block {0}, but we do not have that block header in storage!", block_num);
@@ -548,7 +649,7 @@ namespace IXICore
             }
         }
 
-        private void requestBlockHeaders(ulong from, ulong count, RemoteEndpoint endpoint = null)
+        private void requestBlockHeaders(ulong from, ulong count, RemoteEndpoint? endpoint = null)
         {
             Logging.info("Requesting block headers from {0} to {1}", from, from + count);
             if (useGetBlockHeaders)
@@ -635,7 +736,7 @@ namespace IXICore
             }
         }
 
-        public Block getLastBlockHeader()
+        public Block? getLastBlockHeader()
         {
             return lastBlockHeader;
         }
@@ -654,7 +755,7 @@ namespace IXICore
 
         public void requestNewBlockHeaders(ulong blockNum, RemoteEndpoint endpoint)
         {
-            if (blockNum <= lastBlockHeader.blockNum)
+            if (blockNum <= lastBlockHeader!.blockNum)
             {
                 return;
             }
