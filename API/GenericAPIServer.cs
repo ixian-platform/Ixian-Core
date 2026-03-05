@@ -538,6 +538,11 @@ namespace IXICore
                 response = onResolveExtendedAddress(parameters).Result;
             }
 
+            if (methodName.Equals("getBlockHeader", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onGetBlockHeader(parameters);
+            }
+
             return response;
         }
 
@@ -2601,6 +2606,86 @@ namespace IXICore
                 return new JsonResponse { result = null, error = error };
             }
             return new JsonResponse { result = resolvedAddress.ToString(), error = null };
+        }
+
+        public JsonResponse onGetBlockHeader(Dictionary<string, object> parameters)
+        {
+            JsonError? error = null;
+
+            string blocknum_string = "0";
+            if (parameters.ContainsKey("num"))
+            {
+                blocknum_string = (string)parameters["num"];
+            }
+            ulong block_num = 0;
+            try
+            {
+                block_num = Convert.ToUInt64(blocknum_string);
+            }
+            catch (OverflowException)
+            {
+                block_num = 0;
+            }
+
+            Block? block = IxianHandler.getBlockHeader(block_num);
+            if (block == null)
+            {
+                return new JsonResponse { result = null, error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "Block not found." } };
+            }
+
+            if (parameters.ContainsKey("bytes") && (string)parameters["bytes"] == "1")
+            {
+                return new JsonResponse { result = Crypto.hashToString(block.getBytes(true, true, true)), error = error };
+            }
+            else
+            {
+                return new JsonResponse { result = blockHeaderToJsonDictionary(block), error = error };
+            }
+        }
+
+        private Dictionary<string, string> blockHeaderToJsonDictionary(Block block)
+        {
+            Dictionary<string, string> blockData = new Dictionary<string, string>();
+
+            blockData.Add("Block Number", block.blockNum.ToString());
+            blockData.Add("Version", block.version.ToString());
+            blockData.Add("Block Checksum", Crypto.hashToString(block.blockChecksum));
+            blockData.Add("Last Block Checksum", Crypto.hashToString(block.lastBlockChecksum));
+            blockData.Add("Wallet State Checksum", Crypto.hashToString(block.walletStateChecksum));
+            if (block.regNameStateChecksum != null)
+            {
+                blockData.Add("RegName State Checksum", Crypto.hashToString(block.regNameStateChecksum));
+            }
+            blockData.Add("Sig freeze Checksum", Crypto.hashToString(block.signatureFreezeChecksum));
+            blockData.Add("PoW field", Crypto.hashToString(block.powField));
+            blockData.Add("Timestamp", block.timestamp.ToString());
+            blockData.Add("Difficulty", block.difficulty.ToString());
+            blockData.Add("Hashrate", (MiningUtils.getTargetHashcountPerBlock(block.difficulty) / 60).ToString());
+            blockData.Add("Compacted Sigs", block.compactedSigs.ToString());
+            blockData.Add("Signature count", block.signatures.Count.ToString());
+            blockData.Add("Total Signer Difficulty", block.getTotalSignerDifficulty().ToString());
+
+            blockData.Add("Transaction count", block.transactions.Count.ToString());
+            blockData.Add("Total fees", block.totalFee.ToString());
+            blockData.Add("Signatures", JsonConvert.SerializeObject(block.signatures));
+            if (block.frozenSignatures != null)
+            {
+                blockData.Add("Frozen Signatures", JsonConvert.SerializeObject(block.frozenSignatures));
+                blockData.Add("Frozen Signature count", block.frozenSignatures.Count.ToString());
+            }
+            blockData.Add("Sig Checksum", Crypto.hashToString(block.calculateSignatureChecksum()));
+            blockData.Add("Signer Bits", Crypto.hashToString(BitConverter.GetBytes(block.signerBits)));
+
+            List<string> txids = new List<string>();
+            foreach (byte[] tx in block.transactions)
+            {
+                txids.Add(Transaction.getTxIdString(tx));
+            }
+            blockData.Add("TX IDs", JsonConvert.SerializeObject(txids));
+            blockData.Add("Last Superblock", block.lastSuperBlockNum.ToString());
+            blockData.Add("Last Superblock checksum", Crypto.hashToString(block.lastSuperBlockChecksum));
+
+            return blockData;
         }
     }
 
