@@ -72,7 +72,7 @@ namespace IXICore.Utils
         }
 
         // bytes extension
-        public static byte[] GetIxiBytes(this byte[] value)
+        public static byte[] GetIxiBytes(this byte[]? value)
         {
             if (value == null)
             {

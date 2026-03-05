@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -56,9 +56,9 @@ namespace IXICore.Meta
     {
         // Required
         public abstract ulong getHighestKnownNetworkBlockHeight();
-        public abstract Block getBlockHeader(ulong blockNum);
-        public abstract byte[] getBlockHash(ulong blockNum);
-        public abstract Block getLastBlock();
+        public abstract Block? getBlockHeader(ulong blockNum);
+        public abstract byte[]? getBlockHash(ulong blockNum);
+        public abstract Block? getLastBlock();
         public abstract ulong getLastBlockHeight();
         public abstract int getLastBlockVersion();
         public abstract bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast);
@@ -75,7 +75,12 @@ namespace IXICore.Meta
 
         public virtual long getTimeSinceLastBlock()
         {
-            return Clock.getNetworkTimestamp() - getLastBlock().timestamp;
+            var lb = getLastBlock();
+            if (lb == null)
+            {
+                return Clock.getNetworkTimestamp();
+            }
+            return Clock.getNetworkTimestamp() - lb.timestamp;
         }
     }
 
@@ -109,12 +114,12 @@ namespace IXICore.Meta
         public static bool isTestNet { get; private set; } = false;
         public static bool isRegNet { get; private set; } = false;
 
-        public static Address primaryWalletAddress = null;
+        public static Address? primaryWalletAddress = null;
         public static Dictionary<byte[], WalletStorage> wallets = new Dictionary<byte[], WalletStorage>(new ByteArrayComparer());
 
         public static bool enableNetworkServer = false;
         public static void init(string product_version, IxianNode handler_class, NetworkType type, bool set_title = false,
-            byte[] checksum_lock = null)
+            byte[]? checksum_lock = null)
         {
             CoreConfig.productVersion = product_version;
             if (set_title)
@@ -124,7 +129,7 @@ namespace IXICore.Meta
             init(handler_class, type, checksum_lock);
         }
 
-        public static void init(IxianNode handler_class, NetworkType type, byte[] checksum_lock = null)
+        public static void init(IxianNode handler_class, NetworkType type, byte[]? checksum_lock = null)
         {
             handlerClass = handler_class;
             networkType = type;
@@ -185,7 +190,7 @@ namespace IXICore.Meta
             return handlerClass.getHighestKnownNetworkBlockHeight();
         }
 
-        public static Block getLastBlock()
+        public static Block? getLastBlock()
         {
             verifyHandler();
             return handlerClass.getLastBlock();
@@ -227,13 +232,13 @@ namespace IXICore.Meta
             return handlerClass.getWalletBalance(id);
         }
 
-        public static Block getBlockHeader(ulong blockNum)
+        public static Block? getBlockHeader(ulong blockNum)
         {
             verifyHandler();
             return handlerClass.getBlockHeader(blockNum);
         }
 
-        public static byte[] getBlockHash(ulong blockNum)
+        public static byte[]? getBlockHash(ulong blockNum)
         {
             verifyHandler();
             return handlerClass.getBlockHash(blockNum);
@@ -264,7 +269,7 @@ namespace IXICore.Meta
             return handlerClass.getRegName(name, useAbsoluteId);
         }
 
-        public static WalletStorage getWalletStorage(Address walletAddress = null)
+        public static WalletStorage getWalletStorage(Address? walletAddress = null)
         {
             if (walletAddress == null)
             {
@@ -273,7 +278,7 @@ namespace IXICore.Meta
             return wallets[walletAddress.addressNoChecksum];
         }
 
-        public static WalletStorage getWalletStorageByFilename(string filename)
+        public static WalletStorage? getWalletStorageByFilename(string filename)
         {
             try
             {
@@ -286,7 +291,7 @@ namespace IXICore.Meta
             return null;
         }
 
-        public static WalletStorage getWalletStorageBySecondaryAddress(Address walletAddress)
+        public static WalletStorage? getWalletStorageBySecondaryAddress(Address walletAddress)
         {
             lock (wallets)
             {

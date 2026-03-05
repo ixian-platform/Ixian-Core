@@ -16,6 +16,7 @@ using System.Diagnostics;
 using System.Security.Permissions;
 using System.Text;
 using System.Threading;
+using static NativeMethods;
 
 namespace IXICore.Utils
 {
@@ -26,8 +27,8 @@ namespace IXICore.Utils
         // STD_INPUT_HANDLE (DWORD): -10 is the standard input device.
         const int STD_INPUT_HANDLE = -10;
 
+        private static HandlerRoutine? _handlerRoutine;
 
-        [SecurityPermission(SecurityAction.Demand, Flags = SecurityPermissionFlag.ControlAppDomain)]
         static void installUnhandledExceptionHandler()
         {
             System.AppDomain.CurrentDomain.UnhandledException += currentDomain_UnhandledException;
@@ -68,8 +69,8 @@ namespace IXICore.Utils
             }
 
             // Hook a handler for force close
-            NativeMethods.SetConsoleCtrlHandler(new NativeMethods.HandlerRoutine(IXICore.Utils.ConsoleHelpers.HandleConsoleClose), true);
-
+            _handlerRoutine += new NativeMethods.HandlerRoutine(HandleConsoleClose);
+            NativeMethods.SetConsoleCtrlHandler(_handlerRoutine, true);
         }
 
         static public void displayBackupText()
