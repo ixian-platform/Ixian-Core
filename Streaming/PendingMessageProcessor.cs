@@ -180,18 +180,23 @@ namespace IXICore.Streaming
                 {
                     continue;
                 }
+                if (recipient.messageQueue.Count == 0)
+                {
+                    continue;
+                }
                 List<PendingMessageHeader>? message_headers = null;
                 if (!friend.online)
                 {
+                    CoreStreamProcessor.fetchFriendsPresence(friend);
                     message_headers = recipient.messageQueue.FindAll(x => x.sendToServer);
                 }
                 else
                 {
+                    CoreStreamProcessor.fetchFriendsPresence(friend);
                     message_headers = recipient.messageQueue;
                 }
                 if (message_headers != null && message_headers.Count > 0)
                 {
-                    CoreStreamProcessor.fetchFriendsPresence(friend);
                     List<PendingMessageHeader> tmp_msg_headers = new List<PendingMessageHeader>(message_headers);
                     bool failed_sending = false;
                     foreach (var message_header in tmp_msg_headers)
