@@ -935,7 +935,6 @@ namespace IXICore
             }
             if (IxianHandler.addTransaction(transaction, relayNodeAddresses, extendedAddresses, requestId, true))
             {
-                PendingTransactions.addPendingLocalTransaction(transaction, relayNodeAddresses);
                 return new JsonResponse { result = transaction.toDictionary(), error = null };
             }
 
@@ -1080,7 +1079,6 @@ namespace IXICore
 
             if (IxianHandler.addTransaction(raw_transaction, relayNodeAddresses, extendedAddresses, requestId, true))
             {
-                PendingTransactions.addPendingLocalTransaction(raw_transaction, relayNodeAddresses);
                 return new JsonResponse { result = raw_transaction.toDictionary(), error = null };
             }
 
@@ -1873,7 +1871,6 @@ namespace IXICore
 
             if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1906,7 +1903,6 @@ namespace IXICore
 
             if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -1968,7 +1964,6 @@ namespace IXICore
 
             if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -2025,7 +2020,6 @@ namespace IXICore
 
             if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
@@ -2091,7 +2085,6 @@ namespace IXICore
 
             if (IxianHandler.addTransaction(fundedTx, relayNodeAddresses, null, null, true))
             {
-                PendingTransactions.addPendingLocalTransaction(fundedTx, relayNodeAddresses);
                 return new JsonResponse { result = fundedTx.toDictionary(), error = null };
             }
 
