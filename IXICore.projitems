@@ -16,7 +16,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Address\ExtendedAddress.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)API\GenericAPIServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Block\Block.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Block\BlockHeaderStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Block\BlockSignature.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Crypto\ASNParser.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Crypto\BigInteger.cs" />
@@ -75,6 +74,8 @@
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\RegisteredNamesTransactions.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\RegisteredNameTxEntries.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)RegNames\RegNamesMemoryStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Storage\IStorage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Storage\RocksDBStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Channels\BotChannel.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Channels\BotChannels.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Bot\Groups\BotGroup.cs" />
