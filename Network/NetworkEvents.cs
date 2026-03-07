@@ -25,9 +25,6 @@ namespace IXICore.Network
         {
             all = -1, // only used for detaching
             keepAlive,
-            transactionFrom,
-            transactionTo,
-            balance
         }
 
 

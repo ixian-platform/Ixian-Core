@@ -816,28 +816,6 @@ namespace IXICore
             return filter;
         }
 
-        /// <summary>
-        /// Subscribes client to transactionFrom, transactionTo and balance
-        /// </summary>
-        /// <param name="endpoint">Target endpoint to verify for connectivity.</param>
-        public static void subscribeToEvents(RemoteEndpoint endpoint)
-        {
-            // TODO TODO TODO events can be optimized as there is no real need to subscribe them to every connected node
-
-            // Subscribe to transaction events, for own addresses
-            var my_addresses = IxianHandler.getWalletStorage().getMyAddresses();
-            Cuckoo filter = getMyAddressesCuckooFilter();
-            byte[] filter_data = filter.getFilterBytes();
-            byte[] event_data = NetworkEvents.prepareEventMessageData(NetworkEvents.Type.transactionFrom, filter_data);
-            endpoint.sendData(ProtocolMessageCode.attachEvent, event_data);
-
-            event_data = NetworkEvents.prepareEventMessageData(NetworkEvents.Type.transactionTo, filter_data);
-            endpoint.sendData(ProtocolMessageCode.attachEvent, event_data);
-
-            event_data = NetworkEvents.prepareEventMessageData(NetworkEvents.Type.balance, filter_data);
-            endpoint.sendData(ProtocolMessageCode.attachEvent, event_data);
-        }
-
         public static bool broadcastGetTransaction(byte[] txid, ulong block_num, RemoteEndpoint endpoint = null, bool broadcast_to_single_node = true)
         {
             using (MemoryStream mw = new MemoryStream())
