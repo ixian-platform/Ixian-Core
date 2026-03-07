@@ -23,6 +23,7 @@ namespace IXICore.Streaming
         public static int maxIncomingConnections = 100;
         private static Dictionary<Address, Friend> _incomingConnections = new Dictionary<Address, Friend>(new AddressComparer());
         private static List<Friend> _pendingSectorRequests = new List<Friend>();
+        private static Dictionary<byte[], Friend> _pendingTransactionSendRequests = new(new ByteArrayComparer());
 
         public static Friend? GetIncomingConnection(Address walletAddress)
         {
@@ -36,6 +37,24 @@ namespace IXICore.Streaming
             lock (_pendingSectorRequests)
             {
                 _pendingSectorRequests.Add(friend);
+            }
+        }
+        public static void AddPendingTransactionSendRequest(byte[] requestId, Friend friend)
+        {
+            lock (_pendingTransactionSendRequests)
+            {
+                _pendingTransactionSendRequests.Add(requestId, friend);
+            }
+        }
+
+        public static Friend? GetAndRemovePendingTransactionSendRequest(byte[] requestId)
+        {
+            lock (_pendingTransactionSendRequests)
+            {
+                Friend? friend = null;
+                _pendingTransactionSendRequests.TryGetValue(requestId, out friend);
+                _pendingTransactionSendRequests.Remove(requestId);
+                return friend;
             }
         }
 
@@ -87,6 +106,14 @@ namespace IXICore.Streaming
                 {
                     _incomingConnections.Remove(address);
                     Logging.trace("Removed expired IXI Socket connection from " + address.ToString());
+                }
+                foreach (var pendingTsr in _pendingTransactionSendRequests.ToDictionary())
+                {
+                    if (GetIncomingConnection(pendingTsr.Value.walletAddress) == null)
+                    {
+                        _pendingTransactionSendRequests.Remove(pendingTsr.Key);
+                        Logging.trace("Removed expired IXI Socket connection from " + pendingTsr.Value.walletAddress.ToString());
+                    }
                 }
             }
         }

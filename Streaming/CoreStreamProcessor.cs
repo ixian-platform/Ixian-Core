@@ -1115,6 +1115,7 @@ namespace IXICore.Streaming
                                         transactionSendResponse(friend, ea.GetBytes(), message.id, endpoint);
                                         break;
                                     case P2PTransactionMode.Custom:
+                                        IXISocketConnections.AddPendingTransactionSendRequest(message.id, friend);
                                         break;
                                     default:
                                         Logging.error("Invalid P2P transaction mode configured: {0}", CoreConfig.p2pTransactionMode);
@@ -1154,6 +1155,7 @@ namespace IXICore.Streaming
                             }
                             else
                             {
+                                IxianHandler.addIncomingTransaction(ts.Transaction);
                                 return new ReceiveDataResponse(spixi_message, message, friend, sender_address, real_sender_address);
                             }
                         }
@@ -2830,11 +2832,11 @@ namespace IXICore.Streaming
             });
         }*/
 
-        private static StreamMessage prepareTransactionSendRequest(Friend friend, byte[]? tag, byte[]? message)
+        private static StreamMessage prepareTransactionSendRequest(Friend friend, IxiNumber amount, byte[]? tag, byte[]? message)
         {
             SpixiMessage spixiMsg = new SpixiMessage();
             spixiMsg.type = SpixiMessageCode.transactionSendRequest;
-            spixiMsg.data = (new TransactionSendRequest(tag, message)).getBytes();
+            spixiMsg.data = (new TransactionSendRequest(amount, tag, message)).getBytes();
 
             StreamMessage msg = new StreamMessage(friend.protocolVersion);
             msg.type = StreamMessageCode.data;
@@ -2849,9 +2851,9 @@ namespace IXICore.Streaming
             return msg;
         }
 
-        public static void transactionSendRequest(Friend friend, byte[] tag, byte[] message, RemoteEndpoint? endpoint = null)
+        public static void transactionSendRequest(Friend friend, IxiNumber amount, byte[] tag, byte[] message, RemoteEndpoint? endpoint = null)
         {
-            StreamMessage msg = prepareTransactionSendRequest(friend, tag, message);
+            StreamMessage msg = prepareTransactionSendRequest(friend, amount, tag, message);
 
             if (endpoint != null)
             {
@@ -2862,9 +2864,9 @@ namespace IXICore.Streaming
             sendMessage(friend, msg, true, true, true, false, 0);
         }
 
-        public static async Task<TransactionSendResponse?> transactionSendRequest(IXISocket socket, Friend friend, byte[]? tag, byte[]? message)
+        public static async Task<TransactionSendResponse?> transactionSendRequest(IXISocket socket, Friend friend, IxiNumber amount, byte[]? tag, byte[]? message)
         {
-            StreamMessage msg = prepareTransactionSendRequest(friend, tag, message);
+            StreamMessage msg = prepareTransactionSendRequest(friend, amount, tag, message);
             var response = await sendMessage(socket, friend, msg);
             if (response == null)
             {
@@ -2963,7 +2965,7 @@ namespace IXICore.Streaming
             sendMessage(friend, msg, true, true, true, false, 0);
         }
 
-        public static async Task<ExtendedAddress?> resolveExtendedAddress(ExtendedAddress extendedAddress)
+        public static async Task<ExtendedAddress?> resolveExtendedAddress(IxiNumber amount, ExtendedAddress extendedAddress)
         {
             if (extendedAddress.Flag != AddressPaymentFlag.End2End)
             {
@@ -2981,7 +2983,7 @@ namespace IXICore.Streaming
                     return null;
                 }
 
-                TransactionSendResponse? resp = await transactionSendRequest(ixiSocket, connection, extendedAddress.Tag, UTF8Encoding.UTF8.GetBytes("test"));
+                TransactionSendResponse? resp = await transactionSendRequest(ixiSocket, connection, amount, extendedAddress.Tag, UTF8Encoding.UTF8.GetBytes("test"));
                 if (resp != null)
                 {
                     IXISocketConnections.RemovePendingSectorRequest(connection);

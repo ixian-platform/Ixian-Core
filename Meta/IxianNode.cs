@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Network;
 using IXICore.RegNames;
 using IXICore.Storage;
@@ -61,6 +62,7 @@ namespace IXICore.Meta
         public abstract Block? getLastBlock();
         public abstract ulong getLastBlockHeight();
         public abstract int getLastBlockVersion();
+        public abstract bool addIncomingTransaction(Transaction tx);
         public abstract bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast);
         public abstract bool isAcceptingConnections();
         public abstract Wallet getWallet(Address id);
@@ -206,6 +208,13 @@ namespace IXICore.Meta
         {
             verifyHandler();
             return handlerClass.getLastBlockVersion();
+        }
+
+
+        public static bool addIncomingTransaction(Transaction tx)
+        {
+            verifyHandler();
+            return handlerClass.addIncomingTransaction(tx);
         }
 
         public static bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast)
@@ -434,6 +443,78 @@ namespace IXICore.Meta
         {
             verifyHandler();
             return handlerClass.getTimeSinceLastBlock();
+        }
+
+        public static void addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction)
+        {
+            ActivityObject activity;
+            ActivityType type;
+            IxiNumber value = transaction.amount;
+            Dictionary<byte[], List<byte[]>> wallet_list;
+            Address wallet;
+            Address primary_address = transaction.pubKey;
+
+            ActivityStatus status = ActivityStatus.Pending;
+
+            if (IxianHandler.isMyAddress(primary_address))
+            {
+                // We are the sender
+                wallet = primary_address;
+                type = ActivityType.TransactionSent;
+                if (transaction.type == (int)Transaction.Type.PoWSolution)
+                {
+                    type = ActivityType.MiningReward;
+                    value = ConsensusConfig.calculateMiningRewardForBlock(transaction.powSolution.blockNum);
+                }
+                else if (transaction.type == (int)Transaction.Type.RegName)
+                {
+                    type = ActivityType.IxiName;
+                }
+
+                activity = new ActivityObject(IxianHandler.getWalletStorageBySecondaryAddress(primary_address).getSeedHash(),
+                                wallet,
+                                transaction.id,
+                                transaction.toList.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.amount),
+                                type,
+                                transaction.toList.First().Value.data,
+                                value,
+                                transaction.timeStamp,
+                                status,
+                                transaction.applied);
+                activityStorage.insertActivity(activity);
+            }
+            else
+            {
+                wallet_list = IxianHandler.extractMyAddressesFromAddressList(transaction.toList);
+                if (wallet_list != null)
+                {
+                    // We are the recipient
+                    type = ActivityType.TransactionReceived;
+                    if (transaction.type == (int)Transaction.Type.StakingReward)
+                    {
+                        type = ActivityType.StakingReward;
+                    }
+
+                    foreach (var extractedWallet in wallet_list)
+                    {
+                        foreach (var addressBytes in extractedWallet.Value)
+                        {
+                            Address address = new Address(addressBytes);
+                            activity = new ActivityObject(extractedWallet.Key,
+                                                          address,
+                                                          transaction.id,
+                                                          transaction.fromList.ToDictionary(kvp => new Address(transaction.pubKey.addressNoChecksum, kvp.Key), kvp => kvp.Value),
+                                                          type,
+                                                          transaction.toList[address].data,
+                                                          transaction.toList[address].amount,
+                                                          transaction.timeStamp,
+                                                          status,
+                                                          transaction.applied);
+                            activityStorage.insertActivity(activity);
+                        }
+                    }
+                }
+            }
         }
     }
 }
