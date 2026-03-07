@@ -195,7 +195,7 @@ namespace IXICore
             {
                 string post_data = "";
                 string method_name = "";
-                Dictionary<string, object> method_params = null;
+                Dictionary<string, object> method_params;
 
                 HttpListenerRequest request = context.Request;
                 using (var reader = new StreamReader(request.InputStream, request.ContentEncoding))
@@ -275,9 +275,9 @@ namespace IXICore
             }
         }
 
-        public JsonResponse processDefaultRequest(HttpListenerContext context, string methodName, Dictionary<string, object> parameters)
+        public JsonResponse? processDefaultRequest(HttpListenerContext context, string methodName, Dictionary<string, object> parameters)
         {
-            JsonResponse response = null;
+            JsonResponse? response = null;
 
             if (methodName.Equals("shutdown", StringComparison.OrdinalIgnoreCase))
             {
@@ -543,6 +543,11 @@ namespace IXICore
                 response = onGetBlockHeader(parameters);
             }
 
+            if (methodName.Equals("pendingTransactionSendResponse", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onPendingTransactionSendResponse(parameters);
+            }
+
             return response;
         }
 
@@ -649,7 +654,7 @@ namespace IXICore
 
             while (continueRunning)
             {
-                HttpListenerContext context = null;
+                HttpListenerContext context;
                 try
                 {
                     context = listener.GetContext();
@@ -737,6 +742,7 @@ namespace IXICore
                 {
                     responseError = response.error.ToString();
                 }
+                responseObject.StatusCode = 500;
             }
 
             Logging.trace("Processed request, sending response with error code: {0}", responseError);
@@ -755,6 +761,7 @@ namespace IXICore
                 if (continueRunning)
                 {
                     Logging.error("APIServer: {0}", e);
+                    responseObject.StatusCode = 500;
                 }
             }
         }
@@ -847,7 +854,7 @@ namespace IXICore
 
         private JsonResponse onShutdown()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             IxianHandler.shutdown();
 
@@ -856,7 +863,7 @@ namespace IXICore
 
         private JsonResponse onReconnect(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             bool resetNetworkQueue = false;
             if (parameters.ContainsKey("resetNetworkQueue"))
@@ -871,7 +878,7 @@ namespace IXICore
 
         private JsonResponse onConnect(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             if (!parameters.ContainsKey("to"))
             {
@@ -888,7 +895,7 @@ namespace IXICore
 
         private JsonResponse onIsolate()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             NetworkUtils.isolate();
 
@@ -1002,7 +1009,7 @@ namespace IXICore
 
         private JsonResponse onDecodeRawTransaction(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             // transaction which alters a multisig wallet
             if (!parameters.ContainsKey("transaction"))
@@ -1019,7 +1026,7 @@ namespace IXICore
 
         private JsonResponse onSignRawTransaction(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             // transaction which alters a multisig wallet
             object res = "Incorrect transaction parameters.";
@@ -1045,7 +1052,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_IN_WARMUP, message = String.Format("There was an error while creating the transaction: The node isn't ready to process this request yet.") } };
             }
 
-            JsonError error = null;
+            JsonError? error = null;
 
             // transaction which alters a multisig wallet
             object res = "Incorrect transaction parameters.";
@@ -1378,7 +1385,7 @@ namespace IXICore
 
         private JsonResponse onGetTotalBalance(Dictionary<string, object> parameters)
         {
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1392,9 +1399,9 @@ namespace IXICore
 
         private JsonResponse onMyWallet(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1415,9 +1422,9 @@ namespace IXICore
 
         private JsonResponse onMyPubKey(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1428,7 +1435,7 @@ namespace IXICore
 
         private JsonResponse onClients()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             String[] res = NetworkServer.getConnectedClients();
 
@@ -1437,7 +1444,7 @@ namespace IXICore
 
         private JsonResponse onServers()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             String[] res = NetworkClientManager.getConnectedClients(true);
 
@@ -1509,7 +1516,7 @@ namespace IXICore
 
         private JsonResponse onBlockHeight()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             ulong blockheight = IxianHandler.getLastBlockHeight();
 
@@ -1544,9 +1551,9 @@ namespace IXICore
                 };
             }
 
-            JsonError error = null;
+            JsonError? error = null;
 
-            byte[] fromKey = null;
+            byte[]? fromKey = null;
             if (parameters.ContainsKey("fromId"))
             {
                 fromKey = Convert.FromBase64String((string)parameters["fromId"]);
@@ -1591,13 +1598,13 @@ namespace IXICore
 
         private JsonResponse onGenerateNewAddress(Dictionary<string, object> parameters)
         {
-            Address wallet_address = null;
+            Address? wallet_address = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet_address = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
             }
 
-            string base_address_str = null;
+            string? base_address_str = null;
             if (parameters.ContainsKey("address"))
             {
                 base_address_str = (string)parameters["address"];
@@ -1626,7 +1633,7 @@ namespace IXICore
 
         private JsonResponse onGetWalletBackup(Dictionary<string, object> parameters)
         {
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1636,7 +1643,7 @@ namespace IXICore
 
         private JsonResponse onGetViewingWallet(Dictionary<string, object> parameters)
         {
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1695,7 +1702,7 @@ namespace IXICore
         // Signs message or hash
         private JsonResponse onSign(Dictionary<string, object> parameters)
         {
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1777,13 +1784,13 @@ namespace IXICore
         // Returns "OK" if checksum of the address passes and error RPC_INVALID_ADDRESS_OR_KEY if the address is incorrect
         private JsonResponse onValidateAddress(Dictionary<string, object> parameters)
         {
-            string address = null;
+            string? address = null;
             if (parameters.ContainsKey("address"))
             {
                 address = (string)parameters["address"];
             }
 
-            byte[] address_bytes = null;
+            byte[]? address_bytes = null;
             try
             {
                 address_bytes = Base58Check.Base58CheckEncoding.DecodePlain(address);
@@ -1899,7 +1906,7 @@ namespace IXICore
             ToEntry toEntry = RegisteredNamesTransactions.createExtendToEntry(nameBytes, regTime, ConsensusConfig.rnPricePerUnit * (ulong)capacity * (ulong)(regTime / ConsensusConfig.rnMonthInBlocks));
 
             var txTuple = createRegNameTransaction(toEntry, null, null);
-            Transaction fundedTx = txTuple.tx;
+            Transaction? fundedTx = txTuple.tx;
             List<Address> relayNodeAddresses = txTuple.relayNodeAddresses;
             if (fundedTx == null)
             {
@@ -2098,7 +2105,7 @@ namespace IXICore
 
         private JsonResponse onDecodeNameData(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
             if (!parameters.ContainsKey("data"))
             {
                 error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "data parameter is missing" };
@@ -2113,7 +2120,7 @@ namespace IXICore
 
         private JsonResponse onDecodeTransaction(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
             if (!parameters.ContainsKey("transaction"))
             {
                 error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "transaction parameter is missing" };
@@ -2126,7 +2133,7 @@ namespace IXICore
             return new JsonResponse { result = decodedTransaction, error = null };
         }
 
-        private (Transaction tx, List<Address> relayNodeAddresses) createRegNameTransaction(ToEntry toEntry, Address walletAddress, Address primaryAddress)
+        private (Transaction? tx, List<Address>? relayNodeAddresses) createRegNameTransaction(ToEntry toEntry, Address walletAddress, Address primaryAddress)
         {
             Transaction t = new Transaction((int)Transaction.Type.RegName);
             t.toList = new Dictionary<Address, ToEntry>(new AddressComparer())
@@ -2136,7 +2143,7 @@ namespace IXICore
             return createTransaction(t, walletAddress, primaryAddress, 0);
         }
 
-        private (Transaction tx, List<Address> relayNodeAddresses) createTransaction(Transaction t, Address walletAddress, Address primaryAddress, IxiNumber additionalFees)
+        private (Transaction? tx, List<Address>? relayNodeAddresses) createTransaction(Transaction t, Address walletAddress, Address primaryAddress, IxiNumber additionalFees)
         {
             IxiNumber fromAmount = 0;
             IxiNumber fee = ConsensusConfig.forceTransactionPrice;
@@ -2268,7 +2275,7 @@ namespace IXICore
                 }
             }
 
-            Address walletAddress = null;
+            Address? walletAddress = null;
             if (parameters.ContainsKey("wallet"))
             {
                 walletAddress = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -2276,7 +2283,7 @@ namespace IXICore
 
             WalletStorage ws = IxianHandler.getWalletStorage(walletAddress);
 
-            Address primary_address = null;
+            Address? primary_address = null;
             if (!parameters.ContainsKey("primaryAddress"))
             {
                 primary_address = ws.getPrimaryAddress();
@@ -2333,10 +2340,12 @@ namespace IXICore
                 {
                     string[] single_to_split = single_to.Split('_');
                     ExtendedAddress? single_to_address;
+                    IxiNumber single_to_amount;
                     try
                     {
+                        single_to_amount = new IxiNumber(single_to_split.Last());
                         single_to_address = new ExtendedAddress(string.Join('_', single_to_split.Take(single_to_split.Length - 1)));
-                        single_to_address = CoreStreamProcessor.resolveExtendedAddress(single_to_address).Result;
+                        single_to_address = CoreStreamProcessor.resolveExtendedAddress(single_to_amount, single_to_address).Result;
                         if (single_to_address == null)
                         {
                             return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_ADDRESS_OR_KEY, message = "Unable to resolve extended address" } };
@@ -2345,13 +2354,12 @@ namespace IXICore
                     {
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_ADDRESS_OR_KEY, message = "Invalid to address was specified" } };
                     }
-                    IxiNumber singleToAmount = new IxiNumber(single_to_split.Last());
-                    if (singleToAmount < 0 || singleToAmount == 0)
+                    if (single_to_amount < 0 || single_to_amount == 0)
                     {
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_PARAMS, message = "Invalid to amount was specified" } };
                     }
-                    to_amount += singleToAmount;
-                    ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()), singleToAmount, single_to_address.Tag, null);
+                    to_amount += single_to_amount;
+                    ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()), single_to_amount, single_to_address.Tag, null);
                     toList.Add(single_to_address.PaymentAddress, toEntry);
                     extendedAddresses.Add(single_to_address);
                 }
@@ -2471,7 +2479,7 @@ namespace IXICore
 
         public JsonResponse onPl()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             List<Presence> presences = PresenceList.getPresences();
 
@@ -2481,7 +2489,7 @@ namespace IXICore
 
         public JsonResponse onRelaySectors()
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             var sectors = RelaySectors.Instance.debugDump();
 
@@ -2490,7 +2498,7 @@ namespace IXICore
 
         public JsonResponse onGetSectorNodes(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
 
             if (!parameters.ContainsKey("maxRelayCount"))
             {
@@ -2522,7 +2530,7 @@ namespace IXICore
 
         public async Task<JsonResponse> onExtendAddress(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
             // Check for required parameters
             if (!parameters.ContainsKey("flag"))
             {
@@ -2581,12 +2589,25 @@ namespace IXICore
 
         public async Task<JsonResponse> onResolveExtendedAddress(Dictionary<string, object> parameters)
         {
-            JsonError error = null;
+            JsonError? error = null;
             // Check for required parameters
             if (!parameters.ContainsKey("extendedAddress"))
             {
                 error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "extendedAddress parameter is missing" };
                 return new JsonResponse { result = null, error = error };
+            }
+            IxiNumber amount = 0;
+            if (parameters.ContainsKey("amount"))
+            {
+                try
+                {
+                    amount = new IxiNumber((string)parameters["amount"]);
+                }
+                catch (Exception e)
+                {
+                    error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "amount parameter is invalid: " + e.Message };
+                    return new JsonResponse { result = null, error = error };
+                }
             }
             string extendedAddressStr = (string)parameters["extendedAddress"];
             ExtendedAddress extendedAddress;
@@ -2599,7 +2620,7 @@ namespace IXICore
                 error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "extendedAddress parameter is invalid: " + e.Message };
                 return new JsonResponse { result = null, error = error };
             }
-            ExtendedAddress? resolvedAddress = await CoreStreamProcessor.resolveExtendedAddress(extendedAddress);
+            ExtendedAddress? resolvedAddress = await CoreStreamProcessor.resolveExtendedAddress(amount, extendedAddress);
             if (resolvedAddress == null)
             {
                 error = new JsonError { code = (int)RPCErrorCode.RPC_INTERNAL_ERROR, message = "Could not resolve the extended address" };
@@ -2612,11 +2633,12 @@ namespace IXICore
         {
             JsonError? error = null;
 
-            string blocknum_string = "0";
-            if (parameters.ContainsKey("num"))
+            if (!parameters.ContainsKey("num"))
             {
-                blocknum_string = (string)parameters["num"];
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "num parameter is missing" };
+                return new JsonResponse { result = null, error = error };
             }
+            string blocknum_string = (string)parameters["num"];
             ulong block_num = 0;
             try
             {
@@ -2641,6 +2663,37 @@ namespace IXICore
             {
                 return new JsonResponse { result = blockHeaderToJsonDictionary(block), error = error };
             }
+        }
+
+        public JsonResponse onPendingTransactionSendResponse(Dictionary<string, object> parameters)
+        {
+            if (CoreConfig.p2pTransactionMode != P2PTransactionMode.Custom)
+            {
+                return new JsonResponse { result = null, error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_REQUEST, message = "This method is only available in Custom transaction mode." } };
+            }
+
+            JsonError? error = null;
+            if (!parameters.ContainsKey("requestId"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "requestId parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+            byte[] requestId = Crypto.stringToHash((string)parameters["requestId"]);
+            if (!parameters.ContainsKey("paymentInstructions"))
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "paymentInstructions parameter is missing" };
+                return new JsonResponse { result = null, error = error };
+            }
+            ExtendedAddress paymentInstructions = new ExtendedAddress((string)parameters["paymentInstructions"]);
+            var pending = IXISocketConnections.GetAndRemovePendingTransactionSendRequest(requestId);
+            if (pending == null)
+            {
+                error = new JsonError { code = (int)RPCErrorCode.RPC_INVALID_PARAMETER, message = "No pending transaction send request found for the provided requestId" };
+                return new JsonResponse { result = null, error = error };
+            }
+            CoreStreamProcessor.transactionSendResponse(pending, paymentInstructions.GetBytes(), requestId, null);
+
+            return new JsonResponse { result = "", error = error };
         }
 
         private Dictionary<string, string> blockHeaderToJsonDictionary(Block block)

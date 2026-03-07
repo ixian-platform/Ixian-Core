@@ -18,11 +18,13 @@ namespace IXICore.Streaming.Models
 {
     class TransactionSendRequest
     {
+        public IxiNumber Amount { get; private set; }
         public byte[]? Tag { get; private set; }
         public byte[]? Message { get; private set; }
 
-        public TransactionSendRequest(byte[]? tag, byte[]? message)
+        public TransactionSendRequest(IxiNumber amount, byte[]? tag, byte[]? message)
         {
+            Amount = amount;
             Tag = tag;
             Message = message;
         }
@@ -33,6 +35,7 @@ namespace IXICore.Streaming.Models
             {
                 using (BinaryReader reader = new BinaryReader(m))
                 {
+                    Amount = reader.ReadIxiNumber();
                     Tag = reader.ReadIxiBytes();
                     Message = reader.ReadIxiBytes();
                 }
@@ -45,6 +48,7 @@ namespace IXICore.Streaming.Models
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
+                    writer.WriteIxiNumber(Amount);
                     writer.WriteIxiBytes(Tag);
                     writer.WriteIxiBytes(Message);
                 }
