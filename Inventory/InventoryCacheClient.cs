@@ -24,7 +24,6 @@ namespace IXICore.Inventory
         public InventoryCacheClient(TransactionInclusion tiv) : base()
         {
             this.tiv = tiv;
-            typeOptions[InventoryItemTypes.blockSignature].maxItems = 0;
             typeOptions[InventoryItemTypes.blockSignature2].maxItems = 0;
         }
 

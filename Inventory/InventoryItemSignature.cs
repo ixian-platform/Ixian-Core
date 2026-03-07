@@ -22,12 +22,6 @@ namespace IXICore.Inventory
         public byte[] blockHash;
         public byte[] solution;
 
-
-        [Obsolete("Use InventoryItemSignature(byte[] solution...) instead")]
-        public InventoryItemSignature(Address address, ulong blockNum, byte[] blockHash) : this(InventoryItemTypes.blockSignature, address.addressNoChecksum, blockNum, blockHash)
-        {
-        }
-
         public InventoryItemSignature(byte[] solution, ulong blockNum, byte[] blockHash) : this(InventoryItemTypes.blockSignature2, solution, blockNum, blockHash)
         {
         }
