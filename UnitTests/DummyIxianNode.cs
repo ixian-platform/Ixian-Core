@@ -21,6 +21,11 @@ namespace UnitTests
 {
     public class DummyIxianNode : IxianNode
     {
+        public override bool addIncomingTransaction(Transaction tx)
+        {
+            throw new NotImplementedException();
+        }
+
         public override bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast)
         {
             throw new NotImplementedException();
