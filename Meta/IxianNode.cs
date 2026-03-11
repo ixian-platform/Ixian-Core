@@ -445,11 +445,11 @@ namespace IXICore.Meta
             return handlerClass.getTimeSinceLastBlock();
         }
 
-        public static void addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction)
+        public static bool addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction)
         {
             ActivityObject activity;
             ActivityType type;
-            IxiNumber value = transaction.amount;
+            IxiNumber value = transaction.amount + transaction.fee;
             Dictionary<byte[], List<byte[]>> wallet_list;
             Address wallet;
             Address primary_address = transaction.pubKey;
@@ -480,8 +480,9 @@ namespace IXICore.Meta
                                 value,
                                 transaction.timeStamp,
                                 status,
-                                transaction.applied);
-                activityStorage.insertActivity(activity);
+                                transaction.applied,
+                                transaction);
+                return activityStorage.insertActivity(activity);
             }
             else
             {
@@ -509,12 +510,14 @@ namespace IXICore.Meta
                                                           transaction.toList[address].amount,
                                                           transaction.timeStamp,
                                                           status,
-                                                          transaction.applied);
-                            activityStorage.insertActivity(activity);
+                                                          transaction.applied,
+                                                          transaction);
+                            return activityStorage.insertActivity(activity);
                         }
                     }
                 }
             }
+            return false;
         }
     }
 }

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Inventory;
 using IXICore.Meta;
 using IXICore.Network;
@@ -22,14 +23,14 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 
-// TODO TODO PIT tree should be included with the transaction, it should be requested from the nodes only in cases where PIT wasn't included
-
 namespace IXICore
 {
     public interface TransactionInclusionCallbacks
     {
         public void receivedBlockHeader(Block blockHeader, bool verified);
-        public void receivedTIVResponse(Transaction tx, bool verified);
+        public void transactionVerified(Transaction tx);
+        public void transactionRejected(Transaction tx);
+        public void transactionExpired(Transaction tx);
         public void blockReorg(Block blockHeader);
     }
 
@@ -49,7 +50,6 @@ namespace IXICore
         private Thread? tiv_thread = null;
         private bool running = false;
 
-        Dictionary<byte[], Transaction> txQueue = new Dictionary<byte[], Transaction>(new ByteArrayComparer()); // List of all transactions that should be verified
         SortedList<ulong, PITCacheItem> pitCache = new SortedList<ulong, PITCacheItem>();
         long pitRequestTimeout = 5; // timeout (seconds) before PIT for a specific block is re-requested
         long pitCachePruneInterval = 30; // interval how often pit cache is checked and uninteresting entries removed (to save memory)
@@ -120,9 +120,10 @@ namespace IXICore
 
                 while (running)
                 {
-                    if (updateBlockHeaders())
+                    if (requestBlockHeaders())
                     {
-                        verifyUnprocessedTransactions();
+                        processUnverifiedTransactions();
+                        processOutgoingTransactions();
                         long currentTime = Clock.getTimestamp();
                         if (currentTime - lastPITPruneTime > pitCachePruneInterval)
                         {
@@ -159,7 +160,7 @@ namespace IXICore
             tiv_thread = null;
         }
 
-        private bool updateBlockHeaders(bool force_update = false, RemoteEndpoint endpoint = null)
+        private bool requestBlockHeaders(bool force_update = false, RemoteEndpoint endpoint = null)
         {
             long currentTime = Clock.getTimestamp();
 
@@ -177,44 +178,21 @@ namespace IXICore
             return false;
         }
 
-        /// <summary>
-        ///  Posts a verify transaction inclusion request
-        /// </summary>
-        /// <param name="txid">transaction id string</param>
-        public bool receivedNewTransaction(Transaction t)
-        {
-            lock (txQueue)
-            {
-                if (txQueue.Count() > 0)
-                {
-                    if (txQueue.ContainsKey(t.id))
-                    {
-                        // Already in the requests queue
-                        if (t.applied != 0
-                            && txQueue[t.id].applied != t.applied)
-                        {
-                            txQueue[t.id].applied = t.applied;
-                        }
-                        return false;
-                    }
-                }
-
-                txQueue.Add(t.id, t);
-                return true;
-            }
-        }
-
-        private void verifyUnprocessedTransactions()
+        private void processUnverifiedTransactions()
         {
             if(lastBlockHeader == null)
             {
                 return;
             }
-            lock (txQueue)
+            lock (pitCache)
             {
-                var tmp_txQueue = txQueue.Values.Where(x => x.applied != 0 && x.applied <= lastBlockHeader.blockNum).ToArray();
+                var tmp_txQueue = PendingTransactions.getPendingTransactions().Where(x => x.blockHeight <= lastBlockHeader.blockNum).ToArray();
                 foreach(var tx in tmp_txQueue)
                 {
+                    if (tx.applied == 0)
+                    {
+                        tx.applied = tx.blockHeight;
+                    }
                     Block? bh = blockStorage.getBlock(tx.applied);
                     if(bh is null)
                     {
@@ -224,83 +202,70 @@ namespace IXICore
                     }
                     if (bh.version < BlockVer.v6)
                     {
-                        txQueue.Remove(tx.id);
-
-                        if(bh.transactions.Contains(tx.id, new ByteArrayComparer()))
+                        if (bh.transactions.Contains(tx.id, new ByteArrayComparer()))
                         {
                             // valid
-                            transactionInclusionCallbacks.receivedTIVResponse(tx, true);
-                        }else
-                        {
-                            // invalid
-                            transactionInclusionCallbacks.receivedTIVResponse(tx, false);
+                            transactionInclusionCallbacks.transactionVerified(tx);
+                            PendingTransactions.remove(tx.id);
                         }
-
+                        else
+                        {
+                            // not in this block
+                            tx.applied++;
+                        }
                     }
                     else
                     {
-                        lock (pitCache)
+                        // check if we already have the partial tree for this transaction
+                        if (pitCache.ContainsKey(tx.applied) && pitCache[tx.applied].pit != null)
                         {
-                            // check if we already have the partial tree for this transaction
-                            if (pitCache.ContainsKey(tx.applied) && pitCache[tx.applied].pit != null)
+                            // Note: PIT has been verified against the block header when it was received, so additional verification is not needed here.
+                            // Note: the PIT we have cached might have been requested for different txids (the current txid could have been added later)
+                            // For that reason, the list of TXIDs we requested is stored together with the cached PIT
+                            byte[] txid;
+                            if (bh.version < BlockVer.v8)
                             {
-                                // Note: PIT has been verified against the block header when it was received, so additional verification is not needed here.
-                                // Note: the PIT we have cached might have been requested for different txids (the current txid could have been added later)
-                                // For that reason, the list of TXIDs we requested is stored together with the cached PIT
-                                byte[] txid;
-                                if(bh.version < BlockVer.v8)
+                                txid = UTF8Encoding.UTF8.GetBytes(tx.getTxIdString());
+                            }else
+                            {
+                                txid = tx.id;
+                            }
+                            if (pitCache[tx.applied].requestedForTXIDs.Contains(tx.id, new ByteArrayComparer()))
+                            {
+                                if (pitCache[tx.applied].pit.contains(txid))
                                 {
-                                    txid = UTF8Encoding.UTF8.GetBytes(tx.getTxIdString());
-                                }else
-                                {
-                                    txid = tx.id;
-                                }
-                                if (pitCache[tx.applied].requestedForTXIDs.Contains(tx.id, new ByteArrayComparer()))
-                                {
-                                    // TODO TODO it shouldn't be immediatelly removed but checked with other nodes first
-                                    txQueue.Remove(tx.id);
-
-                                    if (pitCache[tx.applied].pit.contains(txid))
-                                    {
-                                        // valid
-                                        transactionInclusionCallbacks.receivedTIVResponse(tx, true);
-                                    }
-                                    else
-                                    {
-                                        // invalid
-                                        transactionInclusionCallbacks.receivedTIVResponse(tx, false);
-                                    }
+                                    // valid
+                                    transactionInclusionCallbacks.transactionVerified(tx);
+                                    PendingTransactions.remove(tx.id);
                                 }
                                 else
                                 {
-                                    // PIT cache for the correct block exists, but it was originally requested for different txids
-                                    // we have to re-request it for any remaining txids in the queue. (We do not need to request the already-verified ids)
-                                    requestPITForBlock(tx.applied,
-                                        txQueue.Values
-                                            .Where(x => x.applied == tx.applied && x.applied <= lastBlockHeader.blockNum)
-                                            .Select(x => x.id)
-                                            .ToList());
-                                    continue;
+                                    // not in this block
+                                    tx.applied++;
                                 }
                             }
                             else
                             {
-                                // PIT cache has not been received yet, or maybe it has never been requested for this block
+                                // PIT cache for the correct block exists, but it was originally requested for different txids
+                                // we have to re-request it for any remaining txids in the queue. (We do not need to request the already-verified ids)
                                 requestPITForBlock(tx.applied,
-                                    txQueue.Values
-                                        .Where(x => x.applied == tx.applied && x.applied <= lastBlockHeader.blockNum)
-                                        .Select(x => x.id)
+                                    PendingTransactions.pendingTransactions.Values
+                                        .Where(x => x.transaction.applied == tx.applied && x.transaction.applied <= lastBlockHeader.blockNum)
+                                        .Select(x => x.transaction.id)
                                         .ToList());
+                                continue;
                             }
                         }
+                        else
+                        {
+                            // PIT cache has not been received yet, or maybe it has never been requested for this block
+                            requestPITForBlock(tx.applied,
+                                PendingTransactions.pendingTransactions.Values
+                                    .Where(x => x.transaction.applied == tx.applied && x.transaction.applied <= lastBlockHeader.blockNum)
+                                    .Select(x => x.transaction.id)
+                                    .ToList());
+                        }
                     }
-                }
-                tmp_txQueue = txQueue.Values.Where(x => x.blockHeight + ConsensusConfig.getRedactedWindowSize() < lastBlockHeader.blockNum).ToArray();
-                foreach (var tx in tmp_txQueue)
-                {
-                    txQueue.Remove(tx.id);
-                    // invalid
-                    transactionInclusionCallbacks.receivedTIVResponse(tx, false);
                 }
             }
         }
@@ -635,15 +600,16 @@ namespace IXICore
                         Logging.info("Processed {0} block headers in {1}ms.", blockCnt, Clock.getTimestampMillis() - startTime);
                         if (processed)
                         {
-                            updateBlockHeaders(true);
-                            verifyUnprocessedTransactions();
+                            requestBlockHeaders(true);
+                            processUnverifiedTransactions();
+                            processOutgoingTransactions();
                         }
                     }
                     catch (Exception e)
                     {
                         Logging.error("Exception occurred while processing block header: " + e);
                         // TODO blacklist sender
-                        updateBlockHeaders(true);
+                        requestBlockHeaders(true);
                     }
                 }
             }
@@ -712,26 +678,23 @@ namespace IXICore
 
         private void prunePITCache()
         {
-            lock (txQueue)
+            lock (pitCache)
             {
-                lock (pitCache)
+                List<ulong> to_remove = new List<ulong>();
+                foreach (var i in pitCache)
                 {
-                    List<ulong> to_remove = new List<ulong>();
-                    foreach (var i in pitCache)
+                    if (i.Value.requestedForTXIDs.Intersect(PendingTransactions.getAllPendingTxids(), new ByteArrayComparer()).Any())
                     {
-                        if (i.Value.requestedForTXIDs.Intersect(txQueue.Values.Select(tx => tx.id), new ByteArrayComparer()).Any())
-                        {
-                            // PIT cache item is still needed
-                        }
-                        else
-                        {
-                            to_remove.Add(i.Key);
-                        }
+                        // PIT cache item is still needed
                     }
-                    foreach(ulong b_num in to_remove)
+                    else
                     {
-                        pitCache.Remove(b_num);
+                        to_remove.Add(i.Key);
                     }
+                }
+                foreach(ulong b_num in to_remove)
+                {
+                    pitCache.Remove(b_num);
                 }
             }
         }
@@ -743,13 +706,9 @@ namespace IXICore
 
         public void clearCache()
         {
-            lock (txQueue)
+            lock (pitCache)
             {
-                txQueue.Clear();
-                lock (pitCache)
-                {
-                    pitCache.Clear();
-                }
+                pitCache.Clear();
             }
         }
 
@@ -760,8 +719,71 @@ namespace IXICore
                 return;
             }
 
-            updateBlockHeaders(true, endpoint);
-            verifyUnprocessedTransactions();
+            requestBlockHeaders(true, endpoint);
+        }
+
+        private void processOutgoingTransactions()
+        {
+            ulong last_block_height = IxianHandler.getLastBlockHeight();
+            lock (PendingTransactions.pendingTransactions)
+            {
+                long cur_time = Clock.getTimestamp();
+                List<PendingTransaction> tmp_pending_transactions = new(PendingTransactions.pendingTransactions.Values);
+                foreach (var entry in tmp_pending_transactions)
+                {
+                    long tx_time = entry.addedTimestamp;
+
+                    if (entry.transaction.blockHeight > last_block_height)
+                    {
+                        // not ready yet, syncing to the network
+                        continue;
+                    }
+
+                    Transaction t = entry.transaction;
+
+                    // if transaction expired, remove it from pending transactions
+                    if (last_block_height > ConsensusConfig.getRedactedWindowSize()
+                        && t.blockHeight < last_block_height - ConsensusConfig.getRedactedWindowSize())
+                    {
+                        Logging.error("Error sending the transaction {0}, expired", t.getTxIdString());
+                        transactionInclusionCallbacks.transactionExpired(t);
+                        PendingTransactions.remove(t.id);
+                        continue;
+                    }
+
+                    if (entry.rejectedNodeList.Count() > 3
+                        && entry.rejectedNodeList.Count() > entry.confirmedNodeList.Count())
+                    {
+                        Logging.error("Error sending the transaction {0}, rejected", t.getTxIdString());
+                        transactionInclusionCallbacks.transactionRejected(t);
+                        PendingTransactions.remove(t.id);
+                        continue;
+                    }
+
+                    if (cur_time - tx_time > 60) // if the transaction is pending for over 60 seconds, resend
+                    {
+                        Logging.warn("Transaction {0} pending for a while, resending", t.getTxIdString());
+                        entry.addedTimestamp = cur_time;
+
+                        if (!entry.outgoing)
+                        {
+                            continue;
+                        }
+
+                        if (entry.relayNodeAddresses != null)
+                        {
+                            foreach (var address in entry.relayNodeAddresses)
+                            {
+                                NetworkClientManager.sendToClient(address, ProtocolMessageCode.transactionData2, t.getBytes(true, true), null);
+                            }
+                        }
+                        else
+                        {
+                            CoreProtocolMessage.broadcastProtocolMessage(new char[] { 'M', 'H' }, ProtocolMessageCode.transactionData2, t.getBytes(true, true), null);
+                        }
+                    }
+                }
+            }
         }
     }
 }

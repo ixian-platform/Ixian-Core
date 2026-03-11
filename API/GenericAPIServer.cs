@@ -2197,20 +2197,17 @@ namespace IXICore
             t.pubKey = new Address(ws.getPrimaryPublicKey());
 
             SortedDictionary<byte[], IxiNumber> fromList = null;
-            lock (PendingTransactions.pendingTransactions)
+            fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + fee, t.toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+            t.fromList = fromList;
+            t.amount = t.calculateTotalAmount();
+            t.fee = t.calculateMinimumFee(ConsensusConfig.forceTransactionPrice);
+            if (relayNodeAddresses != null)
             {
-                fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + fee, t.toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
-                t.fromList = fromList;
-                t.amount = t.calculateTotalAmount();
-                t.fee = t.calculateMinimumFee(ConsensusConfig.forceTransactionPrice);
-                if (relayNodeAddresses != null)
+                relayFee = 0;
+                foreach (var relayNodeAddress in relayNodeAddresses)
                 {
-                    relayFee = 0;
-                    foreach (var relayNodeAddress in relayNodeAddresses)
-                    {
-                        t.toList[relayNodeAddress].amount = t.fee;
-                        relayFee += t.fee;
-                    }
+                    t.toList[relayNodeAddress].amount = t.fee;
+                    relayFee += t.fee;
                 }
             }
 
@@ -2218,10 +2215,8 @@ namespace IXICore
             for (int i = 0; i < 2 && t.fee != totalTxFee; i++)
             {
                 totalTxFee = t.fee;
-                lock (PendingTransactions.pendingTransactions)
-                {
-                    fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + totalTxFee, t.toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
-                }
+                fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + totalTxFee, t.toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+
                 if (fromList == null || fromList.Count == 0)
                 {
                     return (null, null);
@@ -2406,10 +2401,7 @@ namespace IXICore
             bool adjust_amount = false;
             if (fromList.Count == 0)
             {
-                lock (PendingTransactions.pendingTransactions)
-                {
-                    fromList = ws.generateFromList(primary_address, to_amount + relayFee + fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
-                }
+                fromList = ws.generateFromList(primary_address, to_amount + relayFee + fee, toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
                 adjust_amount = true;
             }
 
@@ -2437,10 +2429,8 @@ namespace IXICore
                     }
 
                     total_tx_fee = transaction.fee;
-                    lock (PendingTransactions.pendingTransactions)
-                    {
-                        fromList = ws.generateFromList(primary_address, to_amount + relayFee + total_tx_fee, toList.Keys.ToList(), PendingTransactions.pendingTransactions.Select(x => x.transaction).ToList());
-                    }
+                    fromList = ws.generateFromList(primary_address, to_amount + relayFee + total_tx_fee, toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+
                     if (fromList == null || fromList.Count == 0)
                     {
                         return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_VERIFY_ERROR, message = "From list is empty" } };
@@ -2718,7 +2708,7 @@ namespace IXICore
             blockData.Add("Signature count", block.signatures.Count.ToString());
             blockData.Add("Total Signer Difficulty", block.getTotalSignerDifficulty().ToString());
 
-            blockData.Add("Transaction count", block.transactions.Count.ToString());
+            blockData.Add("Transaction count", block.txCount.ToString());
             blockData.Add("Total fees", block.totalFee.ToString());
             blockData.Add("Signatures", JsonConvert.SerializeObject(block.signatures));
             if (block.frozenSignatures != null)

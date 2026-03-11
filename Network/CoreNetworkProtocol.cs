@@ -620,7 +620,7 @@ namespace IXICore
         /// <param name="helper_data">Additional information, as required by the protocol message</param>
         /// <param name="skipEndpoint">Remote endpoint which should be skipped (data should not be sent to it).</param>
         /// <returns>True, if at least one message was sent to at least one other node. False if no messages were sent.</returns>
-        public static bool broadcastProtocolMessage(char[] types, ProtocolMessageCode code, byte[] data, byte[] helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastProtocolMessage(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint skipEndpoint = null)
         {
             if (data == null)
             {

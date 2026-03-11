@@ -169,7 +169,8 @@ namespace IXICore.Activity
         public IxiNumber value { get; set; }
         public long timestamp { get; set; }
         public ActivityStatus status { get; set; }
-        public ulong blockHeight { get; set; }
+        public ulong appliedBlockHeight { get; set; }
+        public Transaction? transaction { get; set; }
 
         public ActivityObject(byte[] seedHash,
                               Address walletAddress,
@@ -180,7 +181,8 @@ namespace IXICore.Activity
                               IxiNumber value,
                               long timestamp,
                               ActivityStatus status,
-                              ulong blockHeight)
+                              ulong appliedBlockHeight,
+                              Transaction transaction)
         {
             this.id = id;
             this.seedHash = seedHash.AsSpan(0, 16).ToArray();
@@ -191,13 +193,14 @@ namespace IXICore.Activity
             this.value = value;
             this.timestamp = timestamp;
             this.status = status;
-            this.blockHeight = blockHeight;
+            this.appliedBlockHeight = appliedBlockHeight;
+            this.transaction = transaction;
         }
 
         /// <summary>
         /// Reconstructs from serialized bytes
         /// </summary>
-        public ActivityObject(byte[] bytes, byte[] seedHash, ActivityType type, byte[] id, byte[] metaBytes)
+        public ActivityObject(byte[] bytes, byte[] seedHash, ActivityType type, byte[] id, byte[]? metaBytes, byte[]? transactionBytes)
         {
             using (MemoryStream ms = new MemoryStream(bytes))
             using (BinaryReader br = new BinaryReader(ms))
@@ -237,21 +240,27 @@ namespace IXICore.Activity
                 {
                     var metaData = ParseMetaBytes(metaBytes);
                     status = metaData.status;
-                    blockHeight = metaData.blockHeight;
+                    appliedBlockHeight = metaData.appliedBlockHeight;
                     timestamp = metaData.timestamp;
+                }
+
+                if (transactionBytes != null)
+                {
+                    transaction = new Transaction(transactionBytes, false, true);
+                    transaction.applied = appliedBlockHeight;
                 }
             }
         }
 
-        public static (ActivityStatus status, ulong blockHeight, long timestamp) ParseMetaBytes(byte[] metaBytes)
+        public static (ActivityStatus status, ulong appliedBlockHeight, long timestamp) ParseMetaBytes(byte[] metaBytes)
         {
             using (MemoryStream ms = new MemoryStream(metaBytes))
             using (BinaryReader br = new BinaryReader(ms))
             {
                 var status = (ActivityStatus)br.ReadByte();
-                var blockHeight = br.ReadIxiVarUInt();
+                var appliedBlockHeight = br.ReadIxiVarUInt();
                 var timestamp = (int)br.ReadIxiVarUInt();
-                return (status, blockHeight, timestamp);
+                return (status, appliedBlockHeight, timestamp);
             }
         }
 
@@ -289,7 +298,7 @@ namespace IXICore.Activity
 
         public byte[] GetMetaBytes()
         {
-            return GetMetaBytes(status, blockHeight, timestamp);
+            return GetMetaBytes(status, appliedBlockHeight, timestamp);
         }
 
         public static byte[] GetMetaBytes(ActivityStatus status, ulong blockHeight, long timestamp)

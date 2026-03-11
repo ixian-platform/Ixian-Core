@@ -80,7 +80,8 @@ namespace UnitTests
                                         new IxiNumber(valueStr),
                                         ts ?? Clock.getTimestamp(),
                                         status,
-                                        block);
+                                        block,
+                                        null);
             return ao;
         }
 
@@ -207,7 +208,7 @@ namespace UnitTests
             var list = db.getActivitiesBySeedHashAndType(seed, null, null, 10, false);
             Assert.AreEqual(1, list.Count);
             Assert.AreEqual(s1, list[0].status);
-            Assert.AreEqual(newBlock, list[0].blockHeight);
+            Assert.AreEqual(newBlock, list[0].appliedBlockHeight);
             Assert.AreEqual(newTs, list[0].timestamp);
 
             // highest should bump

@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -10,44 +10,55 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Meta;
-using System.Collections.Generic;
-using System.Linq;
+using IXICore.Network;
+using IXICore.Utils;
 
 namespace IXICore
 {
     public class PendingTransaction
     {
         public Transaction transaction;
-        public List<Address> relayNodeAddresses;
+        public List<Address>? relayNodeAddresses;
         public long addedTimestamp;
         public List<byte[]> confirmedNodeList = new List<byte[]>();
         public List<byte[]> rejectedNodeList = new List<byte[]>();
-        public byte[] messageId;
-        public Address senderAddress;
+        public bool outgoing = false;
 
-        public PendingTransaction(Transaction t, List<Address> relayNodeAddresses, long addedTimestamp, byte[] message_id, Address senderAddress)
+        public PendingTransaction(Transaction t, List<Address>? relayNodeAddresses, long addedTimestamp, bool outgoing)
         {
             transaction = t;
             this.relayNodeAddresses = relayNodeAddresses;
             this.addedTimestamp = addedTimestamp;
-            messageId = message_id;
-            this.senderAddress = senderAddress;
+            this.outgoing = outgoing;
         }
     }
 
-    // TODO TODO TODO make PendingTransactions persistent
     public class PendingTransactions
     {
-        public static List<PendingTransaction> pendingTransactions = new List<PendingTransaction>();
+        public static Dictionary<byte[], PendingTransaction> pendingTransactions = new(new ByteArrayComparer());
 
-        public static bool addPendingLocalTransaction(Transaction t, List<Address> relayNodeAddresses, byte[] message_id = null, Address senderAddress = null)
+        public static bool addIncomingTransaction(Transaction t)
         {
             lock (pendingTransactions)
             {
-                if (pendingTransactions.Find(x => x.transaction.id.SequenceEqual(t.id)) == null)
+                if (!pendingTransactions.ContainsKey(t.id))
                 {
-                    pendingTransactions.Add(new PendingTransaction(t, relayNodeAddresses, Clock.getTimestamp(), message_id, senderAddress));
+                    pendingTransactions[t.id] = new PendingTransaction(t, null, Clock.getTimestamp(), false);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static bool addOutgoingTransaction(Transaction t, List<Address> relayNodeAddresses)
+        {
+            lock (pendingTransactions)
+            {
+                if (!pendingTransactions.ContainsKey(t.id))
+                {
+                    pendingTransactions[t.id] = new PendingTransaction(t, relayNodeAddresses, Clock.getTimestamp(), true);
                     return true;
                 }
             }
@@ -67,7 +78,7 @@ namespace IXICore
             IxiNumber amount = 0;
             lock (pendingTransactions)
             {
-                List<PendingTransaction> txs = pendingTransactions.FindAll(x => x.transaction.type == (int)Transaction.Type.Normal);
+                var txs = pendingTransactions.Values;
                 foreach (var entry in txs)
                 {
                     Transaction tx = entry.transaction;
@@ -80,16 +91,16 @@ namespace IXICore
             return amount;
         }
 
-        public static PendingTransaction remove(byte[] txid)
+        public static PendingTransaction? remove(byte[] txid)
         {
             lock (pendingTransactions)
             {
-                var txs = pendingTransactions.FindAll(x => x.transaction.id.SequenceEqual(txid));
-                foreach (var tx in txs)
+                var tx = pendingTransactions.TryGet(txid);
+                if (tx != null)
                 {
-                    pendingTransactions.Remove(tx);
+                    pendingTransactions.Remove(txid);
                 }
-                return txs.Count > 0 ? txs.First() : null;
+                return tx;
             }
         }
 
@@ -97,7 +108,23 @@ namespace IXICore
         {
             lock (pendingTransactions)
             {
-                return pendingTransactions.Find(x => x.transaction.id.SequenceEqual(txid));
+                return pendingTransactions.TryGet(txid);
+            }
+        }
+
+        public static IEnumerable<Transaction> getPendingTransactions()
+        {
+            lock (pendingTransactions)
+            {
+                return pendingTransactions.Values.Select(tx => tx.transaction);
+            }
+        }
+
+        public static IEnumerable<byte[]> getAllPendingTxids()
+        {
+            lock (pendingTransactions)
+            {
+                return pendingTransactions.Values.Select(tx => tx.transaction.id);
             }
         }
 
@@ -105,7 +132,7 @@ namespace IXICore
         {
             lock (pendingTransactions)
             {
-                PendingTransaction pending = pendingTransactions.Find(x => x.transaction.id.SequenceEqual(txid));
+                PendingTransaction pending = pendingTransactions.TryGet(txid);
                 if (pending != null)
                 {
                     if(pending.confirmedNodeList.Find(x => x.SequenceEqual(address.addressNoChecksum)) == null)
@@ -120,7 +147,7 @@ namespace IXICore
         {
             lock (pendingTransactions)
             {
-                PendingTransaction pending = pendingTransactions.Find(x => x.transaction.id.SequenceEqual(txid));
+                PendingTransaction pending = pendingTransactions.TryGet(txid);
                 if (pending != null)
                 {
                     if (pending.rejectedNodeList.Find(x => x.SequenceEqual(address.addressNoChecksum)) == null)
@@ -128,6 +155,14 @@ namespace IXICore
                         pending.rejectedNodeList.Add(address.addressNoChecksum);
                     }
                 }
+            }
+        }
+
+        public static void clear()
+        {
+            lock (pendingTransactions)
+            {
+                pendingTransactions.Clear();
             }
         }
     }

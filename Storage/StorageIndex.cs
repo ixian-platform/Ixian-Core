@@ -39,7 +39,7 @@ namespace IXICore.Storage
             return combined;
         }
 
-        public void addIndexEntry(ReadOnlySpan<byte> key, ReadOnlySpan<byte> index, ReadOnlySpan<byte> data, WriteBatch writeBatch = null)
+        public void addIndexEntry(ReadOnlySpan<byte> key, ReadOnlySpan<byte> index, ReadOnlySpan<byte> data, WriteBatch? writeBatch = null)
         {
             byte[] keyWithSuffix = combineKeys(key, index);
             if (writeBatch != null)
@@ -52,7 +52,7 @@ namespace IXICore.Storage
             }
         }
 
-        public void delIndexEntry(ReadOnlySpan<byte> key, ReadOnlySpan<byte> index, WriteBatch writeBatch = null)
+        public void delIndexEntry(ReadOnlySpan<byte> key, ReadOnlySpan<byte> index, WriteBatch? writeBatch = null)
         {
             byte[] keyWithSuffix = combineKeys(key, index);
             if (writeBatch != null)
@@ -69,6 +69,12 @@ namespace IXICore.Storage
         {
             var keyWithSuffix = combineKeys(key, index);
             return db.Get(keyWithSuffix, rocksIndexHandle);
+        }
+
+        public bool hasKey(ReadOnlySpan<byte> key, ReadOnlySpan<byte> index)
+        {
+            var keyWithSuffix = combineKeys(key, index);
+            return db.HasKey(keyWithSuffix, rocksIndexHandle);
         }
 
         public IEnumerable<(ReadOnlyMemory<byte> index, ReadOnlyMemory<byte> value)> getEntriesForKey(ReadOnlyMemory<byte> key,

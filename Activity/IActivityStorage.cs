@@ -21,9 +21,10 @@ namespace IXICore.Activity
         public abstract void deleteData();
 
         public abstract List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[]? fromActivityId = null, int count = 0, bool descending = false);
+        public abstract List<ActivityObject> getActivitiesByStatus(ActivityStatus status, bool includeTransaction = false);
 
         public abstract bool insertActivity(ActivityObject activity);
-        public abstract ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null);
+        public abstract ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null, bool includeTransaction = false);
 
         public abstract bool updateStatus(byte[] id, ActivityStatus status, ulong blockHeight, long timestamp = 0);
         public abstract bool updateValue(byte[] id, IxiNumber value);

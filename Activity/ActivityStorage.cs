@@ -32,9 +32,11 @@ namespace IXICore.Activity
         // global column families
         private ColumnFamilyHandle? metaCF;
         private ColumnFamilyHandle? activityCF;
+        private ColumnFamilyHandle? rawTxCF;
 
         private StorageIndex? idxActivityId;
         private StorageIndex? idxBlockHeightActivityId;
+        private StorageIndex? idxStatusActivityId;
 
         private readonly object rockLock = new object();
 
@@ -132,12 +134,18 @@ namespace IXICore.Activity
                         .SetWriteBufferSize(64UL << 10)
                         .SetMaxWriteBufferNumber(1)
                     },
+                    { "raw_tx", new ColumnFamilyOptions()
+                        .SetBlockBasedTableFactory(activityBbto)
+                        .SetWriteBufferSize(16UL << 20)
+                        .SetMaxWriteBufferNumber(2)
+                        .SetMinWriteBufferNumberToMerge(1)
+                    },
                     { "index_block_height_activity_id", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
                         .SetWriteBufferSize(16UL << 20)
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
-                        .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
+                        .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(8))
                     },
                     { "index_activity_id", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
@@ -145,6 +153,13 @@ namespace IXICore.Activity
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
                         .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
+                    },
+                    { "index_status_activity_id", new ColumnFamilyOptions()
+                        .SetBlockBasedTableFactory(activityBbto)
+                        .SetWriteBufferSize(16UL << 20)
+                        .SetMaxWriteBufferNumber(2)
+                        .SetMinWriteBufferNumberToMerge(1)
+                        .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(2))
                     }
                 };
 
@@ -153,9 +168,11 @@ namespace IXICore.Activity
                 // initialize column family handles
                 activityCF = database.GetColumnFamily("activity");
                 metaCF = database.GetColumnFamily("meta");
+                rawTxCF = database.GetColumnFamily("raw_tx");
 
                 idxBlockHeightActivityId = new StorageIndex("index_block_height_activity_id", database);
                 idxActivityId = new StorageIndex("index_activity_id", database);
+                idxStatusActivityId = new StorageIndex("index_status_activity_id", database);
 
                 // read initial meta values
                 byte[] versionBytes = database.Get(META_KEY_DB_VERSION, metaCF);
@@ -215,8 +232,10 @@ namespace IXICore.Activity
                 // free all column families
                 activityCF = null;
                 metaCF = null;
+                rawTxCF = null;
                 idxBlockHeightActivityId = null;
                 idxActivityId = null;
+                idxStatusActivityId = null;
 
                 database.Dispose();
                 database = null;
@@ -234,8 +253,10 @@ namespace IXICore.Activity
                     {
                         database.CompactRange(null, null, activityCF);
                         database.CompactRange(null, null, metaCF);
+                        database.CompactRange(null, null, rawTxCF);
                         database.CompactRange(null, null, idxBlockHeightActivityId!.rocksIndexHandle);
                         database.CompactRange(null, null, idxActivityId!.rocksIndexHandle);
+                        database.CompactRange(null, null, idxStatusActivityId!.rocksIndexHandle);
                     }
                 }
                 catch (Exception e)
@@ -255,7 +276,7 @@ namespace IXICore.Activity
                 }
                 byte[] seedHash = activity.seedHash;
                 byte[] seed16 = seedHash.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
-                if (idxActivityId!.getEntry(activity.id, seed16) != null)
+                if (idxActivityId!.hasKey(activity.id, seed16))
                 {
                     return false;
                 }
@@ -264,18 +285,27 @@ namespace IXICore.Activity
                 using (WriteBatch writeBatch = new WriteBatch())
                 {
                     byte[] timestampTypeIdKey = StorageIndex.combineKeys(Clock.getTimestampMillis().GetBytesBE(), StorageIndex.combineKeys(((short)activity.type).GetBytesBE(), activity.id));
-                    byte[] key = StorageIndex.combineKeys(activity.seedHash, timestampTypeIdKey);
+                    byte[] key = StorageIndex.combineKeys(seed16, timestampTypeIdKey);
                     writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, key), activity.GetBytes(), activityCF);
-                    writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_META, key), activity.GetMetaBytes(), activityCF);
-                    idxActivityId.addIndexEntry(activity.id, activity.seedHash, timestampTypeIdKey, writeBatch);
-                    updateMinMax(writeBatch, activity.blockHeight);
+                    writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_META, activity.id), activity.GetMetaBytes(), activityCF);
+                    idxActivityId.addIndexEntry(activity.id, seed16, timestampTypeIdKey, writeBatch);
+                    if (activity.transaction != null
+                        && !database.HasKey(activity.id, rawTxCF))
+                    {
+                        writeBatch.Put(activity.id, activity.transaction.getBytes(false, true), rawTxCF);
+                    }
+                    if (activity.status != ActivityStatus.Final)
+                    {
+                        idxStatusActivityId!.addIndexEntry(((short)activity.status).GetBytesBE(), activity.id, Array.Empty<byte>(), writeBatch);
+                    }
+                    updateMinMax(writeBatch, activity.appliedBlockHeight);
                     database.Write(writeBatch);
                 }
             }
             return true;
         }
 
-        public ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null)
+        public ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null, bool includeTransaction = false)
         {
             lock (rockLock)
             {
@@ -293,10 +323,12 @@ namespace IXICore.Activity
                         byte[] payloadKey = StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, StorageIndex.combineKeys(indexMem.Span, valueMem.Span));
                         byte[] payload = database.Get(payloadKey, activityCF);
 
-                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(indexMem.Span, valueMem.Span));
+                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, id);
                         byte[] meta = database.Get(metaKey, activityCF);
 
-                        return new ActivityObject(payload, indexMem.ToArray(), (ActivityType)typeShort, id, meta);
+                        byte[] txBytes = database.Get(id, rawTxCF);
+
+                        return new ActivityObject(payload, indexMem.ToArray(), (ActivityType)typeShort, id, meta, txBytes);
                     }
                 }
             }
@@ -394,12 +426,12 @@ namespace IXICore.Activity
                         var payload = it.Value();
                         if (payload == null || payload.Length == 0) continue;
 
-                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seed16, suffix.ToArray()));
-                        byte[] meta = database.Get(metaKey, activityCF);
-
                         byte[] realId = suffix.Slice(10).ToArray();
 
-                        result.Add(new ActivityObject(payload, seed16, (ActivityType)typeShort, realId, meta));
+                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, realId);
+                        byte[] meta = database.Get(metaKey, activityCF);
+
+                        result.Add(new ActivityObject(payload, seed16, (ActivityType)typeShort, realId, meta, null));
                         if (result.Count >= count) break;
                     }
                 }
@@ -436,12 +468,12 @@ namespace IXICore.Activity
                         var payload = it.Value();
                         if (payload == null || payload.Length == 0) continue;
 
-                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seed16, suffix.ToArray()));
-                        byte[] meta = database.Get(metaKey, activityCF);
-
                         byte[] realId = suffix.Slice(10).ToArray();
 
-                        result.Add(new ActivityObject(payload, seed16, (ActivityType)typeShort, realId, meta));
+                        byte[] metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, realId);
+                        byte[] meta = database.Get(metaKey, activityCF);
+
+                        result.Add(new ActivityObject(payload, seed16, (ActivityType)typeShort, realId, meta, null));
                         if (result.Count >= count) break;
                     }
                 }
@@ -484,48 +516,54 @@ namespace IXICore.Activity
 
                 lastUsedTime = DateTime.Now;
 
-                bool anyUpdated = false;
                 using (var wb = new WriteBatch())
                 {
-                    // Iterate all entries for this id (in case of multiple seed hashes)
-                    foreach (var (indexMem, valueMem) in idxActivityId!.getEntriesForKey(id))
+                    var metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, id);
+
+                    // Remove existing indexes
+                    var existingMetaEntry = database.Get(metaKey, activityCF);
+                    if (existingMetaEntry == null || existingMetaEntry.Length == 0)
                     {
-                        var seedHash = indexMem.ToArray();
-                        var tsTypeId = valueMem.ToArray();
-
-                        var metaKey = StorageIndex.combineKeys(ACTIVITY_KEY_META, StorageIndex.combineKeys(seedHash, tsTypeId));
-
-                        var existingMetaEntry = database.Get(metaKey, activityCF);
-                        var parsedMeta = ActivityObject.ParseMetaBytes(existingMetaEntry);
-                        long ts = timestamp;
-                        if (timestamp == 0)
-                        {
-                            ts = parsedMeta.timestamp;
-                        }
-                        if (parsedMeta.blockHeight != 0)
-                        {
-                            idxBlockHeightActivityId!.delIndexEntry(parsedMeta.blockHeight.GetBytesBE(), id, wb);
-                        }
-
-                        byte[] metaBytes = ActivityObject.GetMetaBytes(status, blockHeight, ts);
-                        wb.Put(metaKey, metaBytes, activityCF);
-
-                        if (blockHeight != 0)
-                        {
-                            idxBlockHeightActivityId!.addIndexEntry(blockHeight.GetBytesBE(), id, Array.Empty<byte>(), wb);
-                        }
-
-                        anyUpdated = true;
+                        return false;
+                    }
+                    var parsedMeta = ActivityObject.ParseMetaBytes(existingMetaEntry);
+                    long ts = timestamp;
+                    if (timestamp == 0)
+                    {
+                        ts = parsedMeta.timestamp;
                     }
 
-                    if (anyUpdated)
+                    if (parsedMeta.status == ActivityStatus.Final)
                     {
-                        updateMinMax(wb, blockHeight);
-                        database.Write(wb);
+                        idxBlockHeightActivityId!.delIndexEntry(parsedMeta.appliedBlockHeight.GetBytesBE(), id, wb);
                     }
+                    else
+                    {
+                        idxStatusActivityId!.delIndexEntry(((short)parsedMeta.status).GetBytesBE(), id, wb);
+                    }
+
+                    // Update meta and add new indexes
+                    byte[] metaBytes = ActivityObject.GetMetaBytes(status, blockHeight, ts);
+                    wb.Put(metaKey, metaBytes, activityCF);
+
+                    if (status == ActivityStatus.Final)
+                    {
+                        if (blockHeight == 0)
+                        {
+                            throw new Exception("Cannot set status to final with applied block height 0.");
+                        }
+                        idxBlockHeightActivityId!.addIndexEntry(blockHeight.GetBytesBE(), id, Array.Empty<byte>(), wb);
+                    }
+                    else
+                    {
+                        idxStatusActivityId!.addIndexEntry(((short)status).GetBytesBE(), id, Array.Empty<byte>(), wb);
+                    }
+
+                    updateMinMax(wb, blockHeight);
+                    database.Write(wb);
                 }
 
-                return anyUpdated;
+                return true;
             }
         }
 
@@ -553,7 +591,7 @@ namespace IXICore.Activity
                         short typeShort = BinaryPrimitives.ReadInt16BigEndian(tsTypeId.AsSpan(8, 2));
                         byte[] realId = tsTypeId.AsSpan(10).ToArray();
 
-                        var ao = new ActivityObject(payload, seedHash, (ActivityType)typeShort, realId, null)
+                        var ao = new ActivityObject(payload, seedHash, (ActivityType)typeShort, realId, null, null)
                         {
                             value = value
                         };
@@ -567,6 +605,32 @@ namespace IXICore.Activity
                 }
 
                 return anyUpdated;
+            }
+        }
+
+        public List<ActivityObject> getActivitiesByStatus(ActivityStatus status, bool includeTransaction)
+        {
+            if (status == ActivityStatus.Final)
+            {
+                throw new Exception("Cannot query by final status, as it is expected to be the most common status and is indexed by block height. Please query by block height range instead.");
+            }
+            lock (rockLock)
+            {
+                if (database == null)
+                {
+                    return null;
+                }
+                List<ActivityObject> activities = new List<ActivityObject>();
+                foreach (var (indexMem, valueMem) in idxStatusActivityId!.getEntriesForKey(((short)status).GetBytesBE()))
+                {
+                    var activity = getActivityById(indexMem.ToArray(), null, includeTransaction);
+                    if (activity == null)
+                    {
+                        throw new Exception(string.Format("Inconsistent index: activity with id {0} not found for status {1}. Database may be corrupt.", Convert.ToHexString(indexMem.ToArray()), status));
+                    }
+                    activities.Add(activity);
+                }
+                return activities;
             }
         }
     }
@@ -937,9 +1001,9 @@ namespace IXICore.Activity
                 var db = getDatabase(0);
                 if (db!.insertActivity(activity))
                 {
-                    if (activity.blockHeight > getHighestBlockInStorage())
+                    if (activity.appliedBlockHeight > getHighestBlockInStorage())
                     {
-                        highestBlockNum = activity.blockHeight;
+                        highestBlockNum = activity.appliedBlockHeight;
                     }
                     return true;
                 }
@@ -947,7 +1011,7 @@ namespace IXICore.Activity
             }
         }
 
-        public ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null)
+        public ActivityObject? getActivityById(byte[] id, byte[]? seedHash = null, bool includeTransaction = false)
         {
             lock (openDatabases)
             {
@@ -956,7 +1020,7 @@ namespace IXICore.Activity
                 {
                     return null;
                 }
-                return db.getActivityById(id, seedHash);
+                return db.getActivityById(id, seedHash, includeTransaction);
             }
         }
 
@@ -992,6 +1056,15 @@ namespace IXICore.Activity
             {
                 var db = getDatabase(0);
                 return db!.updateValue(id, value);
+            }
+        }
+
+        public List<ActivityObject> getActivitiesByStatus(ActivityStatus status, bool includeTransaction)
+        {
+            lock (openDatabases)
+            {
+                var db = getDatabase(0);
+                return db!.getActivitiesByStatus(status, includeTransaction);
             }
         }
     }

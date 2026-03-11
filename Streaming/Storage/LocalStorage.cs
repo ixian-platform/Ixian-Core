@@ -25,7 +25,6 @@ namespace IXICore.Storage
     public interface LocalStorageCallbacks
     {
         public void processMessage(FriendMessage friendMessage);
-        public bool receivedNewTransaction(Transaction transaction);
     }
 
     class WriteRequest
@@ -123,8 +122,7 @@ namespace IXICore.Storage
             }
             running = true;
 
-            // Read transactions
-            readTransactionCacheFile();
+            deleteTransactionCacheFile();
 
             // Read the account file
             readAccountFile();
@@ -805,7 +803,8 @@ namespace IXICore.Storage
             }
         }
 
-        public bool deleteTransactionCacheFile()
+        [Obsolete("This method is deprecated and will be removed in the future.")]
+        private bool deleteTransactionCacheFile()
         {
             lock (txCacheLock)
             {
@@ -819,179 +818,6 @@ namespace IXICore.Storage
                 File.Delete(tx_filename);
                 return true;
             }
-        }
-
-        // Reads the message archive for a given wallet
-        public bool readTransactionCacheFile()
-        {
-            lock (txCacheLock)
-            {
-                string tx_filename = Path.Combine(documentsPath, txCacheFileName);
-
-                if (!File.Exists(tx_filename))
-                    return false;
-
-                BinaryReader reader;
-                FileStream fs;
-                try
-                {
-                    fs = new FileStream(tx_filename, FileMode.Open);
-                    reader = new BinaryReader(fs);
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Cannot open file. {0}", e.Message);
-                    return false;
-                }
-
-                TransactionCache.clearAllTransactions();
-
-                int version = 0;
-                try
-                {
-                    version = reader.ReadInt32();
-
-                    if (version < 3)
-                    {
-                        // Read confirmed transactions first
-                        int num_tx = reader.ReadInt32();
-                        for (int i = 0; i < num_tx; i++)
-                        {
-                            int data_length = reader.ReadInt32();
-                            byte[] data = reader.ReadBytes(data_length);
-
-                            Transaction transaction = new(data, true);
-                            TransactionCache.addTransaction(transaction, false);
-                        }
-
-                        // Read unconfirmed transactions
-                        int num_utx = reader.ReadInt32();
-                        for (int i = 0; i < num_utx; i++)
-                        {
-                            int data_length = reader.ReadInt32();
-                            byte[] data = reader.ReadBytes(data_length);
-
-                            Transaction transaction = new(data, true);
-                            TransactionCache.addUnconfirmedTransaction(transaction, false);
-                            localStorageCallbacks.receivedNewTransaction(transaction);
-                        }
-                    }
-                    else
-                    {
-                        // Read confirmed transactions first
-                        int num_tx = reader.ReadInt32();
-                        for (int i = 0; i < num_tx; i++)
-                        {
-                            int data_length = reader.ReadInt32();
-                            byte[] data = reader.ReadBytes(data_length);
-                            StorageTransaction storageTransaction = new(data, version >= 4);
-                            TransactionCache.addTransaction(storageTransaction, false);
-                        }
-
-                        // Read unconfirmed transactions
-                        int num_utx = reader.ReadInt32();
-                        for (int i = 0; i < num_utx; i++)
-                        {
-                            int data_length = reader.ReadInt32();
-                            byte[] data = reader.ReadBytes(data_length);
-                            StorageTransaction storageTransaction = new(data, version >= 4);
-
-                            TransactionCache.addUnconfirmedTransaction(storageTransaction, false);
-                            localStorageCallbacks.receivedNewTransaction(storageTransaction.transaction);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Cannot read from file. {0}", e.Message);
-                }
-
-                reader.Close();
-                reader.Dispose();
-
-                fs.Close();
-                fs.Dispose();
-
-                if (version < 3)
-                {
-                    writeTransactionCacheFile();
-                }
-
-                return true;
-            }
-        }
-
-        // Writes the cached offline messages to a file
-        public bool writeTransactionCacheFile()
-        {
-            lock (txCacheLock)
-            {
-                string tx_filename = Path.Combine(documentsPath, txCacheFileName);
-
-                FileStream fs;
-                BinaryWriter writer;
-                try
-                {
-                    // Prepare the file for writing
-                    fs = new FileStream(tx_filename, FileMode.Create);
-                    writer = new BinaryWriter(fs);
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Cannot create file. {0}", e.Message);
-                    return false;
-                }
-
-                try
-                {
-                    // TODO: encrypt written data
-                    int version = 4; // Set the tx cache file version
-                    writer.Write(version);
-
-                    // Write confirmed transaction
-                    lock (TransactionCache.transactions)
-                    {
-                        int tx_num = TransactionCache.transactions.Count;
-                        writer.Write(tx_num);
-
-                        foreach (StorageTransaction transaction in TransactionCache.transactions)
-                        {
-                            byte[] data = transaction.getBytes(true);
-                            int data_length = data.Length;
-                            writer.Write(data_length);
-                            writer.Write(data);
-                        }
-                    }
-
-                    // Write unconfirmed transactions
-                    lock (TransactionCache.unconfirmedTransactions)
-                    {
-                        int tx_num = TransactionCache.unconfirmedTransactions.Count;
-                        writer.Write(tx_num);
-
-                        foreach (StorageTransaction transaction in TransactionCache.unconfirmedTransactions)
-                        {
-                            byte[] data = transaction.getBytes(true);
-                            int data_length = data.Length;
-                            writer.Write(data_length);
-                            writer.Write(data);
-                        }
-                    }
-
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Cannot write to file. {0}", e);
-                }
-                writer.Flush();
-                writer.Close();
-                writer.Dispose();
-
-                fs.Close();
-                fs.Dispose();
-            }
-
-            return true;
         }
 
         // Write the account file to local storage
