@@ -96,6 +96,8 @@ function statusToString(status, type) {
                 return "Discarded";
             }
             return "Error";
+        case 4:
+            return "Reverted";
         default:
             return "Unknown - " + status;
     }
@@ -206,6 +208,10 @@ function sendTransaction() {
             } else {
                 alert("An error occurred while trying to send a transaction: (" + data["error"]["code"] + ") " + data["error"]["message"]);
             }
+        })
+        .fail(function (jqXHR, status, error) {
+            let data = JSON.parse(jqXHR.responseText);
+            alert("An error occurred while trying to send a transaction: (" + data["error"]["code"] + ") " + data["error"]["message"]);
         });
 
 }
