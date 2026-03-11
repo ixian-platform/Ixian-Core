@@ -25,6 +25,31 @@ using System.Threading;
 
 namespace IXICore
 {
+    public enum TIVBlockVerificationMode
+    {
+        /// <summary>
+        /// Minimal verification, only basic checks (version, previous block hash, timestamp) are performed. No signature or PoW
+        /// verification is performed. This mode uses minimal bandwidth as only superblocks contain the full signature set.
+        /// </summary>
+        Minimal = 0,
+        /// <summary>
+        /// Verification of PoW is performed, but the signatures are not included. This mode uses more bandwidth than Minimal,
+        /// as all blocks contain the PoW signature set without actual PK signatures, but it allows for better security against
+        /// malicious nodes sending invalid blocks with fake transactions.
+        /// </summary>
+        PoCW = 1,
+        /// <summary>
+        /// Full verification of signatures is performed. This mode uses even more bandwidth than PoCW as it contains full
+        /// signature sets.
+        /// </summary>
+        Signatures = 2,
+        /// <summary>
+        /// Full verification of signatures is performed. Blocks contain full signatures and a full list of txids included in the
+        /// block, not just the merkle/PIT root. This mode uses the most bandwidth and is generally not intended for end-clients.
+        /// </summary>
+        Transactions = 3
+    }
+
     public interface TransactionInclusionCallbacks
     {
         public void receivedBlockHeader(Block blockHeader, bool verified);
@@ -70,15 +95,15 @@ namespace IXICore
 
         private TransactionInclusionCallbacks transactionInclusionCallbacks;
 
-        private bool useGetBlockHeaders = true;
+        private TIVBlockVerificationMode blockVerificationMode;
 
         private IStorage blockStorage;
 
-        public TransactionInclusion(IStorage blockStorage, TransactionInclusionCallbacks transactionInclusionCallbacks, bool useGetBlockHeaders)
+        public TransactionInclusion(IStorage blockStorage, TransactionInclusionCallbacks transactionInclusionCallbacks, TIVBlockVerificationMode blockVerificationMode)
         {
-            this.useGetBlockHeaders = useGetBlockHeaders;
             this.transactionInclusionCallbacks = transactionInclusionCallbacks;
             this.blockStorage = blockStorage;
+            this.blockVerificationMode = blockVerificationMode;
         }
 
         public void start(ulong starting_block_height, byte[]? starting_block_checksum, bool pruneBlocks = true)
@@ -345,15 +370,15 @@ namespace IXICore
                 return true;
             }
 
-            populateBlockSignatures(header);
-
-            //return true;
-
             if (header.timestamp + ConsensusConfig.minBlockTimeDifference < previousBlockHeader.timestamp)
             {
                 Logging.error("TIV: Invalid block header timestamp. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 return false;
             }
+
+            populateBlockSignatures(header);
+
+            //return true;
 
             /*if (header.signatures != null
                 && !header.verifySignatures(null, false))
@@ -510,46 +535,48 @@ namespace IXICore
         /// <param name="endpoint">Neighbor, who sent this data.</param>
         public void receivedPIT2(byte[] data, RemoteEndpoint endpoint)
         {
-            MemoryStream m = new MemoryStream(data);
-            using (BinaryReader r = new BinaryReader(m))
+            using (MemoryStream m = new MemoryStream(data))
             {
-                ulong block_num = r.ReadIxiVarUInt();
-                if (!pitCache.ContainsKey(block_num))
+                using (BinaryReader r = new BinaryReader(m))
                 {
-                    return;
-                }
-                Block? h = blockStorage.getBlock(block_num);
-                if (h == null)
-                {
-                    Logging.warn("TIV: Received PIT information for block {0}, but we do not have that block header in storage!", block_num);
-                    return;
-                }
-                int len = (int)r.ReadIxiVarUInt();
-                if (len > 0)
-                {
-                    byte[] pit_data = r.ReadBytes(len);
-                    PrefixInclusionTree pit = new PrefixInclusionTree(44, 3);
-                    try
+                    ulong block_num = r.ReadIxiVarUInt();
+                    if (!pitCache.ContainsKey(block_num))
                     {
-                        pit.reconstructMinimumTree(pit_data);
-                        if (!h.receivedPitChecksum.SequenceEqual(pit.calculateTreeHash()))
+                        return;
+                    }
+                    Block? h = blockStorage.getBlock(block_num);
+                    if (h == null)
+                    {
+                        Logging.warn("TIV: Received PIT information for block {0}, but we do not have that block header in storage!", block_num);
+                        return;
+                    }
+                    int len = (int)r.ReadIxiVarUInt();
+                    if (len > 0)
+                    {
+                        byte[] pit_data = r.ReadBytes(len);
+                        PrefixInclusionTree pit = new PrefixInclusionTree(44, 3);
+                        try
                         {
-                            Logging.error("TIV: Received PIT information for block {0}, but the PIT checksum does not match the one in the block header!", block_num);
-                            // TODO: more drastic action? Maybe blacklist or something.
-                            return;
-                        }
-                        lock (pitCache)
-                        {
-                            if (pitCache.ContainsKey(block_num))
+                            pit.reconstructMinimumTree(pit_data);
+                            if (!h.receivedPitChecksum.SequenceEqual(pit.calculateTreeHash()))
                             {
-                                Logging.info("TIV: Received valid PIT information for block {0}", block_num);
-                                pitCache[block_num].pit = pit;
+                                Logging.error("TIV: Received PIT information for block {0}, but the PIT checksum does not match the one in the block header!", block_num);
+                                // TODO: more drastic action? Maybe blacklist or something.
+                                return;
+                            }
+                            lock (pitCache)
+                            {
+                                if (pitCache.ContainsKey(block_num))
+                                {
+                                    Logging.info("TIV: Received valid PIT information for block {0}", block_num);
+                                    pitCache[block_num].pit = pit;
+                                }
                             }
                         }
-                    }
-                    catch (Exception)
-                    {
-                        Logging.warn("TIV: Invalid or corrupt data received for block {0}.", block_num);
+                        catch (Exception)
+                        {
+                            Logging.warn("TIV: Invalid or corrupt data received for block {0}.", block_num);
+                        }
                     }
                 }
             }
@@ -618,60 +645,32 @@ namespace IXICore
         private void requestBlockHeaders(ulong from, ulong count, RemoteEndpoint? endpoint = null)
         {
             Logging.info("Requesting block headers from {0} to {1}", from, from + count);
-            if (useGetBlockHeaders)
+            using (MemoryStream mOut = new MemoryStream())
             {
-                using (MemoryStream mOut = new MemoryStream())
+                using (BinaryWriter writer = new BinaryWriter(mOut))
                 {
-                    using (BinaryWriter writer = new BinaryWriter(mOut))
-                    {
-                        writer.WriteIxiVarInt(from);
-                        writer.WriteIxiVarInt(count);
-                    }
-
-                    if (endpoint != null)
-                    {
-                        endpoint.sendData(ProtocolMessageCode.getBlockHeaders3, mOut.ToArray());
-                    }
-                    else
-                    {
-                        // Request from a single random node
-                        char[] node_types = new char[] { 'M', 'H' };
-                        if (PresenceList.myPresenceType == 'C')
-                        {
-                            node_types = new char[] { 'M', 'H', 'R' };
-                        }
-                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getBlockHeaders3, mOut.ToArray(), 0);
-
-                    }
+                    writer.WriteIxiVarInt(from);
+                    writer.WriteIxiVarInt(count);
+                    Cuckoo filter = CoreProtocolMessage.getMyAddressesCuckooFilter();
+                    byte[] filterBytes = filter.getFilterBytes();
+                    writer.WriteIxiVarInt(filterBytes.Length);
+                    writer.Write(filterBytes);
+                    writer.WriteIxiVarInt((int)blockVerificationMode);
                 }
-            } else
-            {
-                using (MemoryStream mOut = new MemoryStream())
-                {
-                    using (BinaryWriter writer = new BinaryWriter(mOut))
-                    {
-                        writer.WriteIxiVarInt(from);
-                        writer.WriteIxiVarInt(count);
-                        Cuckoo filter = CoreProtocolMessage.getMyAddressesCuckooFilter();
-                        byte[] filterBytes = filter.getFilterBytes();
-                        writer.WriteIxiVarInt(filterBytes.Length);
-                        writer.Write(filterBytes);
-                    }
 
-                    if (endpoint != null)
+                if (endpoint != null)
+                {
+                    endpoint.sendData(ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray());
+                }
+                else
+                {
+                    // Request from a single random node
+                    char[] node_types = new char[] { 'M', 'H' };
+                    if (PresenceList.myPresenceType == 'C')
                     {
-                        endpoint.sendData(ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray());
+                        node_types = new char[] { 'M', 'H', 'R' };
                     }
-                    else
-                    {
-                        // Request from a single random node
-                        char[] node_types = new char[] { 'M', 'H' };
-                        if (PresenceList.myPresenceType == 'C')
-                        {
-                            node_types = new char[] { 'M', 'H', 'R' };
-                        }
-                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray(), 0);
-                    }
+                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getRelevantBlockTransactions, mOut.ToArray(), 0);
                 }
             }
         }
