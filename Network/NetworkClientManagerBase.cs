@@ -398,7 +398,7 @@ namespace IXICore.Network
 
         // Send data to all connected nodes
         // Returns true if the data was sent to at least one client
-        public bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[] helper_data, RemoteEndpoint skipEndpoint = null)
+        public bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint skipEndpoint = null)
         {
             bool result = false;
             QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data, helper_data);
@@ -467,7 +467,7 @@ namespace IXICore.Network
             return null;
         }
 
-        public bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
         {
             NetworkClient client = getClient(neighbor, true);
 
@@ -480,7 +480,7 @@ namespace IXICore.Network
             return false;
         }
 
-        public bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
         {
             NetworkClient client = null;
             lock (networkClients)

@@ -34,7 +34,7 @@ namespace IXICore.Network
             // Now add the seed nodes to the list
             foreach (string[] addr in NetworkUtils.getSeedNodes(IxianHandler.networkType))
             {
-                Address wallet_addr = null;
+                Address? wallet_addr = null;
                 if (addr[1] != null)
                 {
                     wallet_addr = new Address(Base58Check.Base58CheckEncoding.DecodePlain(addr[1]));
@@ -95,17 +95,17 @@ namespace IXICore.Network
 
         // Send data to all connected nodes
         // Returns true if the data was sent to at least one client
-        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[] helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint skipEndpoint = null)
         {
             return clientManagerBase.broadcastData(types, code, data, helper_data, skipEndpoint);
         }
 
-        public static bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public static bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
         {
             return clientManagerBase.sendToClient(neighbor, code, data, helper_data);
         }
 
-        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
         {
             return clientManagerBase.sendToClient(neighbor, code, data, helper_data);
         }

@@ -845,7 +845,7 @@ namespace IXICore.Network
 
 
         // Sends data over the network
-        public void sendData(ProtocolMessageCode code, byte[] data, byte[] helper_data = null, long msg_id = 0, MessagePriority priority = MessagePriority.auto)
+        public void sendData(ProtocolMessageCode code, byte[] data, byte[]? helper_data = null, long msg_id = 0, MessagePriority priority = MessagePriority.auto)
         {
             if (data == null)
             {
@@ -945,7 +945,7 @@ namespace IXICore.Network
             }
         }
 
-        static public QueueMessage getQueueMessage(ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        static public QueueMessage getQueueMessage(ProtocolMessageCode code, byte[] data, byte[]? helper_data)
         {
             QueueMessage message = new QueueMessage();
             message.code = code;

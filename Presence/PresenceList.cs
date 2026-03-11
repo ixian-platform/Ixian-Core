@@ -887,7 +887,7 @@ namespace IXICore
             return 0;
         }
 
-        public static Presence getPresenceByAddress(Address address)
+        public static Presence? getPresenceByAddress(Address address)
         {
             if (address == null)
                 return null;

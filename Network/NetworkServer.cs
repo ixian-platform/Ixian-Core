@@ -273,7 +273,7 @@ namespace IXICore.Network
         /// <param name="helper_data">Optional, additional data to transmit after `data`.</param>
         /// <param name="skipEndpoint">If given, the message will not be sent to this remote endpoint. This prevents echoing the message to the originating node.</param>
         /// <returns>True, if at least one message was sent to at least one client.</returns>
-        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[] helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
         {
             bool result = false;
             QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data, helper_data);

@@ -22,8 +22,8 @@ namespace IXICore.Network
         public ProtocolMessageCode code;
         public byte[] data;
         public uint checksum;
-        public RemoteEndpoint skipEndpoint;
-        public byte[] helperData;
+        public RemoteEndpoint? skipEndpoint;
+        public byte[]? helperData;
     }
 
     public struct QueueMessageRaw
