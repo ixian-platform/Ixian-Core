@@ -401,7 +401,7 @@ namespace IXICore
                     lastUsedTime = DateTime.Now;
                     using (WriteBatch writeBatch = new WriteBatch())
                     {
-                        writeBatch.Put(StorageIndex.combineKeys(block.blockChecksum, BLOCKS_KEY_HEADER), block.getBytes(true, true, true, true, true), rocksCFBlocks);
+                        writeBatch.Put(StorageIndex.combineKeys(block.blockChecksum, BLOCKS_KEY_HEADER), block.getBytes(true, true, true, true, true, false), rocksCFBlocks);
                         updateBlockIndexes(writeBatch, block);
                         updateMinMax(writeBatch, block.blockNum);
                         database.Write(writeBatch);
@@ -456,7 +456,7 @@ namespace IXICore
                 }
             }
 
-            public byte[]? getBlockBytes(ulong blocknum, bool asBlockHeader)
+            public byte[]? getBlockBytes(ulong blockNum, bool compactedSignatures, bool includeTransactions)
             {
                 lock (rockLock)
                 {
@@ -464,14 +464,14 @@ namespace IXICore
                     {
                         throw new Exception($"Database {dbPath} is not open.");
                     }
-                    if (blocknum < minBlockNumber || blocknum > maxBlockNumber)
+                    if (blockNum < minBlockNumber || blockNum > maxBlockNumber)
                     {
                         return null;
                     }
 
                     lastUsedTime = DateTime.Now;
 
-                    var blockHash = idxBlocksChecksum!.getEntry(blocknum.GetBytesBE(), BLOCKS_KEY_PRIMARY_INDEX);
+                    var blockHash = idxBlocksChecksum!.getEntry(blockNum.GetBytesBE(), BLOCKS_KEY_PRIMARY_INDEX);
                     if (blockHash == null)
                     {
                         return null;
@@ -480,35 +480,52 @@ namespace IXICore
                     byte[] blockBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_HEADER), rocksCFBlocks);
                     if (blockBytes != null)
                     {
-                        if (asBlockHeader)
+                        byte[]? sigBytes = null;
+                        if (!compactedSignatures)
                         {
-                            byte[] sigBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_SIGNERS_COMPACT), rocksCFBlocks);
-                            byte[] mergedBytes = new byte[blockBytes.Length + sigBytes.Length];
-                            Buffer.BlockCopy(blockBytes, 0, mergedBytes, 0, blockBytes.Length);
-                            Buffer.BlockCopy(sigBytes, 0, mergedBytes, blockBytes.Length, sigBytes.Length);
-                            return mergedBytes;
+                            sigBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_SIGNERS), rocksCFBlocks);
                         }
-                        else
+                        if (sigBytes == null)
                         {
-                            byte[] sigBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_SIGNERS), rocksCFBlocks);
-                            if (sigBytes == null)
+                            sigBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_SIGNERS_COMPACT), rocksCFBlocks);
+                        }
+                        if (sigBytes == null)
+                        {
+                            using(var ms = new MemoryStream())
+                            using (var writer = new BinaryWriter(ms))
                             {
-                                sigBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_SIGNERS_COMPACT), rocksCFBlocks);
+                                var blockMeta = parseBlockMetaBytes(idxBlocksChecksum!.getEntry(blockNum.GetBytesBE(), blockHash));
+                                writer.WriteIxiVarInt(0);
+                                writer.WriteIxiVarInt(blockMeta.sigCount);
+                                writer.WriteIxiBytes(blockMeta.totalSignerDifficulty.getBytes());
+                                sigBytes = ms.ToArray();
                             }
-                            byte[] txIDBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_TXS), rocksCFBlocks);
-
-                            byte[] mergedBytes = new byte[blockBytes.Length + sigBytes.Length + txIDBytes.Length];
-                            Buffer.BlockCopy(blockBytes, 0, mergedBytes, 0, blockBytes.Length);
-                            Buffer.BlockCopy(sigBytes, 0, mergedBytes, blockBytes.Length, sigBytes.Length);
-                            Buffer.BlockCopy(txIDBytes, 0, mergedBytes, blockBytes.Length + sigBytes.Length, txIDBytes.Length);
-                            return mergedBytes;
                         }
+                        byte[] mergedBytes = new byte[blockBytes.Length + sigBytes.Length];
+                        Buffer.BlockCopy(blockBytes, 0, mergedBytes, 0, blockBytes.Length);
+                        Buffer.BlockCopy(sigBytes, 0, mergedBytes, blockBytes.Length, sigBytes.Length);
+                        blockBytes = mergedBytes;
+
+                        if (includeTransactions)
+                        {
+                            byte[] txIDBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_TXS), rocksCFBlocks);
+                            if (txIDBytes == null)
+                            {
+                                txIDBytes = Array.Empty<byte>();
+                            }
+                            mergedBytes = new byte[blockBytes.Length + txIDBytes.Length];
+                            Buffer.BlockCopy(blockBytes, 0, mergedBytes, 0, blockBytes.Length);
+                            Buffer.BlockCopy(txIDBytes, 0, mergedBytes, blockBytes.Length, txIDBytes.Length);
+                            blockBytes = mergedBytes;
+                        }
+
+                        return blockBytes;
                     }
                     return null;
                 }
             }
 
-            public Block? getBlockByHash(ReadOnlySpan<byte> checksum)
+            public Block? getBlockByHash(ReadOnlySpan<byte> blockHash)
             {
                 if (database == null)
                 {
@@ -516,18 +533,18 @@ namespace IXICore
                 }
 
                 lastUsedTime = DateTime.Now;
-                return getBlockByHash(checksum, null);
+                return getBlockByHash(blockHash, null);
             }
 
-            private Block? getBlockByHash(ReadOnlySpan<byte> checksum, ReadOnlySpan<byte> blockMetaBytes)
+            private Block? getBlockByHash(ReadOnlySpan<byte> blockHash, ReadOnlySpan<byte> blockMetaBytes)
             {
                 lock (rockLock)
                 {
-                    byte[] blockBytes = database!.Get(StorageIndex.combineKeys(checksum, BLOCKS_KEY_HEADER), rocksCFBlocks);
+                    byte[] blockBytes = database!.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_HEADER), rocksCFBlocks);
                     if (blockBytes != null)
                     {
-                        byte[] txIDsBytes = database.Get(StorageIndex.combineKeys(checksum, BLOCKS_KEY_TXS), rocksCFBlocks);
-                        Block b = new Block(checksum.ToArray(), blockBytes, txIDsBytes);
+                        byte[] txIDsBytes = database.Get(StorageIndex.combineKeys(blockHash, BLOCKS_KEY_TXS), rocksCFBlocks);
+                        Block b = new Block(blockHash.ToArray(), blockBytes, txIDsBytes);
                         (int sigCount, IxiNumber totalSignerDifficulty, byte[] powField) blockMeta;
                         if (blockMetaBytes.Length > 0)
                         {
@@ -833,7 +850,7 @@ namespace IXICore
                 }
             }
 
-            public (byte[]? blockChecksum, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
+            public (byte[]? blockHash, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
             {
                 lock (rockLock)
                 {
@@ -845,17 +862,17 @@ namespace IXICore
 
                     var blockNumBytes = blockNum.GetBytesBE();
 
-                    var blockChecksum = idxBlocksChecksum!.getEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX);
-                    if (blockChecksum == null)
+                    var blockHash = idxBlocksChecksum!.getEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX);
+                    if (blockHash == null)
                     {
                         return (null, null);
                     }
-                    var blockMeta = idxBlocksChecksum!.getEntry(blockNumBytes, blockChecksum);
+                    var blockMeta = idxBlocksChecksum!.getEntry(blockNumBytes, blockHash);
                     if (blockMeta == null)
                     {
                         return (null, null);
                     }
-                    return (blockChecksum, parseBlockMetaBytes(blockMeta).totalSignerDifficulty);
+                    return (blockHash, parseBlockMetaBytes(blockMeta).totalSignerDifficulty);
                 }
             }
 
@@ -1308,7 +1325,7 @@ namespace IXICore
                 }
             }
 
-            public override byte[]? getBlockBytes(ulong blockNum, bool asBlockHeader)
+            public override byte[]? getBlockBytes(ulong blockNum, bool compactedSignatures, bool includeTransactions)
             {
                 lock (openDatabases)
                 {
@@ -1319,7 +1336,7 @@ namespace IXICore
                         return null;
                     }
                     var db = getDatabase(blockNum, true);
-                    return db?.getBlockBytes(blockNum, asBlockHeader);
+                    return db?.getBlockBytes(blockNum, compactedSignatures, includeTransactions);
                 }
             }
 
@@ -1585,7 +1602,7 @@ namespace IXICore
                 }
             }
 
-            public override (byte[]? blockChecksum, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
+            public override (byte[]? blockHash, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blockNum)
             {
                 lock (openDatabases)
                 {

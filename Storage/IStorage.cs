@@ -224,14 +224,14 @@ namespace IXICore
 
             private void debugDumpCrashBlock(Block b)
             {
-                Logging.error("Block #{0}, checksum: {1}.", b.blockNum, Base58Check.Base58CheckEncoding.EncodePlain(b.blockChecksum));
+                Logging.error("Block #{0}, hash: {1}.", b.blockNum, Base58Check.Base58CheckEncoding.EncodePlain(b.blockChecksum));
                 Logging.error("Transactions: {0}, signatures: {1}, timestamp: {2}.", b.transactions.Count, b.signatures.Count, b.timestamp);
                 Logging.error("Complete block: {0}", Base58Check.Base58CheckEncoding.EncodePlain(b.getBytes()));
             }
 
             private void debugDumpCrashTX(Transaction tx)
             {
-                Logging.error("Transaction {0}, checksum: {1}", tx.getTxIdString(), Base58Check.Base58CheckEncoding.EncodePlain(tx.checksum));
+                Logging.error("Transaction {0}, hash: {1}", tx.getTxIdString(), Base58Check.Base58CheckEncoding.EncodePlain(tx.checksum));
                 Logging.error("Type: {0}, amount: {1}", tx.type, tx.amount);
                 Logging.error("Complete transaction: {0}", Base58Check.Base58CheckEncoding.EncodePlain(tx.getBytes(true, true)));
             }
@@ -309,7 +309,7 @@ namespace IXICore
             /// <param name="blocknum">Block height of the block you wish to retrieve.</param>
             /// <returns>Null if the Block does not exist in storage.</returns>
             public abstract Block? getBlock(ulong blocknum);
-            public abstract byte[]? getBlockBytes(ulong blocknum, bool asBlockHeader);
+            public abstract byte[]? getBlockBytes(ulong blocknum, bool compactedSignatures, bool includeTransactions);
             // Get - Transaction
             /// <summary>
             /// Retrieves a Transaction by its txid.
@@ -331,7 +331,7 @@ namespace IXICore
             public abstract bool removeBlock(ulong block_num);
             public abstract bool removeTransaction(byte[] txid, ulong block_num);
 
-            public abstract (byte[]? blockChecksum, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blocknum);
+            public abstract (byte[]? blockHash, IxiNumber? totalSignerDifficulty) getBlockTotalSignerDifficulty(ulong blocknum);
             //
             // Prepare and cleanup
             protected abstract bool prepareStorageInternal(bool optimize);

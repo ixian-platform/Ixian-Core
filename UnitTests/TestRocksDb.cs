@@ -116,10 +116,11 @@ namespace UnitTests
                 Assert.IsTrue(dbBlock.fromLocalStorage);
 
                 Assert.AreEqual(block.getTotalSignerDifficulty(), db.getBlockTotalSignerDifficulty(block.blockNum).totalSignerDifficulty);
-                Assert.IsTrue(block.blockChecksum.SequenceEqual(db.getBlockTotalSignerDifficulty(block.blockNum).blockChecksum));
+                Assert.IsTrue(block.blockChecksum.SequenceEqual(db.getBlockTotalSignerDifficulty(block.blockNum).blockHash));
 
-                Assert.IsTrue(db.getBlockBytes(block.blockNum, false).SequenceEqual(block.getBytes(true, true, true, false, false)));
-                Assert.IsTrue(db.getBlockBytes(block.blockNum, true).SequenceEqual(block.getBytes(true, true, true, false, true)));
+                Assert.IsTrue(db.getBlockBytes(block.blockNum, false, false).SequenceEqual(block.getBytes(true, true, true, false, false, false)));
+                Assert.IsTrue(db.getBlockBytes(block.blockNum, true, false).SequenceEqual(block.getBytes(true, true, true, false, true, false)));
+                Assert.IsTrue(db.getBlockBytes(block.blockNum, true, true).SequenceEqual(block.getBytes(true, true, true, false, true, true)));
             }
         }
 
