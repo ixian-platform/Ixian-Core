@@ -119,7 +119,7 @@ namespace UnitTests
                 Assert.IsTrue(block.blockChecksum.SequenceEqual(db.getBlockTotalSignerDifficulty(block.blockNum).blockChecksum));
 
                 Assert.IsTrue(db.getBlockBytes(block.blockNum, false).SequenceEqual(block.getBytes(true, true, true, false, false)));
-                Assert.IsTrue(db.getBlockBytes(block.blockNum, true).SequenceEqual(block.getBytes(true, true, true, true, false)));
+                Assert.IsTrue(db.getBlockBytes(block.blockNum, true).SequenceEqual(block.getBytes(true, true, true, false, true)));
             }
         }
 
