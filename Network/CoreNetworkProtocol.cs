@@ -16,6 +16,7 @@ using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Network.Messages;
 using IXICore.RegNames;
+using IXICore.Streaming;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -1312,6 +1313,43 @@ namespace IXICore
             else
             {
                 NetworkServer.forwardMessage(recipient, ProtocolMessageCode.s2data, message.getBytes());
+            }
+        }
+
+        public static void resubscribeEvents()
+        {
+            lock (NetworkClientManager.networkClients)
+            {
+                foreach (var client in NetworkClientManager.networkClients)
+                {
+                    if (client.isConnected() && client.helloReceived)
+                    {
+                        if (client.presenceAddress.type != 'M'
+                            && client.presenceAddress.type != 'H'
+                            && client.presenceAddress.type != 'R')
+                        {
+                            continue;
+                        }
+
+                        byte[] event_data = NetworkEvents.prepareEventMessageData(NetworkEvents.Type.all, new byte[0]);
+                        client.sendData(ProtocolMessageCode.detachEvent, event_data);
+                        subscribeToEvents(client);
+                    }
+                }
+            }
+        }
+
+        public static void subscribeToEvents(RemoteEndpoint endpoint)
+        {
+            // Subscribe to friend presences if outgoing stream capabilities are enabled
+            if ((CoreStreamProcessor.streamCapabilities & StreamCapabilities.Outgoing) != 0)
+            {
+                byte[] friend_matcher = FriendList.getFriendCuckooFilter();
+                if (friend_matcher != null)
+                {
+                    byte[] event_data = NetworkEvents.prepareEventMessageData(NetworkEvents.Type.keepAlive, friend_matcher);
+                    endpoint.sendData(ProtocolMessageCode.attachEvent, event_data);
+                }
             }
         }
     }

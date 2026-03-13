@@ -458,7 +458,7 @@ namespace IXICore
                 && lastBlockHeader.blockChecksum != null
                 && !header.lastBlockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
             {
-                Logging.warn("TIV: Invalid last block checksum");
+                Logging.warn("TIV: Invalid last block checksum, preparing for possible reorg.");
 
                 // revert the block
 
@@ -487,12 +487,14 @@ namespace IXICore
                     return false;
                 }
 
+                blockStorage.removeBlock(lastBlockHeader.blockNum);
+                Block reorgedBlockHeader = lastBlockHeader;
                 lastBlockHeader = prev_header;
 
                 ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
                 ConsensusConfig.minRedactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
 
-                transactionInclusionCallbacks.blockReorg(lastBlockHeader);
+                transactionInclusionCallbacks.blockReorg(reorgedBlockHeader);
 
                 return false;
             }

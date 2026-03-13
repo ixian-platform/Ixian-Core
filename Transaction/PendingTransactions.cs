@@ -24,13 +24,15 @@ namespace IXICore
         public long addedTimestamp;
         public List<byte[]> confirmedNodeList = new List<byte[]>();
         public List<byte[]> rejectedNodeList = new List<byte[]>();
+        public Address? senderAddress;
         public bool outgoing = false;
 
-        public PendingTransaction(Transaction t, List<Address>? relayNodeAddresses, long addedTimestamp, bool outgoing)
+        public PendingTransaction(Transaction t, List<Address>? relayNodeAddresses, long addedTimestamp, bool outgoing, Address? senderAddress = null)
         {
             transaction = t;
             this.relayNodeAddresses = relayNodeAddresses;
             this.addedTimestamp = addedTimestamp;
+            this.senderAddress = senderAddress;
             this.outgoing = outgoing;
         }
     }
@@ -52,13 +54,13 @@ namespace IXICore
             return false;
         }
 
-        public static bool addOutgoingTransaction(Transaction t, List<Address> relayNodeAddresses)
+        public static bool addOutgoingTransaction(Transaction t, List<Address>? relayNodeAddresses, Address? senderAddress = null)
         {
             lock (pendingTransactions)
             {
                 if (!pendingTransactions.ContainsKey(t.id))
                 {
-                    pendingTransactions[t.id] = new PendingTransaction(t, relayNodeAddresses, Clock.getTimestamp(), true);
+                    pendingTransactions[t.id] = new PendingTransaction(t, relayNodeAddresses, Clock.getTimestamp(), true, senderAddress);
                     return true;
                 }
             }
