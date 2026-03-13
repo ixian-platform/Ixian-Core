@@ -517,15 +517,15 @@ namespace IXICore
                 {
                     calculateTreeHash();
                 }
-                MemoryStream ms = new MemoryStream();
-                using (BinaryWriter bw = new BinaryWriter(ms, Encoding.UTF8, true))
+                using (MemoryStream ms = new MemoryStream())
+                using (BinaryWriter bw = new BinaryWriter(ms))
                 {
                     bw.Write((byte)PIT_MinimumTreeType.SingleTX);
                     bw.Write(levels);
                     bw.Write(hashLength);
                     writeMinTreeInt(txid, bw, root);
+                    return ms.ToArray();
                 }
-                return ms.ToArray();
             }
         }
 
@@ -543,15 +543,15 @@ namespace IXICore
                 {
                     calculateTreeHash();
                 }
-                MemoryStream ms = new MemoryStream();
-                using (BinaryWriter bw = new BinaryWriter(ms, Encoding.UTF8, true))
+                using (MemoryStream ms = new MemoryStream())
+                using (BinaryWriter bw = new BinaryWriter(ms))
                 {
                     bw.Write((byte)PIT_MinimumTreeType.Anonymized);
                     bw.Write(levels);
                     bw.Write(hashLength);
                     writeMinTreeAInt(bw, root);
+                    return ms.ToArray();
                 }
-                return ms.ToArray();
             }
         }
 
@@ -569,15 +569,15 @@ namespace IXICore
                     calculateTreeHash();
                 }
                 List<byte[]> included = txids.Select(x => x).ToList();
-                MemoryStream ms = new MemoryStream();
-                using (BinaryWriter bw = new BinaryWriter(ms, Encoding.UTF8, true))
+                using (MemoryStream ms = new MemoryStream())
+                using (BinaryWriter bw = new BinaryWriter(ms))
                 {
                     bw.Write((byte)PIT_MinimumTreeType.Matcher);
                     bw.Write(levels);
                     bw.Write(hashLength);
                     writeMinTreeMInt(bw, included, root);
+                    return ms.ToArray();
                 }
-                return ms.ToArray();
             }
         }
 

@@ -322,8 +322,8 @@ namespace IXICore.Utils
         public byte[] getFilterBytes()
         {
             // worst case allocation
-            MemoryStream ms = new MemoryStream(numBuckets*bucketSize);
-            using (BinaryWriter w = new BinaryWriter(ms, Encoding.UTF8, true))
+            using (MemoryStream ms = new MemoryStream(numBuckets * bucketSize))
+            using (BinaryWriter w = new BinaryWriter(ms))
             {
                 // metadata
                 w.Write((byte)itemSize);
@@ -339,19 +339,19 @@ namespace IXICore.Utils
                     w.Write(0);
                 }
                 w.Write(numItems);
-                for(int i=0;i<numBuckets;i++)
+                for (int i = 0; i < numBuckets; i++)
                 {
                     byte b_a = numItemsInBucket(i);
                     w.Write(b_a);
                     w.Write(cuckooData, (i * bucketSize), b_a * itemSize);
                 }
+                return ms.ToArray();
             }
-            return ms.ToArray();
         }
 
         public void setFilterBytes(byte[] filter)
         {
-            MemoryStream ms = new MemoryStream(filter);
+            using (MemoryStream ms = new MemoryStream(filter))
             using (BinaryReader r = new BinaryReader(ms))
             {
                 // metadata
@@ -365,7 +365,7 @@ namespace IXICore.Utils
                 }
                 numItems = r.ReadInt32();
                 cuckooData = new byte[numBuckets * bucketSize];
-                for(int i = 0; i< numBuckets;i++)
+                for (int i = 0; i < numBuckets; i++)
                 {
                     byte b_a = r.ReadByte();
                     if (b_a == 0) continue;

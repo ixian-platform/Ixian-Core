@@ -39,13 +39,14 @@ namespace IXICore
         /// </summary>
         PoCW = 1,
         /// <summary>
-        /// Full verification of signatures is performed. This mode uses even more bandwidth than PoCW as it contains full
-        /// signature sets.
+        /// Full verification of signatures is performed. This mode uses even more bandwidth than PoCW as block headers contain
+        /// full signature sets (if available).
         /// </summary>
         Signatures = 2,
         /// <summary>
-        /// Full verification of signatures is performed. Blocks contain full signatures and a full list of txids included in the
-        /// block, not just the merkle/PIT root. This mode uses the most bandwidth and is generally not intended for end-clients.
+        /// Full verification of signatures is performed. Blocks contain full signatures (if available) and a full list of txids
+        /// included in the block, not just the merkle/PIT root. This mode uses the most bandwidth and is generally not intended
+        /// for end-clients.
         /// </summary>
         Transactions = 3
     }
@@ -316,20 +317,20 @@ namespace IXICore
                         filter.Add(tx);
                     }
                     byte[] filter_bytes = filter.getFilterBytes();
-                    MemoryStream m = new MemoryStream(filter_bytes.Length + 12);
-                    using (BinaryWriter w = new BinaryWriter(m, Encoding.UTF8, true))
+                    using (MemoryStream m = new MemoryStream(filter_bytes.Length + 12))
+                    using (BinaryWriter w = new BinaryWriter(m))
                     {
                         w.WriteIxiVarInt(block_num);
                         w.WriteIxiVarInt(filter_bytes.Length);
                         w.Write(filter_bytes);
-                    }
 
-                    char[] node_types = new char[] { 'M', 'H' };
-                    if (PresenceList.myPresenceType == 'C')
-                    {
-                        node_types = new char[] { 'M', 'H', 'R' };
+                        char[] node_types = new char[] { 'M', 'H' };
+                        if (PresenceList.myPresenceType == 'C')
+                        {
+                            node_types = new char[] { 'M', 'H', 'R' };
+                        }
+                        CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getPIT2, m.ToArray(), 0);
                     }
-                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getPIT2, m.ToArray(), 0);
 
                     PITCacheItem ci = new PITCacheItem()
                         {
@@ -487,6 +488,7 @@ namespace IXICore
                     return false;
                 }
 
+                pitCache.Remove(lastBlockHeader.blockNum);
                 blockStorage.removeBlock(lastBlockHeader.blockNum);
                 Block reorgedBlockHeader = lastBlockHeader;
                 lastBlockHeader = prev_header;

@@ -786,11 +786,10 @@ namespace IXICore
                             if (num_signatures == 0)
                             {
                                 signatureCount = (int)reader.ReadIxiVarUInt();
-                                ulong tmpSignerDiff = reader.ReadIxiVarUInt();
+                                byte[] tmpSignerDiff = reader.ReadIxiBytes();
                                 if (version >= BlockVer.v10)
                                 {
-                                    // TODO replace this with full diff
-                                    totalSignerDifficulty = SignerPowSolution.bitsToDifficulty(tmpSignerDiff);
+                                    totalSignerDifficulty = new IxiNumber(tmpSignerDiff);
                                 }
                             }
                             else
@@ -899,27 +898,25 @@ namespace IXICore
         /// <param name="include_sb_segments">Includes superblock segments if true.</param>
         /// <param name="frozen_sigs_only">Returns only frozen signatures if true. If false it returns all signatures, if they are still available, otherwise falls back to frozen signatures.</param>
         /// <returns>Byte buffer with the serialized block.</returns>
-        public byte[] getBytes(bool include_sb_segments = true, bool frozen_sigs_only = true, bool forceV10Structure = false, bool asBlockHeader = false, bool forChecksum = false)
+        public byte[] getBytes(bool include_sb_segments = true, bool frozen_sigs_only = true, bool force_v10_structure = false, bool for_checksum = false, bool compacted_signatures = false, bool include_transactions = true, bool full_signer_difficulty = true)
         {
             if (compacted)
             {
-                Logging.error("Trying to use getBytes() from a compacted Block {0}", blockNum);
-                return null;
+                throw new Exception($"Trying to use getBytes() from a compacted Block {blockNum}");
             }
 
-            if (forceV10Structure || version >= BlockVer.v10)
+            if (force_v10_structure || version >= BlockVer.v10)
             {
-                return getBytesV10(include_sb_segments, frozen_sigs_only, forChecksum, asBlockHeader);
+                return getBytesV10(include_sb_segments, frozen_sigs_only, for_checksum, compacted_signatures, include_transactions, full_signer_difficulty);
             }
             else if (version < BlockVer.v8)
             {
                 return getBytesLegacy(include_sb_segments, frozen_sigs_only);
             }
-            else if (version < BlockVer.v10)
+            else// if (version < BlockVer.v10)
             {
                 return getBytesV8(include_sb_segments, frozen_sigs_only);
             }
-            return null;
         }
 
         private byte[] getBytesLegacy(bool include_sb_segments = true, bool frozen_sigs_only = true)
@@ -1192,7 +1189,7 @@ namespace IXICore
             }
         }
 
-        private byte[] getBytesV10(bool include_sb_segments = true, bool frozen_sigs_only = true, bool for_checksum = false, bool asBlockHeader = false)
+        private byte[] getBytesV10(bool include_sb_segments = true, bool frozen_sigs_only = true, bool for_checksum = false, bool compacted_signatures = false, bool include_transactions = true, bool full_signer_difficulty = true)
         {
             using (MemoryStream m = new MemoryStream(1048576))
             {
@@ -1292,10 +1289,10 @@ namespace IXICore
 
                     if (!for_checksum)
                     {
-                        writer.Write(getSignaturesBytes(frozen_sigs_only, asBlockHeader));
+                        writer.Write(getSignaturesBytes(frozen_sigs_only, compacted_signatures, full_signer_difficulty));
 
                         if (version < BlockVer.v6
-                            || !asBlockHeader)
+                            || include_transactions)
                         {
                             // Write each txid
                             writer.Write(getTransactionIDsBytes());
@@ -1667,7 +1664,7 @@ namespace IXICore
                     {
                         if (version >= BlockVer.v10)
                         {
-                            byte[] sigBytes = sig.getBytesForBlock(false, true);
+                            byte[] sigBytes = sig.getBytesForBlock(true);
                             writer.WriteIxiVarInt(sigBytes.Length);
                             writer.Write(sigBytes);
                         }
@@ -2594,7 +2591,7 @@ namespace IXICore
             return (transactions != null && transactions.Count > 0) ? (ulong)transactions.Count : txCount;
         }
 
-        public byte[] getSignaturesBytes(bool frozenSigsOnly, bool asBlockHeader)
+        public byte[] getSignaturesBytes(bool frozenSigsOnly, bool compacted, bool fullSignerDifficulty = true)
         {
             using (MemoryStream m = new MemoryStream(640000))
             {
@@ -2604,7 +2601,7 @@ namespace IXICore
                     {
                         if (version < BlockVer.v10)
                         {
-                            asBlockHeader = false;
+                            compacted = false;
                         }
                         List<BlockSignature> tmp_signatures = signatures;
                         if (frozenSigsOnly && frozenSignatures != null)
@@ -2616,8 +2613,14 @@ namespace IXICore
                         {
                             writer.WriteIxiVarInt(0);
                             writer.WriteIxiVarInt(signatureCount);
-                            // TODO replace this with full diff
-                            writer.WriteIxiVarInt(SignerPowSolution.difficultyToBits(totalSignerDifficulty));
+                            if (fullSignerDifficulty)
+                            {
+                                writer.WriteIxiBytes(totalSignerDifficulty.getBytes());
+                            }
+                            else
+                            {
+                                writer.WriteIxiVarInt(SignerPowSolution.difficultyToBits(totalSignerDifficulty));
+                            }
                         }
                         else
                         {
@@ -2636,7 +2639,7 @@ namespace IXICore
                             {
                                 BlockSignature signature = tmp_signatures[i];
 
-                                byte[] sigBytes = signature.getBytesForBlock(true, asBlockHeader);
+                                byte[] sigBytes = signature.getBytesForBlock(compacted);
                                 writer.WriteIxiVarInt(sigBytes.Length);
                                 writer.Write(sigBytes);
                             }
