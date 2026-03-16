@@ -16,11 +16,7 @@ using IXICore.Meta;
 using IXICore.Storage;
 using IXICore.Utils;
 using RocksDbSharp;
-using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace IXICore.Activity
@@ -485,25 +481,27 @@ namespace IXICore.Activity
         static bool hasPrefix(ReadOnlySpan<byte> key, ReadOnlySpan<byte> prefix)
             => key.Length >= prefix.Length && key.Slice(0, prefix.Length).SequenceEqual(prefix);
 
-        public bool revertTransactionsByBlockHeight(ulong blockHeight)
+        public List<byte[]> revertTransactionsByBlockHeight(ulong blockHeight)
         {
             lock (rockLock)
             {
+                List<byte[]> reverted = new();
                 if (database == null)
-                    return false;
+                    return reverted;
 
                 lastUsedTime = DateTime.Now;
 
-                bool anyUpdated = false;
                 using (var wb = new WriteBatch())
                 {
                     foreach (var (indexMem, valueMem) in idxBlockHeightActivityId!.getEntriesForKey(blockHeight.GetBytesBE()))
                     {
                         var id = indexMem.ToArray();
                         updateStatus(id, ActivityStatus.Reverted, blockHeight);
+                        reverted.Add(id);
                     }
+                    database.Write(wb);
                 }
-                return anyUpdated;
+                return reverted;
             }
         }
 
@@ -1024,7 +1022,7 @@ namespace IXICore.Activity
             }
         }
 
-        public bool revertTransactionsByBlockHeight(ulong blockHeight)
+        public List<byte[]> revertTransactionsByBlockHeight(ulong blockHeight)
         {
             lock (openDatabases)
             {

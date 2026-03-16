@@ -10,8 +10,6 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using System.Collections.Generic;
-
 namespace IXICore.Activity
 {
     public interface IActivityStorage
@@ -29,7 +27,7 @@ namespace IXICore.Activity
         public abstract bool updateStatus(byte[] id, ActivityStatus status, ulong blockHeight, long timestamp = 0);
         public abstract bool updateValue(byte[] id, IxiNumber value);
 
-        public abstract bool revertTransactionsByBlockHeight(ulong blockHeight);
+        public abstract List<byte[]> revertTransactionsByBlockHeight(ulong blockHeight);
 
     }
 }

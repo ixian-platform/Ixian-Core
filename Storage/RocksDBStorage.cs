@@ -779,8 +779,6 @@ namespace IXICore
 
                             idxBlocksChecksum.delIndexEntry(blockNumBytes, BLOCKS_KEY_PRIMARY_INDEX, writeBatch);
 
-                            database!.Write(writeBatch);
-
                             if (blockNum == maxBlockNumber)
                             {
                                 if (blockNum == minBlockNumber)
@@ -802,6 +800,8 @@ namespace IXICore
                                 minBlockNumber = blockNum + 1;
                                 writeBatch.Put(META_KEY_MIN_BLOCK, minBlockNumber.GetBytesBE(), rocksCFMeta);
                             }
+
+                            database!.Write(writeBatch);
                         }
 
                         return true;
