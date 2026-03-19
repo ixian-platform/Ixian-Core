@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2025 Ixian
+// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -13,8 +13,6 @@
 #if __ROCKS_DB_SHARP__
 
 using RocksDbSharp;
-using System;
-using System.Collections.Generic;
 
 namespace IXICore.Storage
 {

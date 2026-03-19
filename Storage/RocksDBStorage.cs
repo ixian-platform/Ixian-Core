@@ -1,25 +1,19 @@
-﻿// Copyright (C) 2017-2025 Ixian
-// This file is part of Ixian DLT - www.github.com/ixian-platform/Ixian-DLT
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
-// Ixian DLT is free software: you can redistribute it and/or modify
+// Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
 // by the Open Source Initiative.
 //
-// Ixian DLT is distributed in the hope that it will be useful,
+// Ixian Core is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore;
 using IXICore.Meta;
 using IXICore.Utils;
-using Org.BouncyCastle.Bcpg;
 using RocksDbSharp;
-using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace IXICore

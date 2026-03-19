@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -153,7 +153,7 @@ namespace IXICore.Network
                     case ProtocolMessageCode.getTransactions2:
                     case ProtocolMessageCode.getBlock3:
                     case ProtocolMessageCode.getBlockHeaders3:
-                    case ProtocolMessageCode.getRelevantBlockTransactions:
+                    case ProtocolMessageCode.getBlockHeaders4:
                     case ProtocolMessageCode.getSignatures3:
                     case ProtocolMessageCode.getBlockSignatures2:
                     case ProtocolMessageCode.getPIT2:
@@ -166,7 +166,7 @@ namespace IXICore.Network
                     case ProtocolMessageCode.transactionsChunk3:
                     case ProtocolMessageCode.transactionData2:
                     case ProtocolMessageCode.blockHeaders3:
-                    case ProtocolMessageCode.compactBlockHeaders1:
+                    case ProtocolMessageCode.blockHeaders4:
                     case ProtocolMessageCode.blockData2:
                     case ProtocolMessageCode.pitData2:
                     case ProtocolMessageCode.inventory2:
@@ -230,7 +230,7 @@ namespace IXICore.Network
                             case ProtocolMessageCode.getTransactions2:
                             case ProtocolMessageCode.getBlock3:
                             case ProtocolMessageCode.getBlockHeaders3:
-                            case ProtocolMessageCode.getRelevantBlockTransactions:
+                            case ProtocolMessageCode.getBlockHeaders4:
                             case ProtocolMessageCode.blockData2:
                             case ProtocolMessageCode.getSignatures3:
                             case ProtocolMessageCode.getBlockSignatures2:

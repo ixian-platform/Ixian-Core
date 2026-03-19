@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2025 Ixian
+// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -11,12 +11,9 @@
 // MIT License for more details.
 
 using IXICore.Meta;
-using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -144,12 +141,14 @@ namespace IXICore.Network
         getNameRecord = 43,
         nameRecord = 44,
         //getNextSuperBlock = 45,
+        [Obsolete("Use getBlockHeaders4 instead")]
         getBlockHeaders3 = 46,
+        [Obsolete("Use blockHeaders4 instead")]
         blockHeaders3 = 47,
         getRandomPresences = 48,
         // Temporary protocol message, until we fully enable p2p transactions
-        getRelevantBlockTransactions = 49,
-        compactBlockHeaders1 = 50,
+        getBlockHeaders4 = 49,
+        blockHeaders4 = 50,
         getWalletStateChunk = 51,
         walletStateChunk = 52,
         syncWalletState = 53,
