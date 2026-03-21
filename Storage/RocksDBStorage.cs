@@ -1361,7 +1361,7 @@ namespace IXICore
                     {
                         bool found = false;
                         ulong tx_blocknum = IxiVarInt.GetIxiVarUInt(txid, 1).num;
-                        ulong db_blocknum = tx_blocknum / maxBlocksPerDatabase;
+                        ulong db_blocknum = (tx_blocknum / maxBlocksPerDatabase) * maxBlocksPerDatabase;
 
                         if (tx_blocknum == 0)
                         {
@@ -1438,7 +1438,7 @@ namespace IXICore
                     {
                         bool found = false;
                         ulong tx_blocknum = IxiVarInt.GetIxiVarUInt(txid, 1).num;
-                        ulong db_blocknum = tx_blocknum / maxBlocksPerDatabase;
+                        ulong db_blocknum = (tx_blocknum / maxBlocksPerDatabase) * maxBlocksPerDatabase;
 
                         if (tx_blocknum == 0)
                         {
@@ -1460,7 +1460,7 @@ namespace IXICore
 
                         while (!found)
                         {
-                            var db = getDatabase(tx_blocknum, true);
+                            var db = getDatabase(db_blocknum, true);
                             if (db == null)
                             {
                                 throw new Exception(string.Format("Cannot access database for block {0}", db_blocknum));
