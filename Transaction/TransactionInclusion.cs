@@ -342,17 +342,17 @@ namespace IXICore
             return false;
         }
 
-        private int getMinRequiredSigCount(Block header)
+        private int getMinRequiredSigCount(Block header, bool adjustToRatio)
         {
-            if (header.blockNum <= (ulong)ConsensusConfig.averageSigCalculationBlockCount + (ulong)ConsensusConfig.sigfreezeOffset)
+            if (header.blockNum <= ConsensusConfig.averageSigCalculationBlockCount + ConsensusConfig.requiredConsensusOffset)
             {
                 return 1;
             }
             int blockCount = 0;
             int totalSigCount = 0;
-            for (ulong i = header.blockNum - (ulong)ConsensusConfig.averageSigCalculationBlockCount - (ulong)ConsensusConfig.sigfreezeOffset; i < header.blockNum - (ulong)ConsensusConfig.sigfreezeOffset; i++)
+            for (ulong i = header.blockNum - ConsensusConfig.averageSigCalculationBlockCount - ConsensusConfig.requiredConsensusOffset; i < header.blockNum - ConsensusConfig.requiredConsensusOffset; i++)
             {
-                Block block = blockStorage.getBlock(i);
+                Block? block = blockStorage.getBlock(i);
                 if (block == null)
                 {
                     continue;
@@ -360,86 +360,54 @@ namespace IXICore
                 totalSigCount += block.getFrozenSignatureCount();
                 blockCount++;
             }
-            return totalSigCount / blockCount;
+
+            int consensus = (int)Math.Ceiling((double)totalSigCount / blockCount);
+
+            if (consensus > ConsensusConfig.maximumBlockSigners)
+            {
+                consensus = ConsensusConfig.maximumBlockSigners;
+                if (adjustToRatio)
+                {
+                    consensus = (int)Math.Floor(consensus * ConsensusConfig.networkSignerConsensusRatio);
+                }
+            }
+            else
+            {
+                if (adjustToRatio)
+                {
+                    consensus = (int)Math.Floor(totalSigCount / blockCount * ConsensusConfig.networkSignerConsensusRatio);
+                }
+            }
+
+            if (consensus < 2)
+            {
+                consensus = 2;
+            }
+
+            return consensus;
         }
 
         private int getOverlappingSigCount(Block header)
         {
-            if (header.blockNum <= (ulong)ConsensusConfig.averageSigCalculationBlockCount + (ulong)ConsensusConfig.sigfreezeOffset)
+            if (header.blockNum <= ConsensusConfig.sigOverlapOffset)
             {
                 return 1;
             }
-            int blockCount = 0;
-            int totalSigCount = 0;
-            for (ulong i = header.blockNum - (ulong)ConsensusConfig.averageSigCalculationBlockCount - (ulong)ConsensusConfig.sigfreezeOffset; i < header.blockNum - (ulong)ConsensusConfig.sigfreezeOffset; i++)
+            int overlappedSigCount = 0;
+            Block? block = blockStorage.getBlock(header.blockNum - ConsensusConfig.sigOverlapOffset);
+            foreach (var sig in header.signatures)
             {
-                Block block = blockStorage.getBlock(i);
-                if (block == null)
+                if (block.containsSignature(sig.recipientPubKeyOrAddress))
                 {
-                    continue;
+                    overlappedSigCount++;
                 }
-                totalSigCount += block.getFrozenSignatureCount();
-                blockCount++;
             }
-            return totalSigCount / blockCount;
-        }
-
-        private ulong? getRetargetedDifficultyBits(Block header)
-        {
-            Block? previousRetargetBlock = blockStorage.getBlock(header.blockNum + 1 - ConsensusConfig.superblockInterval);
-            do
-            {
-                previousRetargetBlock = blockStorage.getBlock(previousRetargetBlock.blockNum - ConsensusConfig.superblockInterval);
-                if (previousRetargetBlock == null)
-                {
-                    // We don't have the full blockchain history, so we cannot verify the retarget total difficulty.
-                    // In this case, we will just skip the verification to avoid blocking the chain sync.
-                    return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
-                }
-            } while (previousRetargetBlock.totalSignerDifficulty == header.totalSignerDifficulty);
-
-            if (header.timestamp - previousRetargetBlock.timestamp < ConsensusConfig.difficultyAdjustmentTimeInterval)
-            {
-                Logging.info("DAA: Not enough time has passed to do the calculation, using same difficulty as on previous block.");
-                // Edge case for initial blocks
-                if (header.blockNum == ConsensusConfig.superblockInterval)
-                {
-                    return blockStorage.getBlock(1).signerBits;
-                }
-
-                return blockStorage.getBlock(header.blockNum - ConsensusConfig.superblockInterval).signerBits;
-            }
-
-            IxiNumber totalDifficulty = 0;
-            ulong blockCount = 0;
-            for (ulong i = previousRetargetBlock.blockNum; i < header.blockNum; i++)
-            {
-                var tsd = blockStorage.getBlockTotalSignerDifficulty(i);
-                if (tsd.totalSignerDifficulty == null)
-                {
-                    throw new Exception("Block not found during retarget total difficulty calculation. Block number: " + i);
-                }
-
-                totalDifficulty += tsd.totalSignerDifficulty;
-                blockCount++;
-            }
-
-            if (blockCount == 0)
-            {
-                return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
-            }
-
-            if (blockCount < (ulong)ConsensusConfig.difficultyAdjustmentExpectedBlockCount)
-            {
-                blockCount = (ulong)ConsensusConfig.difficultyAdjustmentExpectedBlockCount;
-            }
-
-            return SignerPowSolution.difficultyToBits(totalDifficulty / blockCount);
+            return overlappedSigCount;
         }
 
         private bool verifySigfreezeChecksum(Block header)
         {
-            Block? targetBlock = blockStorage.getBlock(header.blockNum - (ulong)ConsensusConfig.sigfreezeOffset);
+            Block? targetBlock = blockStorage.getBlock(header.blockNum - ConsensusConfig.sigfreezeOffset);
             if (targetBlock == null)
             {
                 // We don't have the full blockchain history, so we cannot verify the sigfreeze checksum.
@@ -518,7 +486,7 @@ namespace IXICore
                 }
             }
 
-            int minRequiredSigCount = getMinRequiredSigCount(header);
+            int minRequiredSigCount = getMinRequiredSigCount(header, true);
             if (header.getFrozenSignatureCount() < minRequiredSigCount)
             {
                 Logging.warn("TIV: Block header does not contain enough frozen signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
@@ -530,7 +498,7 @@ namespace IXICore
             {
                 requiredOverlappingSigs = (minRequiredSigCount / 2) + 1;
             }
-            if (requiredOverlappingSigs < getOverlappingSigCount(header))
+            if (getOverlappingSigCount(header) < requiredOverlappingSigs)
             {
                 Logging.error("TIV: Block header does not contain enough overlapping signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 return false;
@@ -619,7 +587,7 @@ namespace IXICore
                     }
                     if (blockVerificationMode != TIVBlockVerificationMode.Minimal)
                     {
-                        if (getRetargetedDifficultyBits(header) != header.signerBits)
+                        if (SignerPowSolution.difficultyToBits(calculateRequiredSignerDifficulty(header.version, header.timestamp)) != header.signerBits)
                         {
                             Logging.error("TIV: Block header signer bits do not match the expected retargeted difficulty. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                             return false;
@@ -895,6 +863,7 @@ namespace IXICore
                         // TODO blacklist sender
                         requestBlockHeaders(true);
                     }
+                    Thread.Yield();
                 }
             }
         }
@@ -1039,5 +1008,153 @@ namespace IXICore
                 }
             }
         }
+
+        // TODO Move and unify this region across DLT and Core
+        #region Ixiac related functions
+        public ulong getRequiredSignerBits(ulong blockNum)
+        {
+            if (blockNum == 1)
+            {
+                return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
+            }
+            Block lastSuperBlock = blockStorage.getBlock((IxianHandler.getLastBlockHeight() / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
+            if (lastSuperBlock == null || lastSuperBlock.signerBits == 0)
+            {
+                return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
+            }
+            if (blockNum < lastSuperBlock.blockNum)
+            {
+                var sb = blockStorage.getBlock((blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
+                if (sb == null || sb.signerBits == 0)
+                {
+                    return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
+                }
+                return sb.signerBits;
+            }
+            return lastSuperBlock.signerBits;
+        }
+
+        private IxiNumber adjustSignerDifficultyToRatio(ulong blockNum, IxiNumber difficulty)
+        {
+            return (difficulty * ConsensusConfig.networkSignerDifficultyConsensusRatio) / 100;
+        }
+
+        public IxiNumber getRequiredSignerDifficulty(ulong blockNum, bool adjustToRatio, int curBlockVersion = 0, long curBlockTimestamp = 0)
+        {
+            IxiNumber? difficulty = null;
+            if (blockNum > lastBlockHeader.blockNum && blockNum % ConsensusConfig.superblockInterval == 0)
+            {
+                if (curBlockVersion != 0 && curBlockTimestamp != 0)
+                {
+                    difficulty = calculateRequiredSignerDifficulty(curBlockVersion, curBlockTimestamp);
+                }
+            }
+            if (difficulty == null)
+            {
+                difficulty = SignerPowSolution.bitsToDifficulty(getRequiredSignerBits(blockNum));
+            }
+            if (adjustToRatio)
+            {
+                difficulty = adjustSignerDifficultyToRatio(blockNum, difficulty);
+            }
+            return difficulty;
+        }
+
+        public IxiNumber getMinSignerPowDifficulty(ulong blockNum, int curBlockVersion, long curBlockTimestamp)
+        {
+            if (blockNum < 8)
+            {
+                return ConsensusConfig.minBlockSignerPowDifficulty;
+            }
+            uint minDiffRatio = 7;
+            ulong frozenSignatureCount = (ulong)ConsensusConfig.maximumBlockSigners;
+            var difficulty = getRequiredSignerDifficulty(blockNum, true, curBlockVersion, curBlockTimestamp) / (frozenSignatureCount * minDiffRatio);
+            if (difficulty < ConsensusConfig.minBlockSignerPowDifficulty)
+            {
+                difficulty = ConsensusConfig.minBlockSignerPowDifficulty;
+            }
+            return difficulty;
+        }
+
+        private Block findLastDifficultyChangedSuperBlock(ulong blockNum, int blockVersion)
+        {
+            // Make sure that it's a superblock
+            if (blockNum % ConsensusConfig.superblockInterval != 0)
+            {
+                throw new Exception("Cannot find last difficulty changed super block, block number is not a superblock.");
+            }
+
+            // Edge case for initial blocks
+            if (blockNum == ConsensusConfig.superblockInterval)
+            {
+                return blockStorage.getBlock(1);
+            }
+
+            Block sb = blockStorage.getBlock(blockNum - ConsensusConfig.superblockInterval);
+            IxiNumber diff = getRequiredSignerDifficulty(sb.blockNum, false);
+            while (sb.lastSuperBlockNum != 0)
+            {
+                if (diff != getRequiredSignerDifficulty(sb.lastSuperBlockNum, false))
+                {
+                    Logging.trace("DAA: Found diff block #{0}", sb.blockNum);
+                    return sb;
+                }
+                if (blockVersion <= BlockVer.v12)
+                {
+                    // regression fix, which searched only last 11000 blocks
+                    if (blockNum - sb.blockNum == 11000)
+                    {
+                        return sb;
+                    }
+                }
+                sb = blockStorage.getBlock(sb.lastSuperBlockNum);
+            }
+            return sb;
+        }
+
+        private IxiNumber calculateRequiredSignerDifficulty(int blockVersion, long curBlockTimestamp)
+        {
+            ulong blockNum = lastBlockHeader.blockNum + 1;
+            Block? previousRetargetBlock = findLastDifficultyChangedSuperBlock(blockNum, blockVersion);
+
+            if (curBlockTimestamp - previousRetargetBlock.timestamp < ConsensusConfig.difficultyAdjustmentTimeInterval)
+            {
+                Logging.info("DAA: Not enough time has passed to do the calculation, using same difficulty as on previous block.");
+                // Edge case for initial blocks
+                if (blockNum == ConsensusConfig.superblockInterval)
+                {
+                    return SignerPowSolution.bitsToDifficulty(blockStorage.getBlock(1).signerBits);
+                }
+
+                return SignerPowSolution.bitsToDifficulty(blockStorage.getBlock(blockNum - ConsensusConfig.superblockInterval).signerBits);
+            }
+
+            IxiNumber totalDifficulty = 0;
+            ulong blockCount = 0;
+            for (ulong i = previousRetargetBlock.blockNum; i < blockNum; i++)
+            {
+                var tsd = blockStorage.getBlockTotalSignerDifficulty(i);
+                if (tsd.totalSignerDifficulty == null)
+                {
+                    throw new Exception("Block not found during retarget total difficulty calculation. Block number: " + i);
+                }
+
+                totalDifficulty += tsd.totalSignerDifficulty;
+                blockCount++;
+            }
+
+            if (blockCount == 0)
+            {
+                return ConsensusConfig.minBlockSignerPowDifficulty;
+            }
+
+            if (blockCount < (ulong)ConsensusConfig.difficultyAdjustmentExpectedBlockCount)
+            {
+                blockCount = (ulong)ConsensusConfig.difficultyAdjustmentExpectedBlockCount;
+            }
+
+            return totalDifficulty / blockCount;
+        }
+        #endregion
     }
 }

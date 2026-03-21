@@ -271,6 +271,8 @@ namespace IXICore
         public static readonly long blockChainRecoveryMissingSignerMultiplier = 7;
 
         public static readonly ulong sigfreezeOffset = 5;
+        public static readonly ulong sigOverlapOffset = 6;
+        public static readonly ulong requiredConsensusOffset = 7;
         public static readonly ulong averageSigCalculationBlockCount = 10;
 
 
