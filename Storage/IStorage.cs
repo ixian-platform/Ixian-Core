@@ -16,6 +16,13 @@ namespace IXICore
 {
     namespace Storage
     {
+        public enum BlockSigPruningType : byte
+        {
+            None = 0,
+            Signatures = 1,
+            PoCW = 2
+        }
+
         public abstract class IStorage
         {
             protected string pathBase;
@@ -85,7 +92,7 @@ namespace IXICore
                 try
                 {
                     // Wait for reconnect loop to finish
-                    storageTask.GetAwaiter().GetResult();
+                    storageTask?.GetAwaiter().GetResult();
                 }
                 catch (OperationCanceledException) { }
                 finally
@@ -148,11 +155,7 @@ namespace IXICore
                             if (cur_time - lastCleanupPass > 60)
                             {
                                 lastCleanupPass = cur_time;
-                                // this is only enabled on Rocks for now
-                                if (this is RocksDBStorage)
-                                {
-                                    cleanupCache();
-                                }
+                                cleanupCache();
                             }
                             // Sleep for 50ms to yield CPU schedule slot
 
@@ -175,7 +178,7 @@ namespace IXICore
                         {
                             debugDumpCrashObject(active_message);
                             active_message.retryCount += 1;
-                            if(active_message.retryCount > 10)
+                            if (active_message.retryCount > 10)
                             {
                                 lock (queueStatements)
                                 {
@@ -230,7 +233,7 @@ namespace IXICore
                 Logging.error("Complete transaction: {0}", Base58Check.Base58CheckEncoding.EncodePlain(tx.getBytes(true, true)));
             }
 
-            public abstract void redactBlockStorage(ulong removeBlocksBelow);    
+            public abstract void redactBlockStorage(ulong removeBlocksBelow);
 
             public virtual int getQueuedQueryCount()
             {
@@ -242,10 +245,6 @@ namespace IXICore
 
             public virtual bool insertBlock(Block block)
             {
-                if (this is RocksDBStorage)
-                {
-                    return insertBlockInternal(block);
-                }
                 // Make a copy of the block for the queue storage message processing
                 QueueStorageMessage message = new QueueStorageMessage
                 {
@@ -262,13 +261,8 @@ namespace IXICore
             }
 
 
-            public virtual void insertTransaction(Transaction transaction)
+            public virtual bool insertTransaction(Transaction transaction)
             {
-                if (this is RocksDBStorage)
-                {
-                    insertTransactionInternal(transaction);
-                    return;
-                }
                 // Make a copy of the transaction for the queue storage message processing
                 QueueStorageMessage message = new QueueStorageMessage
                 {
@@ -279,9 +273,9 @@ namespace IXICore
 
                 lock (queueStatements)
                 {
-
                     queueStatements.Add(message);
                 }
+                return true;
             }
 
             // Used when on-disk storage must be upgraded
@@ -332,6 +326,9 @@ namespace IXICore
             protected abstract void shutdown();
             protected abstract void cleanupCache();
             public abstract void deleteData();
+
+            public abstract void pruneBlocks(ulong pruneBlocksBelow, BlockSigPruningType pruningType, bool pruneSuperblocks);
+            public abstract void pruneTxIDs(ulong pruneBlocksBelow);
         }
     }
 }

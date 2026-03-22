@@ -20,6 +20,12 @@ namespace IXICore
 {
     namespace Storage
     {
+        public enum RocksDBOptimizations
+        {
+            Servers = 0,
+            Mobiles = 1
+        }
+
         class RocksDBInternal
         {
             public string dbPath { get; private set; }
@@ -46,16 +52,14 @@ namespace IXICore
             private readonly byte[] META_KEY_DB_VERSION = Encoding.UTF8.GetBytes("db_version");
             private readonly byte[] META_KEY_MIN_BLOCK = Encoding.UTF8.GetBytes("min_block");
             private readonly byte[] META_KEY_MAX_BLOCK = Encoding.UTF8.GetBytes("max_block");
-            private readonly byte[] META_KEY_COMPACTION_TYPE = Encoding.UTF8.GetBytes("compaction_type");
-
-            private readonly byte[] COMPACTION_TYPE_NONE = new byte[] { 0 };
-            private readonly byte[] COMPACTION_TYPE_SIGS = new byte[] { 1 };
-            private readonly byte[] COMPACTION_TYPE_FULL = new byte[] { 2 };
+            private readonly byte[] META_KEY_BLOCK_SIG_PRUNING_STATE = Encoding.UTF8.GetBytes("block_sig_pruning_state");
+            private readonly byte[] META_KEY_BLOCK_PRUNED_TXIDS = Encoding.UTF8.GetBytes("block_pruned_txids");
 
             public ulong minBlockNumber { get; private set; }
             public ulong maxBlockNumber { get; private set; }
             public int dbVersion { get; private set; }
-            public byte[] compactionType { get; private set; }
+            public BlockSigPruningType blockSigPruningState { get; private set; }
+            public bool blockPrunedTxids { get; private set; }
             public bool isOpen
             {
                 get
@@ -67,15 +71,19 @@ namespace IXICore
             // Caches (shared with other rocksDb
             private Cache blockCache;
 
-            public RocksDBInternal(string dbPath, Cache blockCache)
+            private RocksDBOptimizations optimizationType;
+
+            public RocksDBInternal(string dbPath, Cache blockCache, RocksDBOptimizations optimizationType)
             {
                 minBlockNumber = 0;
                 maxBlockNumber = 0;
                 dbVersion = 0;
-                compactionType = COMPACTION_TYPE_NONE;
+                blockSigPruningState = BlockSigPruningType.None;
+                blockPrunedTxids = false;
 
                 this.dbPath = dbPath;
                 this.blockCache = blockCache;
+                this.optimizationType = optimizationType;
             }
 
             public void openDatabase()
@@ -216,7 +224,8 @@ namespace IXICore
                         database.Put(META_KEY_DB_VERSION, dbVersion.GetBytesBE(), rocksCFMeta);
                         database.Put(META_KEY_MIN_BLOCK, minBlockNumber.GetBytesBE(), rocksCFMeta);
                         database.Put(META_KEY_MAX_BLOCK, maxBlockNumber.GetBytesBE(), rocksCFMeta);
-                        database.Put(META_KEY_COMPACTION_TYPE, compactionType, rocksCFMeta);
+                        database.Put(META_KEY_BLOCK_SIG_PRUNING_STATE, new byte[] { (byte)blockSigPruningState }, rocksCFMeta);
+                        database.Put(META_KEY_BLOCK_PRUNED_TXIDS, new byte[] { blockPrunedTxids ? (byte)1 : (byte)0 }, rocksCFMeta);
                     }
                     else
                     {
@@ -230,8 +239,17 @@ namespace IXICore
                             byte[] maxBlockBytes = database.Get(META_KEY_MAX_BLOCK, rocksCFMeta);
                             maxBlockNumber = BinaryPrimitives.ReadUInt64BigEndian(maxBlockBytes);
 
-                            byte[] compactionTypeBytes = database.Get(META_KEY_COMPACTION_TYPE, rocksCFMeta);
-                            compactionType = compactionTypeBytes;
+                            byte[] blockPruningStateBytes = database.Get(META_KEY_BLOCK_SIG_PRUNING_STATE, rocksCFMeta);
+                            if (blockPruningStateBytes != null)
+                            {
+                                blockSigPruningState = (BlockSigPruningType)blockPruningStateBytes[0];
+                            }
+
+                            byte[] blockPrunedTxidsBytes = database.Get(META_KEY_BLOCK_PRUNED_TXIDS, rocksCFMeta);
+                            if (blockPrunedTxidsBytes != null)
+                            {
+                                blockPrunedTxids = blockPrunedTxidsBytes[0] == 1 ? true : false;
+                            }
                         }
                         catch
                         {
@@ -239,7 +257,7 @@ namespace IXICore
                         }
                     }
 
-                    Logging.info("RocksDB: Opened Database {0}: Blocks {1} - {2}, version {3}, compaction type {4}", dbPath, minBlockNumber, maxBlockNumber, dbVersion, Crypto.hashToString(compactionType));
+                    Logging.info("RocksDB: Opened Database {0}: Blocks {1} - {2}, version {3}, block pruning state {4}", dbPath, minBlockNumber, maxBlockNumber, dbVersion, blockSigPruningState);
                     Logging.trace("RocksDB: Stats: {0}", database.GetProperty("rocksdb.stats"));
                     lastUsedTime = DateTime.Now;
                 }
@@ -485,7 +503,7 @@ namespace IXICore
                         }
                         if (sigBytes == null)
                         {
-                            using(var ms = new MemoryStream())
+                            using (var ms = new MemoryStream())
                             using (var writer = new BinaryWriter(ms))
                             {
                                 var blockMeta = parseBlockMetaBytes(idxBlocksChecksum!.getEntry(blockNum.GetBytesBE(), blockHash));
@@ -899,6 +917,112 @@ namespace IXICore
                 closeDatabase();
                 Directory.Delete(dbPath, true);
             }
+
+            public void pruneBlocks(BlockSigPruningType pruningType, bool pruneSuperblocks)
+            {
+                if (database == null)
+                {
+                    throw new Exception($"Database {dbPath} is not open.");
+                }
+
+                Logging.info("RocksDB: Pruning blocks with pruning type '{0}' on database '{1}'.", pruningType, dbPath);
+                lock (rockLock)
+                {
+                    if (blockSigPruningState > pruningType)
+                    {
+                        throw new Exception($"Database {dbPath} already has pruning state {blockSigPruningState}, cannot apply pruning type {pruningType}.");
+                    }
+
+                    var ro = new ReadOptions().SetPrefixSameAsStart(true);
+                    var iter = database.NewIterator(rocksCFBlocks, ro);
+                    try
+                    {
+                        for (iter.SeekToFirst(); iter.Valid(); iter.Next())
+                        {
+                            var k = iter.Key();
+                            if (!k.AsSpan().EndsWith(BLOCKS_KEY_HEADER))
+                                continue;
+
+                            if (!pruneSuperblocks)
+                            {
+                                Block b = new Block(iter.Value(), true);
+                                if (b.lastSuperBlockNum != 0)
+                                {
+                                    continue;
+                                }
+                            }
+
+                            var blockChecksum = k.AsSpan(0, k.Length - BLOCKS_KEY_HEADER.Length);
+
+                            switch (pruningType)
+                            {
+                                case BlockSigPruningType.Signatures:
+                                    {
+                                        var keySigners = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS);
+                                        database.Remove(keySigners, rocksCFBlocks);
+                                    }
+                                    break;
+
+                                case BlockSigPruningType.PoCW:
+                                    {
+                                        var keySigners = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS);
+                                        database.Remove(keySigners, rocksCFBlocks);
+                                        var keyCompact = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT);
+                                        database.Remove(keyCompact, rocksCFBlocks);
+                                    }
+                                    break;
+
+                                default:
+                                    throw new Exception("Unknown pruning type: " + pruningType);
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        iter.Dispose();
+                    }
+                    blockSigPruningState = pruningType;
+                    database.Put(META_KEY_BLOCK_SIG_PRUNING_STATE, new byte[] { (byte)blockSigPruningState }, rocksCFMeta);
+                }
+            }
+
+            public void pruneTxIDs()
+            {
+                if (database == null)
+                {
+                    throw new Exception($"Database {dbPath} is not open.");
+                }
+
+                Logging.info("RocksDB: Pruning TXID blocks on database '{0}'.", dbPath);
+                lock (rockLock)
+                {
+                    if (blockPrunedTxids)
+                    {
+                        Logging.warn("RocksDB: Database '{0}' already has pruned transaction IDs, skipping.", dbPath);
+                        return;
+                    }
+
+                    var ro = new ReadOptions().SetPrefixSameAsStart(true);
+                    var iter = database.NewIterator(rocksCFBlocks, ro);
+                    try
+                    {
+                        for (iter.SeekToFirst(); iter.Valid(); iter.Next())
+                        {
+                            var k = iter.Key();
+                            if (!k.AsSpan().EndsWith(BLOCKS_KEY_TXS))
+                                continue;
+
+                            database.Remove(k, rocksCFBlocks);
+                        }
+                    }
+                    finally
+                    {
+                        iter.Dispose();
+                    }
+                    blockPrunedTxids = true;
+                    database.Put(META_KEY_BLOCK_PRUNED_TXIDS, new byte[] { blockPrunedTxids ? (byte)1 : (byte)0 }, rocksCFMeta);
+                }
+            }
         }
 
         public class RocksDBStorage : IStorage
@@ -924,7 +1048,9 @@ namespace IXICore
 
             private bool closeRedactedWindow;
 
-            public RocksDBStorage(string dataFolderBlocks, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, int maxOpenDatabases) : base(dataFolderBlocks)
+            private RocksDBOptimizations optimizationType;
+
+            public RocksDBStorage(string dataFolderBlocks, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, int maxOpenDatabases, RocksDBOptimizations optimizationType) : base(dataFolderBlocks)
             {
                 this.maxOpenDatabases = maxOpenDatabases;
                 this.maxDatabaseCache = maxDatabaseCache;
@@ -934,6 +1060,8 @@ namespace IXICore
                 {
                     closeRedactedWindow = true;
                 }
+
+                this.optimizationType = optimizationType;
             }
 
             private RocksDBInternal? getDatabase(ulong blockNum, bool onlyExisting = false)
@@ -973,7 +1101,7 @@ namespace IXICore
                         }
 
                         Logging.info("RocksDB: Opening a database for blocks {0} - {1}.", baseBlockNum * maxBlocksPerDatabase, (baseBlockNum * maxBlocksPerDatabase) + maxBlocksPerDatabase - 1);
-                        db = new RocksDBInternal(db_path, commonBlockCache!);
+                        db = new RocksDBInternal(db_path, commonBlockCache!, optimizationType);
                         db.openDatabase();
                         openDatabases.Add(baseBlockNum, db);
 
@@ -1030,7 +1158,7 @@ namespace IXICore
                     foreach (string db in Directory.GetDirectories(Path.Combine(pathBase, "0000")))
                     {
                         Logging.info("RocksDB: Optimizing [{0}].", db);
-                        RocksDBInternal temp_db = new RocksDBInternal(db, commonBlockCache);
+                        RocksDBInternal temp_db = new RocksDBInternal(db, commonBlockCache, optimizationType);
                         try
                         {
                             temp_db.openDatabase();
@@ -1617,11 +1745,10 @@ namespace IXICore
 
             public override void redactBlockStorage(ulong removeBlocksBelow)
             {
-                ulong lowestBlock = getLowestBlockInStorage();
                 lock (openDatabases)
                 {
                     closeDatabases(false);
-                    ulong dbBlockNum = (ulong)(removeBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase);
+                    ulong dbBlockNum = removeBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase;
 
                     bool first = false;
 
@@ -1644,6 +1771,100 @@ namespace IXICore
                         {
                             first = true;
                         }
+                    }
+                }
+            }
+
+            public override bool insertBlock(Block block)
+            {
+                return insertBlockInternal(block);
+            }
+
+            public override bool insertTransaction(Transaction tx)
+            {
+                return insertTransactionInternal(tx);
+            }
+
+            public override void pruneBlocks(ulong pruneBlocksBelow, BlockSigPruningType pruningType, bool pruneSuperblocks)
+            {
+                lock (openDatabases)
+                {
+                    ulong dbBlockNum = (pruneBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase) * CoreConfig.maxBlockHeadersPerDatabase;
+
+                    bool first = false;
+
+                    // Scan
+                    while (!first)
+                    {
+                        var db = getDatabase(dbBlockNum, true);
+                        if (db == null)
+                        {
+                            break;
+                        }
+
+                        if (db.blockSigPruningState >= pruningType)
+                        {
+                            break;
+                        }
+
+                        if (dbBlockNum > 0)
+                        {
+                            dbBlockNum -= CoreConfig.maxBlockHeadersPerDatabase;
+                        }
+                        else if (dbBlockNum == 0)
+                        {
+                            first = true;
+                        }
+                    }
+
+                    // Prune
+                    while (dbBlockNum < pruneBlocksBelow)
+                    {
+                        var db = getDatabase(dbBlockNum, true);
+                        db!.pruneBlocks(pruningType, pruneSuperblocks);
+                        dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
+                    }
+                }
+            }
+
+            public override void pruneTxIDs(ulong pruneBlocksBelow)
+            {
+                lock (openDatabases)
+                {
+                    ulong dbBlockNum = (pruneBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase) * CoreConfig.maxBlockHeadersPerDatabase;
+
+                    bool first = false;
+
+                    // Scan
+                    while (!first)
+                    {
+                        var db = getDatabase(dbBlockNum, true);
+                        if (db == null)
+                        {
+                            break;
+                        }
+
+                        if (db.blockPrunedTxids)
+                        {
+                            break;
+                        }
+
+                        if (dbBlockNum > 0)
+                        {
+                            dbBlockNum -= CoreConfig.maxBlockHeadersPerDatabase;
+                        }
+                        else if (dbBlockNum == 0)
+                        {
+                            first = true;
+                        }
+                    }
+
+                    // Prune
+                    while (dbBlockNum < pruneBlocksBelow)
+                    {
+                        var db = getDatabase(dbBlockNum, true);
+                        db!.pruneTxIDs();
+                        dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
                     }
                 }
             }
