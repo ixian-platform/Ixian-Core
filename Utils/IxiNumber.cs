@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -131,7 +131,7 @@ namespace IXICore
             return amount.GetHashCode();
         }
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj is IxiNumber)
             {
@@ -238,7 +238,7 @@ namespace IXICore
             return new IxiNumber(value);
         }
 
-        public static bool operator ==(IxiNumber a, IxiNumber b)
+        public static bool operator ==(IxiNumber? a, IxiNumber? b)
         {
             if (a is null && b is null)
             {
@@ -258,7 +258,7 @@ namespace IXICore
             return status;
         }
 
-        public static bool operator !=(IxiNumber a, IxiNumber b)
+        public static bool operator !=(IxiNumber? a, IxiNumber? b)
         {
             return !(a == b);
         }
@@ -323,8 +323,12 @@ namespace IXICore
             return divide(a, b);
         }
 
-        public int CompareTo(IxiNumber other)
+        public int CompareTo(IxiNumber? other)
         {
+            if (other is null)
+            {
+                return 1;
+            }
             return getAmount().CompareTo(other.getAmount());
         }
     }

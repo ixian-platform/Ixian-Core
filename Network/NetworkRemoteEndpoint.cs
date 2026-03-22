@@ -825,14 +825,15 @@ namespace IXICore.Network
                 bool duplicate = message_queue.Exists(x => x.code == message.code && message.checksum == x.checksum);
                 if (duplicate)
                 {
-                    Logging.warn(string.Format("Attempting to add a duplicate message (code: {0}) to the network queue for {1}", message.code, getFullAddress()));
+                    Logging.warn("Attempting to add a duplicate message (code: {0}) to the send queue for {1}", message.code, getFullAddress());
                     return;
                 }
             }
             // Check if there are too many messages
             if (message_queue.Count > CoreConfig.maxSendQueue)
             {
-                message_queue.RemoveAt(10);
+                Logging.warn("Send queue for {0} has too many messages, dropping message with code {1}", getFullAddress(), message.code);
+                return;
             }
 
             message_queue.Add(message);
