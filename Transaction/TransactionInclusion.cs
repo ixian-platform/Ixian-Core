@@ -777,13 +777,19 @@ namespace IXICore
                                 // TODO: more drastic action? Maybe blacklist or something.
                                 return;
                             }
+                            bool processed = false;
                             lock (pitCache)
                             {
                                 if (pitCache.ContainsKey(block_num))
                                 {
                                     Logging.info("TIV: Received valid PIT information for block {0}", block_num);
                                     pitCache[block_num].pit = pit;
+                                    processed = true;
                                 }
+                            }
+                            if (processed)
+                            {
+                                processUnverifiedTransactions();
                             }
                         }
                         catch (Exception)
