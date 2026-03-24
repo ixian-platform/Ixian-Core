@@ -19,6 +19,22 @@ using System.Text;
 
 namespace IXICore
 {
+    class RequiredSignerDifficultyCache
+    {
+        public ulong BlockNum = 0;
+        public int BlockVersion = 0;
+        public IxiNumber Difficulty = 0;
+        public long Timestamp = 0;
+
+        public void Set(ulong blockNum, int blockVersion, IxiNumber difficulty, long timestamp)
+        {
+            BlockNum = blockNum;
+            BlockVersion = blockVersion;
+            Difficulty = difficulty;
+            Timestamp = timestamp;
+        }
+    }
+
     public enum TIVBlockVerificationMode
     {
         /// <summary>
@@ -94,6 +110,10 @@ namespace IXICore
 
         private IStorage blockStorage;
 
+        private RequiredSignerDifficultyCache cachedRequiredSignerDifficulty = new();
+
+        private object tivLock = new object();
+
         public TransactionInclusion(IStorage blockStorage, TransactionInclusionCallbacks transactionInclusionCallbacks, TIVBlockVerificationMode blockVerificationMode)
         {
             this.transactionInclusionCallbacks = transactionInclusionCallbacks;
@@ -126,7 +146,7 @@ namespace IXICore
             {
                 Block? last_block_header = blockStorage.getBlock(blockStorage.getHighestBlockInStorage());
 
-                if (last_block_header != null && last_block_header.blockNum > startingBlockHeight)
+                if (last_block_header != null)
                 {
                     lastBlockHeader = last_block_header;
                 }
@@ -144,12 +164,14 @@ namespace IXICore
                     {
                         processUnverifiedTransactions();
                         processOutgoingTransactions();
-                        long currentTime = Clock.getTimestamp();
-                        if (currentTime - lastPITPruneTime > pitCachePruneInterval)
-                        {
-                            prunePITCache();
-                        }
                     }
+
+                    long currentTime = Clock.getTimestamp();
+                    if (currentTime - lastPITPruneTime > pitCachePruneInterval)
+                    {
+                        prunePITCache();
+                    }
+
                     Thread.Sleep(ConsensusConfig.blockGenerationInterval);
                 }
             }
@@ -165,7 +187,7 @@ namespace IXICore
 
         public void stop()
         {
-            if(!running)
+            if (!running)
             {
                 return;
             }
@@ -190,7 +212,15 @@ namespace IXICore
                 lastRequestedBlockTime = currentTime;
 
                 // request next blocks
-                requestBlockHeaders(lastBlockHeader!.blockNum + 1, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
+                if (lastBlockHeader!.blockNum > 0
+                    && lastBlockHeader.version == 0)
+                {
+                    requestBlockHeaders(lastBlockHeader.blockNum, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
+                }
+                else
+                {
+                    requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
+                }
 
                 return true;
             }
@@ -200,21 +230,21 @@ namespace IXICore
 
         private void processUnverifiedTransactions()
         {
-            if(lastBlockHeader == null)
+            if (lastBlockHeader == null)
             {
                 return;
             }
-            lock (pitCache)
+            lock (PendingTransactions.pendingTransactions)
             {
                 var tmp_txQueue = PendingTransactions.getPendingTransactions().Where(x => x.blockHeight <= lastBlockHeader.blockNum).ToArray();
-                foreach(var tx in tmp_txQueue)
+                foreach (var tx in tmp_txQueue)
                 {
                     if (tx.applied == 0)
                     {
                         tx.applied = tx.blockHeight;
                     }
                     Block? bh = blockStorage.getBlock(tx.applied);
-                    if(bh is null)
+                    if (bh is null)
                     {
                         // TODO: need to wait for the block to arrive, or re-request
                         // maybe something similar to PIT cache, or extend PIT cache to handle older blocks, too
@@ -246,7 +276,8 @@ namespace IXICore
                             if (bh.version < BlockVer.v8)
                             {
                                 txid = UTF8Encoding.UTF8.GetBytes(tx.getTxIdString());
-                            }else
+                            }
+                            else
                             {
                                 txid = tx.id;
                             }
@@ -299,11 +330,11 @@ namespace IXICore
         /// <param name="txids">List of interesting transactions, which we wish to verify.</param>
         private void requestPITForBlock(ulong block_num, List<byte[]> txids)
         {
-            lock(pitCache)
+            lock (pitCache)
             {
                 long currentTime = Clock.getTimestamp();
                 // Request might already have been sent. In that case, we re-send it we have been waiting for too long.
-                if(!pitCache.ContainsKey(block_num) || currentTime - pitCache[block_num].requestSent > pitRequestTimeout)
+                if (!pitCache.ContainsKey(block_num) || currentTime - pitCache[block_num].requestSent > pitRequestTimeout)
                 {
                     Cuckoo filter = new Cuckoo(txids.Count);
                     foreach (var tx in txids)
@@ -327,11 +358,11 @@ namespace IXICore
                     }
 
                     PITCacheItem ci = new PITCacheItem()
-                        {
-                            pit = null,
-                            requestedForTXIDs = txids,
-                            requestSent = Clock.getTimestamp()
-                        };
+                    {
+                        pit = null,
+                        requestedForTXIDs = txids,
+                        requestSent = Clock.getTimestamp()
+                    };
                     pitCache.AddOrReplace(block_num, ci);
                 }
             }
@@ -350,15 +381,22 @@ namespace IXICore
             }
             int blockCount = 0;
             int totalSigCount = 0;
-            for (ulong i = header.blockNum - ConsensusConfig.averageSigCalculationBlockCount - ConsensusConfig.requiredConsensusOffset; i < header.blockNum - ConsensusConfig.requiredConsensusOffset; i++)
+            for (ulong i = 0; i < ConsensusConfig.averageSigCalculationBlockCount; i++)
             {
-                Block? block = blockStorage.getBlock(i);
+                ulong consensusBlockNum = header.blockNum - i - ConsensusConfig.requiredConsensusOffset;
+                Block? block = blockStorage.getBlock(consensusBlockNum);
                 if (block == null)
                 {
-                    continue;
+                    Logging.warn("TIV: Cannot get min required signatures for block {0} - {1} because one of the blocks from which to check the signatures is not available in storage.", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                    return 1;
                 }
                 totalSigCount += block.getFrozenSignatureCount();
                 blockCount++;
+            }
+
+            if (blockCount == 0)
+            {
+                return ConsensusConfig.maximumBlockSigners;
             }
 
             int consensus = (int)Math.Ceiling((double)totalSigCount / blockCount);
@@ -395,6 +433,11 @@ namespace IXICore
             }
             int overlappedSigCount = 0;
             Block? block = blockStorage.getBlock(header.blockNum - ConsensusConfig.sigOverlapOffset);
+            if (block == null)
+            {
+                Logging.warn("TIV: Cannot verify overlapping signatures for block {0} - {1} because the block from which to check the overlapping signatures is not available in storage.", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                return 1;
+            }
             foreach (var sig in header.signatures)
             {
                 if (block.containsSignature(sig.recipientPubKeyOrAddress))
@@ -443,6 +486,12 @@ namespace IXICore
 
         private bool verifyBlockSignatures(Block header)
         {
+            // Signature verification for Blocks v13+
+            if (header.version < BlockVer.v13)
+            {
+                return true;
+            }
+
             bool isSuperBlock = this.isSuperBlock(header.blockNum);
 
             Block? lastSuperBlock = null;
@@ -487,9 +536,13 @@ namespace IXICore
             }
 
             int minRequiredSigCount = getMinRequiredSigCount(header, true);
-            if (header.getFrozenSignatureCount() < minRequiredSigCount)
+            int frozenSigCount = header.getFrozenSignatureCount();
+            var totalSignerDifficulty = header.getTotalSignerDifficulty();
+            var overlappingSigCount = getOverlappingSigCount(header);
+            if (frozenSigCount < minRequiredSigCount
+                && !handleBlockchainRecoveryMode(header, overlappingSigCount, frozenSigCount, totalSignerDifficulty, getRequiredSignerDifficulty(header.blockNum, false, header.version, header.timestamp)))
             {
-                Logging.warn("TIV: Block header does not contain enough frozen signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                Logging.error("TIV: Block header does not contain enough frozen signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 return false;
             }
 
@@ -498,7 +551,7 @@ namespace IXICore
             {
                 requiredOverlappingSigs = (minRequiredSigCount / 2) + 1;
             }
-            if (getOverlappingSigCount(header) < requiredOverlappingSigs)
+            if (overlappingSigCount < requiredOverlappingSigs)
             {
                 Logging.error("TIV: Block header does not contain enough overlapping signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 return false;
@@ -508,7 +561,7 @@ namespace IXICore
             if (lastSuperBlock != null)
             {
                 var requiredDifficulty = (SignerPowSolution.bitsToDifficulty(lastSuperBlock.signerBits) * ConsensusConfig.networkSignerDifficultyConsensusRatio) / 100;
-                if (header.getTotalSignerDifficulty() < requiredDifficulty)
+                if (totalSignerDifficulty < requiredDifficulty)
                 {
                     Logging.error("TIV: Block header does not meet minimum signer difficulty. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                     return false;
@@ -541,6 +594,14 @@ namespace IXICore
                 return false;
             }
 
+            if (!verifySigfreezeChecksum(header))
+            {
+                Logging.warn("TIV: Invalid block header sigfreeze checksum. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                requestBlockHeaders(header.blockNum - ConsensusConfig.sigfreezeOffset, 1, null);
+
+                return false;
+            }
+
             // Advanced verification for Blocks v13+
             if (header.version < BlockVer.v13)
             {
@@ -553,16 +614,8 @@ namespace IXICore
                 return false;
             }
 
-            if (!verifySigfreezeChecksum(header))
-            {
-                Logging.warn("TIV: Invalid block header sigfreeze checksum. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
-                requestBlockHeaders(header.blockNum - ConsensusConfig.sigfreezeOffset, 1, null);
-
-                return false;
-            }
-
             bool isSuperBlock = this.isSuperBlock(header.blockNum);
-            
+
             Block? lastSuperBlock = null;
             if (isSuperBlock)
             {
@@ -587,7 +640,13 @@ namespace IXICore
                     }
                     if (blockVerificationMode != TIVBlockVerificationMode.Minimal)
                     {
-                        if (SignerPowSolution.difficultyToBits(calculateRequiredSignerDifficulty(header.version, header.timestamp)) != header.signerBits)
+                        var expectedDifficulty = getRequiredSignerDifficulty(header.blockNum, false, header.version, header.timestamp);
+                        if (expectedDifficulty == null)
+                        {
+                            Logging.warn("TIV: Failed to calculate expected signer difficulty for block header. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                            return true;
+                        }
+                        if (SignerPowSolution.difficultyToBits(expectedDifficulty) != header.signerBits)
                         {
                             Logging.error("TIV: Block header signer bits do not match the expected retargeted difficulty. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                             return false;
@@ -696,6 +755,7 @@ namespace IXICore
                 blockStorage.removeBlock(lastBlockHeader.blockNum);
                 Block reorgedBlockHeader = lastBlockHeader;
                 lastBlockHeader = prev_header;
+                cachedRequiredSignerDifficulty.Set(0, 0, 0, 0);
 
                 ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
                 ConsensusConfig.minRedactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
@@ -711,7 +771,7 @@ namespace IXICore
                 return false;
             }
 
-            if (header.version >= BlockVer.v10)
+            if (header.version >= BlockVer.v13)
             {
                 header.setFrozenSignatures(header.signatures.OrderBy(x => x.powSolution.difficulty, Comparer<IxiNumber>.Default).ThenBy(x => x.recipientPubKeyOrAddress.addressNoChecksum, new ByteArrayComparer()).ToList());
             }
@@ -808,11 +868,12 @@ namespace IXICore
         /// <param name="endpoint">corresponding remote endpoint</param>
         public void receivedBlockHeaders3(byte[] data, RemoteEndpoint endpoint)
         {
-            using (MemoryStream m = new MemoryStream(data))
+            lock (tivLock)
             {
+                using (MemoryStream m = new MemoryStream(data))
                 using (BinaryReader reader = new BinaryReader(m))
                 {
-                    bool processed = false;
+                    bool sigFreezedBlock = false;
                     try
                     {
                         int blockCnt = 0;
@@ -834,13 +895,32 @@ namespace IXICore
 
                             if (lastBlockHeader != null)
                             {
+                                if (lastBlockHeader.lastBlockChecksum == null)
+                                {
+                                    if (header.blockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
+                                    {
+                                        populateBlockSignatures(header);
+                                        if (!blockStorage.insertBlock(header))
+                                        {
+                                            break;
+                                        }
+
+                                        lastBlockHeader = header;
+
+                                        ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
+                                        ConsensusConfig.minRedactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
+
+                                        blockCnt++;
+                                        continue;
+                                    }
+                                }
                                 if (header.blockNum + ConsensusConfig.sigfreezeOffset == lastBlockHeader.blockNum + 1)
                                 {
                                     if (!processSigfreezedBlockHeader(header))
                                     {
                                         break;
                                     }
-                                    processed = true;
+                                    sigFreezedBlock = true;
                                     blockCnt++;
                                 }
                                 if (header.blockNum <= lastBlockHeader.blockNum)
@@ -852,13 +932,15 @@ namespace IXICore
                             {
                                 break;
                             }
-                            processed = true;
                             blockCnt++;
                         }
                         Logging.info("Processed {0} block headers in {1}ms.", blockCnt, Clock.getTimestampMillis() - startTime);
-                        if (processed)
+                        if (sigFreezedBlock || blockCnt > 2)
                         {
                             requestBlockHeaders(true);
+                        }
+                        if (blockCnt > 0)
+                        {
                             processUnverifiedTransactions();
                             processOutgoingTransactions();
                         }
@@ -921,7 +1003,7 @@ namespace IXICore
                         to_remove.Add(i.Key);
                     }
                 }
-                foreach(ulong b_num in to_remove)
+                foreach (ulong b_num in to_remove)
                 {
                     pitCache.Remove(b_num);
                 }
@@ -1017,51 +1099,47 @@ namespace IXICore
 
         // TODO Move and unify this region across DLT and Core
         #region Ixiac related functions
-        public ulong getRequiredSignerBits(ulong blockNum)
-        {
-            if (blockNum == 1)
-            {
-                return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
-            }
-            Block lastSuperBlock = blockStorage.getBlock((IxianHandler.getLastBlockHeight() / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
-            if (lastSuperBlock == null || lastSuperBlock.signerBits == 0)
-            {
-                return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
-            }
-            if (blockNum < lastSuperBlock.blockNum)
-            {
-                var sb = blockStorage.getBlock((blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
-                if (sb == null || sb.signerBits == 0)
-                {
-                    return SignerPowSolution.difficultyToBits(ConsensusConfig.minBlockSignerPowDifficulty);
-                }
-                return sb.signerBits;
-            }
-            return lastSuperBlock.signerBits;
-        }
-
-        private IxiNumber adjustSignerDifficultyToRatio(ulong blockNum, IxiNumber difficulty)
+        private IxiNumber adjustSignerDifficultyToRatio(IxiNumber difficulty)
         {
             return (difficulty * ConsensusConfig.networkSignerDifficultyConsensusRatio) / 100;
         }
 
-        public IxiNumber getRequiredSignerDifficulty(ulong blockNum, bool adjustToRatio, int curBlockVersion = 0, long curBlockTimestamp = 0)
+        public IxiNumber? getRequiredSignerDifficulty(ulong blockNum, bool adjustToRatio, int curBlockVersion = 0, long curBlockTimestamp = 0)
         {
             IxiNumber? difficulty = null;
-            if (blockNum > lastBlockHeader.blockNum && blockNum % ConsensusConfig.superblockInterval == 0)
+            if (blockNum == lastBlockHeader.blockNum + 1 && blockNum % ConsensusConfig.superblockInterval == 0)
             {
                 if (curBlockVersion != 0 && curBlockTimestamp != 0)
                 {
                     difficulty = calculateRequiredSignerDifficulty(curBlockVersion, curBlockTimestamp);
+                    if (difficulty == null)
+                    {
+                        Logging.warn("DAA: Failed to calculate required signer difficulty for block #{0} using DAA calculation.", blockNum);
+                        return null;
+                    }
                 }
             }
             if (difficulty == null)
             {
-                difficulty = SignerPowSolution.bitsToDifficulty(getRequiredSignerBits(blockNum));
+                var block = blockStorage.getBlock((blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
+                if (block == null)
+                {
+                    Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the block is not available in storage.", blockNum);
+                    return null;
+                }
+                if (block.signerBits == 0)
+                {
+                    Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the signer bits of the block is 0.", blockNum);
+                    difficulty = ConsensusConfig.minBlockSignerPowDifficulty;
+                }
+                else
+                {
+                    difficulty = SignerPowSolution.bitsToDifficulty(block.signerBits);
+                }
             }
             if (adjustToRatio)
             {
-                difficulty = adjustSignerDifficultyToRatio(blockNum, difficulty);
+                difficulty = adjustSignerDifficultyToRatio(difficulty);
             }
             return difficulty;
         }
@@ -1074,7 +1152,12 @@ namespace IXICore
             }
             uint minDiffRatio = 7;
             ulong frozenSignatureCount = (ulong)ConsensusConfig.maximumBlockSigners;
-            var difficulty = getRequiredSignerDifficulty(blockNum, true, curBlockVersion, curBlockTimestamp) / (frozenSignatureCount * minDiffRatio);
+            var difficulty = getRequiredSignerDifficulty(blockNum, true, curBlockVersion, curBlockTimestamp);
+            if (difficulty == null)
+            {
+                throw new Exception("Failed to calculate minimum signer difficulty, difficulty is null.");
+            }
+            difficulty = difficulty / (frozenSignatureCount * minDiffRatio);
             if (difficulty < ConsensusConfig.minBlockSignerPowDifficulty)
             {
                 difficulty = ConsensusConfig.minBlockSignerPowDifficulty;
@@ -1082,12 +1165,12 @@ namespace IXICore
             return difficulty;
         }
 
-        private Block findLastDifficultyChangedSuperBlock(ulong blockNum, int blockVersion)
+        private Block? findLastDifficultyChangedSuperBlock(ulong blockNum, int blockVersion)
         {
             // Make sure that it's a superblock
             if (blockNum % ConsensusConfig.superblockInterval != 0)
             {
-                throw new Exception("Cannot find last difficulty changed super block, block number is not a superblock.");
+                throw new Exception("DAA: Cannot find last difficulty changed super block, block number is not a superblock.");
             }
 
             // Edge case for initial blocks
@@ -1096,11 +1179,27 @@ namespace IXICore
                 return blockStorage.getBlock(1);
             }
 
-            Block sb = blockStorage.getBlock(blockNum - ConsensusConfig.superblockInterval);
-            IxiNumber diff = getRequiredSignerDifficulty(sb.blockNum, false);
+            Block? sb = blockStorage.getBlock(blockNum - ConsensusConfig.superblockInterval);
+            if (sb == null)
+            {
+                Logging.warn("DAA: Cannot find last difficulty changed super block for block #{0} because the previous superblock is not available in storage.", blockNum);
+                return null;
+            }
+            IxiNumber? diff = getRequiredSignerDifficulty(sb.blockNum, false);
+            if (diff == null)
+            {
+                Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the difficulty of the previous superblock is not available.", blockNum);
+                return null;
+            }
             while (sb.lastSuperBlockNum != 0)
             {
-                if (diff != getRequiredSignerDifficulty(sb.lastSuperBlockNum, false))
+                var cmpDiff = getRequiredSignerDifficulty(sb.lastSuperBlockNum, false);
+                if (cmpDiff == null)
+                {
+                    Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the difficulty of the previous superblock is not available.", sb.lastSuperBlockNum);
+                    return null;
+                }
+                if (diff != cmpDiff)
                 {
                     Logging.trace("DAA: Found diff block #{0}", sb.blockNum);
                     return sb;
@@ -1114,16 +1213,36 @@ namespace IXICore
                     }
                 }
                 sb = blockStorage.getBlock(sb.lastSuperBlockNum);
+                if (sb == null)
+                {
+                    Logging.warn("DAA: Cannot find last difficulty changed super block for block #{0} because a previous superblock is not available in storage.", blockNum);
+                    return null;
+                }
             }
             return sb;
         }
 
-        private IxiNumber calculateRequiredSignerDifficulty(int blockVersion, long curBlockTimestamp)
+        private IxiNumber? calculateRequiredSignerDifficulty(int blockVersion, long curBlockTimestamp)
         {
             ulong blockNum = lastBlockHeader.blockNum + 1;
-            Block? previousRetargetBlock = findLastDifficultyChangedSuperBlock(blockNum, blockVersion);
+            ulong blockOffset = 7;
+            if (blockNum < blockOffset + 1) return ConsensusConfig.minBlockSignerPowDifficulty; // special case for first X blocks - since sigFreeze happens n-5 blocks
 
-            if (curBlockTimestamp - previousRetargetBlock.timestamp < ConsensusConfig.difficultyAdjustmentTimeInterval)
+            if (cachedRequiredSignerDifficulty.BlockNum == blockNum
+                && cachedRequiredSignerDifficulty.BlockVersion == blockVersion
+                && cachedRequiredSignerDifficulty.Difficulty != 0
+                && cachedRequiredSignerDifficulty.Timestamp <= curBlockTimestamp)
+            {
+                return cachedRequiredSignerDifficulty.Difficulty;
+            }
+
+            Block? lastDiffChangeSuperblock = findLastDifficultyChangedSuperBlock(blockNum, blockVersion);
+            if (lastDiffChangeSuperblock == null)
+            {
+                Logging.warn("DAA: Could not find previous retarget block.");
+                return null;
+            }
+            if (curBlockTimestamp - lastDiffChangeSuperblock.timestamp < ConsensusConfig.difficultyAdjustmentTimeInterval)
             {
                 Logging.info("DAA: Not enough time has passed to do the calculation, using same difficulty as on previous block.");
                 // Edge case for initial blocks
@@ -1137,16 +1256,44 @@ namespace IXICore
 
             IxiNumber totalDifficulty = 0;
             ulong blockCount = 0;
-            for (ulong i = previousRetargetBlock.blockNum; i < blockNum; i++)
-            {
-                var tsd = blockStorage.getBlockTotalSignerDifficulty(i);
-                if (tsd.totalSignerDifficulty == null)
-                {
-                    throw new Exception("Block not found during retarget total difficulty calculation. Block number: " + i);
-                }
+            ulong blocksToUseForDifficultyCalculation = blockNum - lastDiffChangeSuperblock.blockNum;
 
-                totalDifficulty += tsd.totalSignerDifficulty;
+            IxiNumber maxSingleBlockDifficulty = null;
+            if (lastDiffChangeSuperblock != null && lastDiffChangeSuperblock.signerBits > 0)
+            {
+                maxSingleBlockDifficulty = SignerPowSolution.bitsToDifficulty(lastDiffChangeSuperblock.signerBits) * 4;
+            }
+
+            for (ulong i = 0; i < blocksToUseForDifficultyCalculation; i++)
+            {
+                ulong consensusBlockNum = blockNum - i - blockOffset;
+                Logging.trace("DAA: Using block #{0} for DAA calculation", consensusBlockNum);
+                var btsd = blockStorage.getBlockTotalSignerDifficulty(consensusBlockNum);
+                var blockTotalSignerDifficulty = btsd.totalSignerDifficulty;
+                if (blockTotalSignerDifficulty == null)
+                {
+                    Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the total signer difficulty of a block used for calculation is not available.", consensusBlockNum);
+                    return null;
+                }
+                Logging.trace("DAA: Using block #{0} with diff {1} for DAA calculation", consensusBlockNum, blockTotalSignerDifficulty);
+
+                // Smooth-out difficulty spikes
+                if (maxSingleBlockDifficulty != null
+                    && blockTotalSignerDifficulty > maxSingleBlockDifficulty)
+                {
+                    blockTotalSignerDifficulty = maxSingleBlockDifficulty;
+                }
+                totalDifficulty += blockTotalSignerDifficulty;
                 blockCount++;
+            }
+
+            Logging.info("DAA: Used {0} blocks for DAA calculation, expected {1}", blockCount, blocksToUseForDifficultyCalculation);
+            if (lastDiffChangeSuperblock.blockNum != 1 && blockCount != blocksToUseForDifficultyCalculation)
+            {
+                if ((blockNum - blockOffset) != blockCount)
+                {
+                    throw new Exception(String.Format("An error occured while calculating required signer difficulty for block #{0}. Actual block samples different than expected: {1} != {2}", blockNum, blockCount, blocksToUseForDifficultyCalculation));
+                }
             }
 
             if (blockCount == 0)
@@ -1158,8 +1305,70 @@ namespace IXICore
             {
                 blockCount = (ulong)ConsensusConfig.difficultyAdjustmentExpectedBlockCount;
             }
+            var newDifficulty = totalDifficulty / blockCount;
+            cachedRequiredSignerDifficulty.Set(blockNum, blockVersion, newDifficulty, curBlockTimestamp);
+            return newDifficulty;
+        }
 
-            return totalDifficulty / blockCount;
+        private bool isBlockchainRecoveryMode(ulong blockNum, long blockTimestamp, int totalBlockSignatures)
+        {
+            Block prevBlock = IxianHandler.getBlockHeader(blockNum - 1);
+            if (prevBlock == null || prevBlock.timestamp + ConsensusConfig.blockChainRecoveryTimeout > blockTimestamp)
+            {
+                return false;
+            }
+
+            if (totalBlockSignatures < 3)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool handleBlockchainRecoveryMode(Block curBlock, int requiredSignatureCount, int totalBlockSignatures, IxiNumber totalSignerDifficulty, IxiNumber requiredSignerDifficulty)
+        {
+            if (!isBlockchainRecoveryMode(curBlock.blockNum, curBlock.timestamp, totalBlockSignatures))
+            {
+                return false;
+            }
+
+            int requiredConsensus = getMinRequiredSigCount(curBlock, false);
+            int requiredConsensusAdj = getMinRequiredSigCount(curBlock, true);
+
+            int missingRequiredSigs = ((requiredConsensus / 2) + 1) - requiredSignatureCount;
+            int missingSigs = requiredConsensusAdj - totalBlockSignatures;
+
+            // no missing sigs, no need for recovery mode
+            if (missingRequiredSigs <= 0 && missingSigs <= 0)
+            {
+                return false;
+            }
+
+            // missing sigs and no block for a period of time, run recovery checks
+
+            IxiNumber recoveryRequiredSignerDifficulty = 0;
+            if (missingRequiredSigs > 0)
+            {
+                recoveryRequiredSignerDifficulty = recoveryRequiredSignerDifficulty + (missingRequiredSigs * requiredSignerDifficulty * ConsensusConfig.blockChainRecoveryMissingRequiredSignerRatio / 100);
+                if (totalSignerDifficulty < recoveryRequiredSignerDifficulty)
+                {
+                    return false;
+                }
+            }
+
+            if (missingSigs > 0)
+            {
+                if (totalSignerDifficulty < recoveryRequiredSignerDifficulty + (missingSigs * IxianHandler.getMinSignerPowDifficulty(curBlock.blockNum, curBlock.version, curBlock.timestamp) * ConsensusConfig.blockChainRecoveryMissingSignerMultiplier))
+                {
+                    return false;
+                }
+            }
+
+            Logging.warn("Recovery mode activated for block #{0} {1}, missing required sigs:{2}, missing sigs: {3}, cur time: {4}, block time: {5}, total signer difficulty: {6}, requiredSignerDifficultyAdjusted: {7}.",
+                curBlock.blockNum, Crypto.hashToString(curBlock.calculateChecksum()), missingRequiredSigs, missingSigs, Clock.getNetworkTimestamp(), curBlock.timestamp, totalSignerDifficulty, requiredSignerDifficulty);
+
+            return true;
         }
         #endregion
     }

@@ -1645,7 +1645,7 @@ namespace IXICore
                     sortedSigs = new List<BlockSignature>(signatures);
                 }
             }
-            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1).version >= BlockVer.v10)
+            if (blockNum != 1 && (version > BlockVer.v10 || (version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1).version >= BlockVer.v10)))
             {
                 //sortedSigs = sortedSigs.OrderBy(x => x.powSolution.difficulty, Comparer<IxiNumber>.Default).ThenBy(x => x.recipientPubKeyOrAddress.addressNoChecksum, new ByteArrayComparer()).ToList();
             }
@@ -1950,7 +1950,7 @@ namespace IXICore
         public bool verifySignature(BlockSignature sig)
         {
             byte[] dataToVerify = blockChecksum;
-            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)
+            if (blockNum != 1 && (version > BlockVer.v10 || (version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)))
             {
                 if (sig.powSolution == null)
                 {
@@ -1974,7 +1974,7 @@ namespace IXICore
             }
 
             byte[]? publicKey = null;
-            if (blockNum != 1 && version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)
+            if (blockNum != 1 && (version > BlockVer.v10 || (version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)))
             {
                 publicKey = sig.powSolution.signingPubKey;
             }

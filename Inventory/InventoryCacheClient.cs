@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -13,8 +13,6 @@
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Utils;
-using System;
-using System.Linq;
 
 namespace IXICore.Inventory
 {

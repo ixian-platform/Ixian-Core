@@ -240,7 +240,7 @@ namespace IXICore.Miner
                 startedSolvingBlockHeight = lastBlockHeight;
             }
 
-            solvingDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight() + 1, IxianHandler.getLastBlockVersion(), 0);
+            solvingDifficulty = IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight(), IxianHandler.getLastBlockVersion(), 0);
 
             foreach (var solution in solutions)
             {

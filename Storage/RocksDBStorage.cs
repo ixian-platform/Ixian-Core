@@ -257,7 +257,7 @@ namespace IXICore
                         }
                     }
 
-                    Logging.info("RocksDB: Opened Database {0}: Blocks {1} - {2}, version {3}, block pruning state {4}", dbPath, minBlockNumber, maxBlockNumber, dbVersion, blockSigPruningState);
+                    Logging.info("RocksDB: Opened Database {0}: Blocks {1} - {2}, db version {3}, block pruning state {4}, pruned TXIDs {5}", dbPath, minBlockNumber, maxBlockNumber, dbVersion, blockSigPruningState, blockPrunedTxids);
                     Logging.trace("RocksDB: Stats: {0}", database.GetProperty("rocksdb.stats"));
                     lastUsedTime = DateTime.Now;
                 }
@@ -993,7 +993,7 @@ namespace IXICore
                     throw new Exception($"Database {dbPath} is not open.");
                 }
 
-                Logging.info("RocksDB: Pruning TXID blocks on database '{0}'.", dbPath);
+                Logging.info("RocksDB: Pruning TXIDs from blocks on database '{0}'.", dbPath);
                 lock (rockLock)
                 {
                     if (blockPrunedTxids)

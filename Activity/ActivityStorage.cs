@@ -60,7 +60,9 @@ namespace IXICore.Activity
         // Caches (shared with other rocksDb
         private Cache blockCache;
 
-        public RocksDBInternal(string dbPath, Cache blockCache)
+        private RocksDBOptimizations optimizationType;
+
+        public RocksDBInternal(string dbPath, Cache blockCache, RocksDBOptimizations optimizationType)
         {
             minBlockNumber = 0;
             maxBlockNumber = 0;
@@ -657,11 +659,15 @@ namespace IXICore.Activity
 
         private ulong maxBlocksPerDatabase = 0;
 
-        public ActivityStorage(string path, ulong maxDatabaseCache, ulong maxBlocksPerDatabase)
+        private RocksDBOptimizations optimizationType;
+
+        public ActivityStorage(string path, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, RocksDBOptimizations optimizationType)
         {
             this.pathBase = path;
             this.maxDatabaseCache = maxDatabaseCache;
             this.maxBlocksPerDatabase = maxBlocksPerDatabase;
+
+            this.optimizationType = optimizationType;
         }
 
         private RocksDBInternal? getDatabase(ulong blockNum, bool onlyExisting = false)
@@ -701,7 +707,7 @@ namespace IXICore.Activity
                     }
 
                     Logging.info("Activity: Opening a database for activity {0} - {1}.", baseBlockNum * maxBlocksPerDatabase, (baseBlockNum * maxBlocksPerDatabase) + maxBlocksPerDatabase - 1);
-                    db = new RocksDBInternal(db_path, commonBlockCache!);
+                    db = new RocksDBInternal(db_path, commonBlockCache!, optimizationType);
                     db.openDatabase();
                     openDatabases.Add(baseBlockNum, db);
 
@@ -743,7 +749,7 @@ namespace IXICore.Activity
                 foreach (string db in Directory.GetDirectories(pathBase))
                 {
                     Logging.info("Activity: Optimizing [{0}].", db);
-                    RocksDBInternal temp_db = new RocksDBInternal(db, commonBlockCache);
+                    RocksDBInternal temp_db = new RocksDBInternal(db, commonBlockCache, optimizationType);
                     try
                     {
                         temp_db.openDatabase();
@@ -760,7 +766,7 @@ namespace IXICore.Activity
 
             running = true;
 
-            Logging.info("Last storage block number is: #{0}", getHighestBlockInStorage());
+            Logging.info("Last activity block number is: #{0}", getHighestBlockInStorage());
             return true;
         }
 
@@ -971,8 +977,8 @@ namespace IXICore.Activity
             }
             lock (openDatabases)
             {
-                var db = getDatabase(oldest_db, true);
-                lowestBlockNum = db != null ? db.minBlockNumber : 0;
+                var db = getDatabase(oldest_db * maxBlocksPerDatabase, true);
+                lowestBlockNum = db!.minBlockNumber;
                 return lowestBlockNum;
             }
         }

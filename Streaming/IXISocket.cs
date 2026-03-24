@@ -139,7 +139,7 @@ namespace IXICore.Streaming
                     {
                         Logging.trace("Received presence response from sector node {0}", sectorNode.hostname);
 
-                        Presence p = PresenceList.updateFromBytes(message.data, 0);
+                        Presence p = PresenceList.updateFromBytes(message.data, IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight(), IxianHandler.getLastBlockVersion(), 0));
                         if (p == null)
                         {
                             p = PresenceList.getPresenceByAddress(_friend.walletAddress);
