@@ -1224,6 +1224,10 @@ namespace IXICore
 
         private IxiNumber? calculateRequiredSignerDifficulty(int blockVersion, long curBlockTimestamp)
         {
+            if (curBlockTimestamp == 0)
+            {
+                throw new Exception("Current block timestamp must be provided to calculate required signer difficulty.");
+            }
             ulong blockNum = lastBlockHeader.blockNum + 1;
             ulong blockOffset = 7;
             if (blockNum < blockOffset + 1) return ConsensusConfig.minBlockSignerPowDifficulty; // special case for first X blocks - since sigFreeze happens n-5 blocks

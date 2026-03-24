@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading;
 using IXICore;
 using System.Collections.Generic;
+using IXICore.Storage;
 
 namespace UnitTests
 {
@@ -16,7 +17,7 @@ namespace UnitTests
         [TestInitialize]
         public void Init()
         {
-            db = new ActivityStorage("test", 10UL << 20, 0);
+            db = new ActivityStorage("test", 10UL << 20, 0, RocksDBOptimizations.Servers);
             db.prepareStorage(false);
         }
 
