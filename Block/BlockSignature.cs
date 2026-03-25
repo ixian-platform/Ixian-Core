@@ -10,10 +10,10 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Meta;
 using IXICore.Utils;
-using System;
-using System.IO;
+using Newtonsoft.Json;
 
 namespace IXICore
 {
@@ -22,6 +22,7 @@ namespace IXICore
         public ulong blockNum;
         public byte[] blockHash;
         public byte[] signature;
+        [JsonConverter(typeof(AddressConverter))]
         public Address recipientPubKeyOrAddress;
         public SignerPowSolution powSolution;
 

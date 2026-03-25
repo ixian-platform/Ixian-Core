@@ -525,8 +525,9 @@ namespace IXICore
                     if (isSuperBlock
                         || blockVerificationMode != TIVBlockVerificationMode.PoCW)
                     {
+                        IxiNumber minPowDifficulty = IxianHandler.getMinSignerPowDifficulty(header.blockNum, header.version, header.timestamp);
                         if (header.signatures == null
-                            || !header.verifySignatures(null, false))
+                            || !header.verifySignatures(null, minPowDifficulty, false))
                         {
                             Logging.error("TIV: Invalid block header signature. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                             return false;

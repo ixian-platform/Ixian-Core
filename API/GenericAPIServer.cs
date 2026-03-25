@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian DLT - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -15,17 +15,10 @@ using IXICore.Meta;
 using IXICore.Network;
 using IXICore.RegNames;
 using IXICore.Streaming;
-using IXICore.Streaming.Models;
 using IXICore.Utils;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
 using static IXICore.Transaction;
 
 namespace IXICore
@@ -2704,8 +2697,7 @@ namespace IXICore
             blockData.Add("Timestamp", block.timestamp.ToString());
             blockData.Add("Difficulty", block.difficulty.ToString());
             blockData.Add("Hashrate", (MiningUtils.getTargetHashcountPerBlock(block.difficulty) / 60).ToString());
-            blockData.Add("Compacted Sigs", block.compactedSigs.ToString());
-            blockData.Add("Signature count", block.signatures.Count.ToString());
+            blockData.Add("Signature count", block.getFrozenSignatureCount().ToString());
             blockData.Add("Total Signer Difficulty", block.getTotalSignerDifficulty().ToString());
 
             blockData.Add("Transaction count", block.txCount.ToString());

@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using IXICore.Activity;
 using IXICore.Meta;
 using IXICore.Utils;
 using Newtonsoft.Json;
@@ -48,6 +49,7 @@ namespace IXICore
         [JsonIgnore]
         public IxianKeyPair keyPair; // keyPair is not trasmitted over the network
 
+        [JsonConverter(typeof(AddressConverter))]
         private Address recipientAddress = null; // solverAddress is not trasmitted over the network
         private byte[] _checksum = null;
         public byte[] checksum

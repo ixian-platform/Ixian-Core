@@ -183,10 +183,6 @@ namespace IXICore
         /// </summary>
         public bool compacting = false;
         public bool compacted = false;
-        /// <summary>
-        ///  Indicator to show if the block's signatures have been compacted through the superblock functionality.
-        /// </summary>
-        public bool compactedSigs = false;
 
         /// <summary>
         ///  Address of the block proposer/first signer.
@@ -324,7 +320,6 @@ namespace IXICore
 
             compacted = block.compacted;
             compacting = block.compacting;
-            compactedSigs = block.compactedSigs;
             signatureCount = block.signatureCount;
             totalSignerDifficulty = block.totalSignerDifficulty;
 
@@ -1708,7 +1703,7 @@ namespace IXICore
         ///  An example of this is when this node's public key is present in the Presence List.
         /// </remarks>
         /// <returns>Byte array with the node's signature and public key or address.</returns>
-        public BlockSignature applySignature(SignerPowSolution powSolution)
+        public BlockSignature applySignature(SignerPowSolution powSolution, IxiNumber minSignerPowDifficulty)
         {
             if (compacted)
             {
@@ -1747,9 +1742,9 @@ namespace IXICore
                     Logging.warn("Trying to apply signature on block #{0} but PoW Signing solution is too old {1} < {2}.", blockNum, powSolution.blockNum + ConsensusConfig.getPlPowBlocksValidity(version), blockNum);
                     return null;
                 }
-                if (powSolution.difficulty < IxianHandler.getMinSignerPowDifficulty(blockNum, version, timestamp))
+                if (powSolution.difficulty < minSignerPowDifficulty)
                 {
-                    Logging.warn("Trying to apply signature on block #{0} but difficulty of PoW Signing solution is too small {1} < {2}.", blockNum, powSolution.difficulty, IxianHandler.getMinSignerPowDifficulty(blockNum, version, timestamp));
+                    Logging.warn("Trying to apply signature on block #{0} but difficulty of PoW Signing solution is too small {1} < {2}.", blockNum, powSolution.difficulty, minSignerPowDifficulty);
                     return null;
                 }
                 newSig.powSolution = powSolution;
@@ -1882,7 +1877,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="other">The other block (should be the same `blockNum`) whose signatures will be merged.</param>
         /// <returns>The list of 'new' signatures.</returns>
-        public List<BlockSignature> addSignaturesFrom(Block other, bool verifySigs)
+        public List<BlockSignature> addSignaturesFrom(Block other, IxiNumber minSignerDifficulty, bool verifySigs)
         {
             if (compacted)
             {
@@ -1913,7 +1908,7 @@ namespace IXICore
 
                 if (verifySigs)
                 {
-                    if (!verifySignature(sig))
+                    if (!verifySignature(sig, minSignerDifficulty))
                     {
                         continue;
                     }
@@ -1947,7 +1942,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="sig">BlockSignature object.</param>
         /// <returns>True, if the signature validates this block.</returns>
-        public bool verifySignature(BlockSignature sig)
+        public bool verifySignature(BlockSignature sig, IxiNumber minSignerDifficulty)
         {
             byte[] dataToVerify = blockChecksum;
             if (blockNum != 1 && (version > BlockVer.v10 || (version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)))
@@ -1958,10 +1953,9 @@ namespace IXICore
                     return false;
                 }
 
-                IxiNumber minPowDifficulty = IxianHandler.getMinSignerPowDifficulty(blockNum, version, timestamp);
                 if (sig.powSolution.blockNum >= blockNum
                     || sig.powSolution.blockNum + ConsensusConfig.getPlPowBlocksValidity(version) < blockNum
-                    || !sig.powSolution.verifySolution(minPowDifficulty))
+                    || !sig.powSolution.verifySolution(minSignerDifficulty))
                 {
                     Logging.error("VerifySig: invalid solution");
                     return false;
@@ -1997,7 +1991,7 @@ namespace IXICore
         /// </summary>
         /// <param name="sig">BlockSignature object.</param>
         /// <returns>True, if the signature was successfully added. False is returned if the signature was already present, or was not valid.</returns>
-        public bool addSignature(BlockSignature sig)
+        public bool addSignature(BlockSignature sig, IxiNumber minSignerDifficulty)
         {
             if (compacted)
             {
@@ -2019,7 +2013,7 @@ namespace IXICore
                 }
             }
 
-            if (!verifySignature(sig))
+            if (!verifySignature(sig, minSignerDifficulty))
             {
                 return false;
             }
@@ -2127,7 +2121,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="skip_sig_verification">False for simpler, non-cryptographic verification.</param>
         /// <returns>True if all signatures are valid and (optionally) match the block's checksum.</returns>
-        public bool verifySignatures(Block? local_block, bool skip_sig_verification = false)
+        public bool verifySignatures(Block? local_block, IxiNumber minSignerDifficulty, bool skip_sig_verification = false)
         {
             if (compacted)
             {
@@ -2175,7 +2169,7 @@ namespace IXICore
                         return;
                     }
 
-                    if (verifySignature(sig))
+                    if (verifySignature(sig, minSignerDifficulty))
                     {
                         // Skip duplicates
                         if (!seenAddresses.TryAdd(signerAddress, i))
@@ -2428,50 +2422,6 @@ namespace IXICore
 
             regNameStateChecksum = new byte[checksum.Length];
             Array.Copy(checksum, regNameStateChecksum, regNameStateChecksum.Length);
-        }
-
-        /// <summary>
-        ///  ?
-        /// </summary>
-        /// <returns></returns>
-        public bool pruneSignatures()
-        {
-            return false; // disabled for now
-
-            if (version < BlockVer.v4)
-            {
-                return false;
-            }
-
-            if (compactedSigs)
-            {
-                return false;
-            }
-
-            compactedSigs = true;
-
-            // TODO TODO prune frozen sigs as well
-            // TODO TODO locking?
-
-            int compacted_cnt = 0;
-            List<BlockSignature> new_sigs = new List<BlockSignature>();
-            foreach (var entry in signatures)
-            {
-                if (entry.signature != null)
-                {
-                    compacted_cnt++;
-                    entry.signature = null;
-                }
-                new_sigs.Add(entry);
-            }
-
-            if (compacted_cnt > 0)
-            {
-                signatures = new_sigs;
-                return true;
-            }
-
-            return false;
         }
 
         /// <summary>

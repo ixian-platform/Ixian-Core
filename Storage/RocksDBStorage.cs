@@ -576,7 +576,14 @@ namespace IXICore
                         {
                             sigBytes = database.Get(StorageIndex.combineKeys(b.blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), rocksCFBlocks);
                         }
-                        b.setSignaturesFromBytes(sigBytes, false);
+                        if (sigBytes != null)
+                        {
+                            b.setSignaturesFromBytes(sigBytes, false);
+                        }
+                        else
+                        {
+                            b.compacted = true;
+                        }
                         b.fromLocalStorage = true;
                         return b;
                     }
@@ -933,8 +940,7 @@ namespace IXICore
                         throw new Exception($"Database {dbPath} already has pruning state {blockSigPruningState}, cannot apply pruning type {pruningType}.");
                     }
 
-                    var ro = new ReadOptions().SetPrefixSameAsStart(true);
-                    var iter = database.NewIterator(rocksCFBlocks, ro);
+                    var iter = database.NewIterator(rocksCFBlocks, null);
                     try
                     {
                         for (iter.SeekToFirst(); iter.Valid(); iter.Next())
@@ -1002,8 +1008,7 @@ namespace IXICore
                         return;
                     }
 
-                    var ro = new ReadOptions().SetPrefixSameAsStart(true);
-                    var iter = database.NewIterator(rocksCFBlocks, ro);
+                    var iter = database.NewIterator(rocksCFBlocks, null);
                     try
                     {
                         for (iter.SeekToFirst(); iter.Valid(); iter.Next())
@@ -1789,31 +1794,24 @@ namespace IXICore
             {
                 lock (openDatabases)
                 {
-                    ulong dbBlockNum = (pruneBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase) * CoreConfig.maxBlockHeadersPerDatabase;
-
-                    bool first = false;
+                    pruneBlocksBelow = (pruneBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase) * CoreConfig.maxBlockHeadersPerDatabase;
+                    ulong dbBlockNum = pruneBlocksBelow;
 
                     // Scan
-                    while (!first)
+                    while (dbBlockNum > 0)
                     {
+                        dbBlockNum -= CoreConfig.maxBlockHeadersPerDatabase;
                         var db = getDatabase(dbBlockNum, true);
                         if (db == null)
                         {
+                            dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
                             break;
                         }
 
                         if (db.blockSigPruningState >= pruningType)
                         {
+                            dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
                             break;
-                        }
-
-                        if (dbBlockNum > 0)
-                        {
-                            dbBlockNum -= CoreConfig.maxBlockHeadersPerDatabase;
-                        }
-                        else if (dbBlockNum == 0)
-                        {
-                            first = true;
                         }
                     }
 
@@ -1831,31 +1829,24 @@ namespace IXICore
             {
                 lock (openDatabases)
                 {
-                    ulong dbBlockNum = (pruneBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase) * CoreConfig.maxBlockHeadersPerDatabase;
-
-                    bool first = false;
+                    pruneBlocksBelow = (pruneBlocksBelow / CoreConfig.maxBlockHeadersPerDatabase) * CoreConfig.maxBlockHeadersPerDatabase;
+                    ulong dbBlockNum = pruneBlocksBelow;
 
                     // Scan
-                    while (!first)
+                    while (dbBlockNum > 0)
                     {
+                        dbBlockNum -= CoreConfig.maxBlockHeadersPerDatabase;
                         var db = getDatabase(dbBlockNum, true);
                         if (db == null)
                         {
+                            dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
                             break;
                         }
 
                         if (db.blockPrunedTxids)
                         {
+                            dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
                             break;
-                        }
-
-                        if (dbBlockNum > 0)
-                        {
-                            dbBlockNum -= CoreConfig.maxBlockHeadersPerDatabase;
-                        }
-                        else if (dbBlockNum == 0)
-                        {
-                            first = true;
                         }
                     }
 
