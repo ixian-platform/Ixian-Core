@@ -1151,14 +1151,21 @@ namespace IXICore
                     Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the block is not available in storage.", blockNum);
                     return null;
                 }
-                if (block.signerBits == 0)
+                if (block.version < BlockVer.v13)
                 {
-                    Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the signer bits of the block is 0.", blockNum);
                     difficulty = ConsensusConfig.minBlockSignerPowDifficulty;
                 }
                 else
                 {
-                    difficulty = SignerPowSolution.bitsToDifficulty(block.signerBits);
+                    if (block.signerBits == 0)
+                    {
+                        Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the signer bits of the block is 0.", blockNum);
+                        difficulty = ConsensusConfig.minBlockSignerPowDifficulty;
+                    }
+                    else
+                    {
+                        difficulty = SignerPowSolution.bitsToDifficulty(block.signerBits);
+                    }
                 }
             }
             if (adjustToRatio)
@@ -1249,6 +1256,10 @@ namespace IXICore
 
         private IxiNumber? calculateRequiredSignerDifficulty(int blockVersion, long curBlockTimestamp)
         {
+            if (blockVersion < BlockVer.v13)
+            {
+                return ConsensusConfig.minBlockSignerPowDifficulty;
+            }
             if (curBlockTimestamp == 0)
             {
                 throw new Exception("Current block timestamp must be provided to calculate required signer difficulty.");
