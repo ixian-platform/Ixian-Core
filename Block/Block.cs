@@ -95,7 +95,7 @@ namespace IXICore
         /// <summary>
         /// The list of Frozen Master Node signatures which enable the Ixian Consensus algorithm.
         /// </summary>
-        public List<BlockSignature> frozenSignatures { get; private set; } = null;
+        public List<BlockSignature>? frozenSignatures { get; private set; } = null;
 
         public int signatureCount = 0; // used only when block is compacted
         public IxiNumber totalSignerDifficulty = 0; // used only when block is compacted
@@ -199,6 +199,8 @@ namespace IXICore
         public IxiNumber totalFee = 0;
 
         public byte[] regNameStateChecksum = null;
+
+        // TODO v14 - add frozen txCount and total diff; add tx filters
 
 
         public Block()
@@ -347,6 +349,10 @@ namespace IXICore
             if (forceV10Structure || bytes[0] >= BlockVer.v10)
             {
                 fromBytesV10(bytes, null, null);
+                if (signatures.Count == 0)
+                {
+                    compacted = true;
+                }
             }
             else if (bytes[0] < BlockVer.v8)
             {
@@ -2447,7 +2453,7 @@ namespace IXICore
             superBlockSegments = null;
 
             txCount = (ulong)transactions.Count;
-            transactions = null;
+            transactions.Clear();
 
             compacted = true;
 
@@ -2488,7 +2494,7 @@ namespace IXICore
         /// </summary>
         public bool isGenesis { get { return this.blockNum == 0 && this.lastBlockChecksum == null; } }
 
-        public void setFrozenSignatures(List<BlockSignature> frozen_sigs)
+        public void setFrozenSignatures(List<BlockSignature>? frozen_sigs)
         {
             if (compacted)
             {
@@ -2538,7 +2544,7 @@ namespace IXICore
 
         public ulong getTransactionsCount()
         {
-            return (transactions != null && transactions.Count > 0) ? (ulong)transactions.Count : txCount;
+            return transactions.Count > 0 ? (ulong)transactions.Count : txCount;
         }
 
         public byte[] getSignaturesBytes(bool frozenSigsOnly, bool compacted, bool fullSignerDifficulty = true)

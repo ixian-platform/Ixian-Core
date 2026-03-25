@@ -579,6 +579,7 @@ namespace IXICore
                         if (sigBytes != null)
                         {
                             b.setSignaturesFromBytes(sigBytes, false);
+                            b.compacted = false;
                         }
                         else
                         {

@@ -250,7 +250,8 @@ namespace IXICore
                         // maybe something similar to PIT cache, or extend PIT cache to handle older blocks, too
                         continue;
                     }
-                    if (bh.version < BlockVer.v6)
+                    if (bh.version < BlockVer.v6
+                        || blockVerificationMode == TIVBlockVerificationMode.Transactions)
                     {
                         if (bh.transactions.Contains(tx.id, new ByteArrayComparer()))
                         {
@@ -506,14 +507,14 @@ namespace IXICore
 
             if (isSuperBlock || blockVerificationMode != TIVBlockVerificationMode.Minimal)
             {
-                if (header.signatures == null || header.signatures.Count == 0)
+                if (header.signatures.Count == 0)
                 {
                     Logging.error("TIV: Block header does not contain signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                     return false;
                 }
                 if (blockVerificationMode == TIVBlockVerificationMode.Transactions)
                 {
-                    if (header.transactions == null || header.transactions.Count == 0)
+                    if (header.transactions.Count == 0)
                     {
                         Logging.error("TIV: Block header does not contain transactions, but transaction verification mode is enabled. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                         return false;
@@ -526,7 +527,7 @@ namespace IXICore
                         || blockVerificationMode != TIVBlockVerificationMode.PoCW)
                     {
                         IxiNumber minPowDifficulty = IxianHandler.getMinSignerPowDifficulty(header.blockNum, header.version, header.timestamp);
-                        if (header.signatures == null
+                        if (header.signatures.Count == 0
                             || !header.verifySignatures(null, minPowDifficulty, false))
                         {
                             Logging.error("TIV: Invalid block header signature. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
