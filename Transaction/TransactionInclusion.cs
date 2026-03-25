@@ -437,7 +437,13 @@ namespace IXICore
             if (block == null)
             {
                 Logging.warn("TIV: Cannot verify overlapping signatures for block {0} - {1} because the block from which to check the overlapping signatures is not available in storage.", header.blockNum, Crypto.hashToString(header.blockChecksum));
-                return 1;
+                return header.getFrozenSignatureCount();
+            }
+            // Minimal verification mode or when upgrading from minimal
+            if (blockVerificationMode == TIVBlockVerificationMode.Minimal
+                || block.signatures.Count == 0)
+            {
+                return header.getFrozenSignatureCount();
             }
             foreach (var sig in header.signatures)
             {
@@ -498,6 +504,12 @@ namespace IXICore
             Block? lastSuperBlock = null;
             if (isSuperBlock)
             {
+                var expectedDifficulty = getRequiredSignerDifficulty(header.blockNum, false, header.version, header.timestamp);
+                if (expectedDifficulty == null)
+                {
+                    Logging.warn("TIV: Failed to calculate expected signer difficulty for block header. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                    return true;
+                }
                 lastSuperBlock = blockStorage.getBlock(header.blockNum - ConsensusConfig.superblockInterval);
             }
             else
@@ -512,27 +524,16 @@ namespace IXICore
                     Logging.error("TIV: Block header does not contain signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                     return false;
                 }
-                if (blockVerificationMode == TIVBlockVerificationMode.Transactions)
-                {
-                    if (header.transactions.Count == 0)
-                    {
-                        Logging.error("TIV: Block header does not contain transactions, but transaction verification mode is enabled. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
-                        return false;
-                    }
-                }
                 if (header.blockNum > 1)
                 {
                     populateBlockSignatures(header);
-                    if (isSuperBlock
-                        || blockVerificationMode != TIVBlockVerificationMode.PoCW)
+                    IxiNumber minPowDifficulty = IxianHandler.getMinSignerPowDifficulty(header.blockNum, header.version, header.timestamp);
+                    bool skipSigVerification = !isSuperBlock && blockVerificationMode == TIVBlockVerificationMode.PoCW;
+                    if (header.signatures.Count == 0
+                        || !header.verifySignatures(null, minPowDifficulty, false, skipSigVerification))
                     {
-                        IxiNumber minPowDifficulty = IxianHandler.getMinSignerPowDifficulty(header.blockNum, header.version, header.timestamp);
-                        if (header.signatures.Count == 0
-                            || !header.verifySignatures(null, minPowDifficulty, false))
-                        {
-                            Logging.error("TIV: Invalid block header signature. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
-                            return false;
-                        }
+                        Logging.error("TIV: Invalid block header signature. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                        return false;
                     }
                 }
             }
@@ -596,7 +597,18 @@ namespace IXICore
                 return false;
             }
 
-            if (!verifySigfreezeChecksum(header))
+            if (header.blockNum > 10
+                && blockVerificationMode == TIVBlockVerificationMode.Transactions)
+            {
+                if (header.transactions.Count == 0)
+                {
+                    Logging.error("TIV: Block header does not contain transactions, but transaction verification mode is enabled. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
+                    return false;
+                }
+            }
+
+            if (blockVerificationMode != TIVBlockVerificationMode.Minimal
+                && !verifySigfreezeChecksum(header))
             {
                 Logging.warn("TIV: Invalid block header sigfreeze checksum. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 requestBlockHeaders(header.blockNum - ConsensusConfig.sigfreezeOffset, 1, null);
@@ -708,6 +720,8 @@ namespace IXICore
 
             if (verifyBlockSignatures(header))
             {
+                // TODO 'header.overrideCompactedCheck = true;' can be removed after Block.getBytes() compacted safety is removed
+                header.overrideCompactedCheck = true;
                 localBlock.setFrozenSignatures(header.signatures);
                 blockStorage.insertBlock(localBlock);
 
@@ -773,11 +787,14 @@ namespace IXICore
                 return false;
             }
 
-            if (header.version >= BlockVer.v13)
+            if (!header.compacted
+                && header.version >= BlockVer.v13)
             {
                 header.setFrozenSignatures(header.signatures.OrderBy(x => x.powSolution.difficulty, Comparer<IxiNumber>.Default).ThenBy(x => x.recipientPubKeyOrAddress.addressNoChecksum, new ByteArrayComparer()).ToList());
             }
 
+            // TODO 'header.overrideCompactedCheck = true;' can be removed after Block.getBytes() compacted safety is removed
+            header.overrideCompactedCheck = true;
             if (blockStorage.insertBlock(header))
             {
                 lastBlockHeader = header;
@@ -899,9 +916,14 @@ namespace IXICore
                             {
                                 if (lastBlockHeader.lastBlockChecksum == null)
                                 {
+                                    // First block 
                                     if (header.blockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
                                     {
-                                        populateBlockSignatures(header);
+                                        // Correct first block, replace with full data
+                                        if (header.blockNum > 1)
+                                        {
+                                            populateBlockSignatures(header);
+                                        }
                                         if (!blockStorage.insertBlock(header))
                                         {
                                             break;
@@ -1157,7 +1179,8 @@ namespace IXICore
             var difficulty = getRequiredSignerDifficulty(blockNum, true, curBlockVersion, curBlockTimestamp);
             if (difficulty == null)
             {
-                throw new Exception("Failed to calculate minimum signer difficulty, difficulty is null.");
+                Logging.warn("Failed to calculate minimum signer difficulty, difficulty is null.");
+                difficulty = ConsensusConfig.minBlockSignerPowDifficulty;
             }
             difficulty = difficulty / (frozenSignatureCount * minDiffRatio);
             if (difficulty < ConsensusConfig.minBlockSignerPowDifficulty)

@@ -200,6 +200,8 @@ namespace IXICore
 
         public byte[] regNameStateChecksum = null;
 
+        public bool overrideCompactedCheck = false;
+
         // TODO v14 - add frozen txCount and total diff; add tx filters
 
 
@@ -269,7 +271,7 @@ namespace IXICore
                     {
                         frozen_signatures.Add(new BlockSignature(signature));
                     }
-                    setFrozenSignatures(frozen_signatures);
+                    frozenSignatures = frozen_signatures;
                 }
             }
 
@@ -901,7 +903,8 @@ namespace IXICore
         /// <returns>Byte buffer with the serialized block.</returns>
         public byte[] getBytes(bool include_sb_segments = true, bool frozen_sigs_only = true, bool force_v10_structure = false, bool for_checksum = false, bool compacted_signatures = false, bool include_transactions = true, bool full_signer_difficulty = true)
         {
-            if (compacted)
+            if (!overrideCompactedCheck
+                && compacted)
             {
                 throw new Exception($"Trying to use getBytes() from a compacted Block {blockNum}");
             }
@@ -1483,8 +1486,7 @@ namespace IXICore
         {
             if (compacted)
             {
-                Logging.error("Trying to add transaction on a compacted block {0}", blockNum);
-                return false;
+                throw new Exception($"Trying to add transaction {Transaction.getTxIdString(txid)} to a compacted Block {blockNum}");
             }
             // TODO: this assumes the transaction is properly validated as it's already in the Transaction Pool
             // Could add an additional layer of checks here, just as in the TransactionPool - to avoid tampering
@@ -1516,8 +1518,7 @@ namespace IXICore
         {
             if (compacted)
             {
-                Logging.error("Trying to calculate checksum on a compacted block {0}", blockNum);
-                return null;
+                throw new Exception($"Trying to calculate checksum on a compacted Block {blockNum}");
             }
             if (version >= BlockVer.v10)
             {
@@ -1629,8 +1630,7 @@ namespace IXICore
         {
             if (compacted)
             {
-                Logging.error("Trying to calculate signature checksum on a compacted block {0}", blockNum);
-                return null;
+                throw new Exception($"Trying to calculate signature checksum on a compacted Block {blockNum}");
             }
 
             // Sort the signature first
@@ -1709,7 +1709,7 @@ namespace IXICore
         ///  An example of this is when this node's public key is present in the Presence List.
         /// </remarks>
         /// <returns>Byte array with the node's signature and public key or address.</returns>
-        public BlockSignature applySignature(SignerPowSolution powSolution, IxiNumber minSignerPowDifficulty)
+        public BlockSignature? applySignature(SignerPowSolution powSolution, IxiNumber minSignerPowDifficulty)
         {
             if (compacted)
             {
@@ -1812,7 +1812,7 @@ namespace IXICore
             }
         }
 
-        public BlockSignature getSignature(Address p_address)
+        public BlockSignature? getSignature(Address p_address)
         {
             if (compacted)
             {
@@ -1887,8 +1887,7 @@ namespace IXICore
         {
             if (compacted)
             {
-                Logging.error("Trying to add signature from block on a compacted block {0}", blockNum);
-                return null;
+                throw new Exception($"Trying to add signatures from block {other.blockNum} to a compacted block {blockNum}");
             }
             // Note: we don't need any further validation, since this block has already passed through BlockProcessor.verifyBlock() at this point.
             int count = 0;
@@ -1948,7 +1947,7 @@ namespace IXICore
         /// </remarks>
         /// <param name="sig">BlockSignature object.</param>
         /// <returns>True, if the signature validates this block.</returns>
-        public bool verifySignature(BlockSignature sig, IxiNumber minSignerDifficulty)
+        public bool verifySignature(BlockSignature sig, IxiNumber minSignerDifficulty, bool skipSigVerification = false)
         {
             byte[] dataToVerify = blockChecksum;
             if (blockNum != 1 && (version > BlockVer.v10 || (version >= BlockVer.v10 && IxianHandler.getBlockHeader(blockNum - 1)?.version >= BlockVer.v10)))
@@ -1983,11 +1982,14 @@ namespace IXICore
                 publicKey = getSignerPubKey(sig.recipientPubKeyOrAddress);
             }
 
-            if (publicKey == null
-                || !CryptoManager.lib.verifySignature(dataToVerify, publicKey, sig.signature))
+            if (!skipSigVerification)
             {
-                Logging.error("VerifySig: invalid sig");
-                return false;
+                if (publicKey == null
+                    || !CryptoManager.lib.verifySignature(dataToVerify, publicKey, sig.signature))
+                {
+                    Logging.error("VerifySig: invalid sig");
+                    return false;
+                }
             }
             return true;
         }
@@ -2001,8 +2003,7 @@ namespace IXICore
         {
             if (compacted)
             {
-                Logging.error("Trying to add signature on a compacted block {0}", blockNum);
-                return false;
+                throw new Exception($"Trying to add signature from {sig.recipientPubKeyOrAddress.ToString()} to a compacted block {blockNum}");
             }
             var signer_address = sig.recipientPubKeyOrAddress;
             var local_sig = getSignature(signer_address);
@@ -2125,9 +2126,12 @@ namespace IXICore
         ///  only checks that public keys for all signatures exist and that all signers are known, without cryptographically verifying that each signature
         ///  matches the block.
         /// </remarks>
-        /// <param name="skip_sig_verification">False for simpler, non-cryptographic verification.</param>
+        /// <param name="localBlock">The local block to compare signatures with. If provided, signatures that are already present on the local block will be skipped from verification, but still included in the final signature list.</param>
+        /// <param name="minSignerDifficulty">Minimum difficulty for PoW signatures to be accepted.</param>
+        /// <param name="skipPoCWAndSigVerification">If true, the function will skip both PoW and signature verification and only check that signatures are present.</param>
+        /// <param name="skipSigVerification">If true, the function will skip signature verification but still verify PoW solutions if present.</param>
         /// <returns>True if all signatures are valid and (optionally) match the block's checksum.</returns>
-        public bool verifySignatures(Block? local_block, IxiNumber minSignerDifficulty, bool skip_sig_verification = false)
+        public bool verifySignatures(Block? localBlock, IxiNumber minSignerDifficulty, bool skipPoCWAndSigVerification = false, bool skipSigVerification = false)
         {
             if (compacted)
             {
@@ -2135,7 +2139,7 @@ namespace IXICore
                 return false;
             }
 
-            if (skip_sig_verification)
+            if (skipPoCWAndSigVerification)
             {
                 return true;
             }
@@ -2163,7 +2167,7 @@ namespace IXICore
                     var signerAddress = sig.recipientPubKeyOrAddress.addressNoChecksum;
 
                     // Skip verification if local block already has it
-                    if (local_block != null && local_block.containsSignature(sig))
+                    if (localBlock != null && localBlock.containsSignature(sig))
                     {
                         // Skip duplicates
                         if (!seenAddresses.TryAdd(signerAddress, i))
@@ -2175,7 +2179,7 @@ namespace IXICore
                         return;
                     }
 
-                    if (verifySignature(sig, minSignerDifficulty))
+                    if (verifySignature(sig, minSignerDifficulty, skipSigVerification))
                     {
                         // Skip duplicates
                         if (!seenAddresses.TryAdd(signerAddress, i))
@@ -2238,7 +2242,7 @@ namespace IXICore
         /// </summary>
         /// <param name="address">The address to check.</param>
         /// <returns>signature, if the address has already signed the block.</returns>
-        public BlockSignature getNodeSignature(Address address)
+        public BlockSignature? getNodeSignature(Address address)
         {
             if (compacted)
             {
@@ -2283,7 +2287,7 @@ namespace IXICore
         /// </summary>
         /// <param name="solution">The solution to check.</param>
         /// <returns>signature, if the solution has already signed the block.</returns>
-        public BlockSignature getNodeSignature(byte[] solution)
+        public BlockSignature? getNodeSignature(byte[] solution)
         {
             if (compacted)
             {
@@ -2333,8 +2337,7 @@ namespace IXICore
         {
             if (compacted)
             {
-                Logging.error("Trying to get signer wallet addresses from a compacted block {0}", blockNum);
-                return null;
+                throw new Exception($"Trying to get signatures wallet addresses on a compacted block {blockNum}");
             }
 
             List<(Address address, IxiNumber difficulty)> result = new List<(Address, IxiNumber)>();
@@ -2496,10 +2499,10 @@ namespace IXICore
 
         public void setFrozenSignatures(List<BlockSignature>? frozen_sigs)
         {
-            if (compacted)
+            if (!overrideCompactedCheck
+                && compacted)
             {
-                Logging.error("Trying to set frozen signatures on a compacted block {0}", blockNum);
-                return;
+                throw new Exception($"Trying to set frozen signatures on a compacted block {blockNum}");
             }
 
             lock (signatures)
