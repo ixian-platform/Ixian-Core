@@ -1140,7 +1140,12 @@ namespace IXICore
             }
             if (difficulty == null)
             {
-                var block = blockStorage.getBlock((blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval);
+                ulong superBlockNum = (blockNum / ConsensusConfig.superblockInterval) * ConsensusConfig.superblockInterval;
+                if (superBlockNum == 0)
+                {
+                    superBlockNum = 1;
+                }
+                var block = blockStorage.getBlock(superBlockNum);
                 if (block == null)
                 {
                     Logging.warn("DAA: Cannot calculate required signer difficulty for block #{0} because the block is not available in storage.", blockNum);

@@ -974,9 +974,20 @@ namespace IXICore
                                     {
                                         var keySigners = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS);
                                         database.Remove(keySigners, rocksCFBlocks);
-                                        if (new Block(iter.Value(), true).version >= BlockVer.v10)
+                                        var keyCompact = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT);
+                                        var b = new Block(iter.Value(), true);
+                                        if (b.version == BlockVer.v9)
                                         {
-                                            var keyCompact = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT);
+                                            var sigs = database.Get(keyCompact, rocksCFBlocks);
+                                            if (sigs != null)
+                                            {
+                                                b.setSignaturesFromBytes(sigs, true);
+                                                b.signatures = b.signatures.Take(1).ToList();
+                                                database.Put(keyCompact, b.getSignaturesBytes(true, false));
+                                            }
+                                        }
+                                        else
+                                        {
                                             database.Remove(keyCompact, rocksCFBlocks);
                                         }
                                     }
