@@ -597,7 +597,7 @@ namespace IXICore
                 return false;
             }
 
-            if (header.blockNum > 10
+            if (header.blockNum > ConsensusConfig.rewardMaturity + 1
                 && blockVerificationMode == TIVBlockVerificationMode.Transactions)
             {
                 if (header.transactions.Count == 0)
@@ -738,15 +738,9 @@ namespace IXICore
                 && !header.lastBlockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
             {
                 // revert the block
+                // TODO check with multiple nodes before reorg
 
                 Logging.warn("TIV: Invalid last block checksum, preparing for possible reorg.");
-
-                // !! needs testing
-                if (!verifyBlockHeader(header, null))
-                {
-                    Logging.error("TIV: Invalid block header received, and it failed verification. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
-                    return false;
-                }
 
                 if (lastBlockHeader.blockNum > 100
                     && minBlockHeightReorg < lastBlockHeader.blockNum - 100)
@@ -760,17 +754,18 @@ namespace IXICore
                     return false;
                 }
 
-                Block? prev_header = blockStorage.getBlock(lastBlockHeader.blockNum - 1);
+                Block? prevHeader = blockStorage.getBlock(lastBlockHeader.blockNum - 1);
 
-                if (prev_header == null)
+                if (prevHeader == null)
                 {
+                    Logging.error("TIV: Cannot reorg due to missing Block {0}", lastBlockHeader.blockNum - 1);
                     return false;
                 }
 
                 pitCache.Remove(lastBlockHeader.blockNum);
                 blockStorage.removeBlock(lastBlockHeader.blockNum);
                 Block reorgedBlockHeader = lastBlockHeader;
-                lastBlockHeader = prev_header;
+                lastBlockHeader = prevHeader;
                 cachedRequiredSignerDifficulty.Set(0, 0, 0, 0);
 
                 ConsensusConfig.redactedWindowSize = ConsensusConfig.getRedactedWindowSize(lastBlockHeader.version);
