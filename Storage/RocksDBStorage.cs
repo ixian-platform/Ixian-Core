@@ -950,16 +950,16 @@ namespace IXICore
                             if (!k.AsSpan().EndsWith(BLOCKS_KEY_HEADER))
                                 continue;
 
+                            var blockChecksum = k.AsSpan(0, k.Length - BLOCKS_KEY_HEADER.Length);
+
                             if (!pruneSuperblocks)
                             {
-                                Block b = new Block(iter.Value(), true);
+                                Block b = new Block(blockChecksum.ToArray(), iter.Value(), null);
                                 if (b.lastSuperBlockNum != 0)
                                 {
                                     continue;
                                 }
                             }
-
-                            var blockChecksum = k.AsSpan(0, k.Length - BLOCKS_KEY_HEADER.Length);
 
                             switch (pruningType)
                             {
@@ -975,7 +975,7 @@ namespace IXICore
                                         var keySigners = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS);
                                         database.Remove(keySigners, rocksCFBlocks);
                                         var keyCompact = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT);
-                                        var b = new Block(iter.Value(), true);
+                                        var b = new Block(blockChecksum.ToArray(), iter.Value(), null);
                                         if (b.version == BlockVer.v9)
                                         {
                                             var sigs = database.Get(keyCompact, rocksCFBlocks);
@@ -1029,10 +1029,17 @@ namespace IXICore
                         for (iter.SeekToFirst(); iter.Valid(); iter.Next())
                         {
                             var k = iter.Key();
-                            if (!k.AsSpan().EndsWith(BLOCKS_KEY_TXS))
+                            if (!k.AsSpan().EndsWith(BLOCKS_KEY_HEADER))
                                 continue;
 
-                            database.Remove(k, rocksCFBlocks);
+                            var blockChecksum = k.AsSpan(0, k.Length - BLOCKS_KEY_HEADER.Length);
+
+                            var keyTxs = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_TXS);
+                            var b = new Block(blockChecksum.ToArray(), iter.Value(), null);
+                            if (b.version >= BlockVer.v6)
+                            {
+                                database.Remove(keyTxs, rocksCFBlocks);
+                            }
                         }
                     }
                     finally

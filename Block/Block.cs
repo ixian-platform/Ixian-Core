@@ -44,7 +44,7 @@ namespace IXICore
     public class SuperBlockSegment
     {
         public ulong blockNum = 0;
-        public byte[] blockChecksum = null;
+        public byte[] blockChecksum;
 
         public SuperBlockSegment(ulong block_num, byte[] block_checksum)
         {
@@ -366,7 +366,7 @@ namespace IXICore
             }
         }
 
-        public Block(byte[] checksum, byte[] bytes, byte[] txIDsBytes)
+        public Block(byte[] checksum, byte[] bytes, byte[]? txIDsBytes)
         {
             initPITTree();
             fromBytesV10(bytes, checksum, txIDsBytes);
@@ -654,7 +654,7 @@ namespace IXICore
             }
         }
 
-        private void fromBytesV10(byte[] bytes, byte[] checksum, byte[] txIDBytes)
+        private void fromBytesV10(byte[] bytes, byte[]? checksum, byte[]? txIDBytes)
         {
             try
             {
