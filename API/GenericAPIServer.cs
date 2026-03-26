@@ -2697,6 +2697,7 @@ namespace IXICore
             blockData.Add("Timestamp", block.timestamp.ToString());
             blockData.Add("Difficulty", block.difficulty.ToString());
             blockData.Add("Hashrate", (MiningUtils.getTargetHashcountPerBlock(block.difficulty) / 60).ToString());
+            blockData.Add("Compacted", block.compacted.ToString());
             blockData.Add("Signature count", block.getFrozenSignatureCount().ToString());
             blockData.Add("Total Signer Difficulty", block.getTotalSignerDifficulty().ToString());
 
@@ -2708,7 +2709,10 @@ namespace IXICore
                 blockData.Add("Frozen Signatures", JsonConvert.SerializeObject(block.frozenSignatures));
                 blockData.Add("Frozen Signature count", block.frozenSignatures.Count.ToString());
             }
-            blockData.Add("Sig Checksum", Crypto.hashToString(block.calculateSignatureChecksum()));
+            if (!block.compacted)
+            {
+                blockData.Add("Sig Checksum", Crypto.hashToString(block.calculateSignatureChecksum()));
+            }
             blockData.Add("Signer Bits", Crypto.hashToString(BitConverter.GetBytes(block.signerBits)));
 
             List<string> txids = new List<string>();
