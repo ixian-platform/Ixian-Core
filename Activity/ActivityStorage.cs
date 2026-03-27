@@ -70,58 +70,54 @@ namespace IXICore.Activity
 
             this.dbPath = dbPath;
             this.blockCache = blockCache;
+            this.optimizationType = optimizationType;
         }
 
-        public void openDatabase()
+
+        public (DbOptions dbOptions, ColumnFamilies columnFamilies) getDefaultOptions()
         {
-            if (database != null)
-            {
-                throw new Exception(String.Format("Rocks Database '{0}' is already open.", dbPath));
-            }
-            lock (rockLock)
-            {
-                var rocksOptions = new DbOptions()
-                    .SetCreateIfMissing(true)
-                    .SetCreateMissingColumnFamilies(true)
-                    .SetKeepLogFileNum(2)
-                    .SetMaxLogFileSize(1 * 1024 * 1024)
-                    .SetRecycleLogFileNum(10)
-                    .IncreaseParallelism(Environment.ProcessorCount)
-                    .SetMaxBackgroundCompactions(Environment.ProcessorCount)
-                    .SetMaxBackgroundFlushes(Math.Max(1, Math.Min(4, Environment.ProcessorCount / 2)))
-                    .SetAllowMmapReads(false)
-                    .SetAllowMmapWrites(false)
-                    .SetTargetFileSizeBase(256 * 1024 * 1024)
-                    .SetTargetFileSizeMultiplier(2)
-                    .SetCompression(Compression.Zstd)
-                    .SetLevelCompactionDynamicLevelBytes(true)
-                    .SetCompactionReadaheadSize(4 * 1024 * 1024);
+            var rocksOptions = new DbOptions()
+                .SetCreateIfMissing(true)
+                .SetCreateMissingColumnFamilies(true)
+                .SetKeepLogFileNum(2)
+                .SetMaxLogFileSize(1 * 1024 * 1024)
+                .SetRecycleLogFileNum(10)
+                .IncreaseParallelism(Environment.ProcessorCount)
+                .SetMaxBackgroundCompactions(Environment.ProcessorCount)
+                .SetMaxBackgroundFlushes(Math.Max(1, Math.Min(4, Environment.ProcessorCount / 2)))
+                .SetAllowMmapReads(false)
+                .SetAllowMmapWrites(false)
+                .SetTargetFileSizeBase(256 * 1024 * 1024)
+                .SetTargetFileSizeMultiplier(2)
+                .SetCompression(Compression.Zstd)
+                .SetLevelCompactionDynamicLevelBytes(true)
+                .SetCompactionReadaheadSize(4 * 1024 * 1024);
 
-                // activity
-                var activityBbto = new BlockBasedTableOptions();
-                activityBbto.SetBlockCache(blockCache.Handle);
-                activityBbto.SetBlockSize(32 * 1024);
-                activityBbto.SetCacheIndexAndFilterBlocks(true);
-                activityBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                activityBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
-                activityBbto.SetWholeKeyFiltering(true);
-                activityBbto.SetFormatVersion(6);
+            // activity
+            var activityBbto = new BlockBasedTableOptions();
+            activityBbto.SetBlockCache(blockCache.Handle);
+            activityBbto.SetBlockSize(32 * 1024);
+            activityBbto.SetCacheIndexAndFilterBlocks(true);
+            activityBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+            activityBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
+            activityBbto.SetWholeKeyFiltering(true);
+            activityBbto.SetFormatVersion(6);
 
-                // meta
-                var metaBbto = new BlockBasedTableOptions();
-                metaBbto.SetBlockCache(blockCache.Handle);
-                metaBbto.SetBlockSize(4 * 1024);
-                metaBbto.SetCacheIndexAndFilterBlocks(true);
-                metaBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
-                metaBbto.SetWholeKeyFiltering(true);
-                metaBbto.SetFormatVersion(6);
+            // meta
+            var metaBbto = new BlockBasedTableOptions();
+            metaBbto.SetBlockCache(blockCache.Handle);
+            metaBbto.SetBlockSize(4 * 1024);
+            metaBbto.SetCacheIndexAndFilterBlocks(true);
+            metaBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+            metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
+            metaBbto.SetWholeKeyFiltering(true);
+            metaBbto.SetFormatVersion(6);
 
-                var columnFamilies = new ColumnFamilies
+            var columnFamilies = new ColumnFamilies
                 {
                     { "activity", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
-                        .SetWriteBufferSize(16UL << 20)
+                        .SetWriteBufferSize(8UL << 20)
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
                         .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
@@ -140,28 +136,73 @@ namespace IXICore.Activity
                     },
                     { "index_block_height_activity_id", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
-                        .SetWriteBufferSize(16UL << 20)
+                        .SetWriteBufferSize(1UL << 20)
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
                         .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(8))
                     },
                     { "index_activity_id", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
-                        .SetWriteBufferSize(16UL << 20)
+                        .SetWriteBufferSize(1UL << 20)
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
                         .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
                     },
                     { "index_status_activity_id", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(activityBbto)
-                        .SetWriteBufferSize(16UL << 20)
+                        .SetWriteBufferSize(1UL << 20)
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
                         .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(2))
                     }
                 };
 
-                database = RocksDb.Open(rocksOptions, dbPath, columnFamilies);
+            return (rocksOptions, columnFamilies);
+        }
+
+        private (DbOptions dbOptions, ColumnFamilies columnFamilies) getMobilesOptions()
+        {
+            var opts = getDefaultOptions();
+
+            var dbOptions = opts.dbOptions;
+            dbOptions.SetCompression(Compression.Lz4)
+                     .SetWriteBufferSize(4UL << 20)
+                     .SetMaxWriteBufferNumber(2)
+                     .SetTargetFileSizeBase(32UL << 20)
+                     .SetMaxBackgroundCompactions(1)
+                     .SetMaxBackgroundFlushes(1)
+                     .IncreaseParallelism(1)
+                     .SetBytesPerSync(1UL << 20)
+                     .SetCompactionReadaheadSize(2UL << 20)
+                     .SetMaxOpenFiles(60);
+
+            var columnFamilies = opts.columnFamilies;
+
+            var activityCfOpts = columnFamilies.ToList().Find(x => x.Name == "activity");
+            activityCfOpts.Options.SetWriteBufferSize(2UL << 20)
+                                  .SetMaxWriteBufferNumber(2);
+
+            var rawTxCfOpts = columnFamilies.ToList().Find(x => x.Name == "raw_tx");
+            rawTxCfOpts.Options.SetWriteBufferSize(4UL << 20)
+                               .SetMaxWriteBufferNumber(2);
+
+            return (dbOptions, columnFamilies);
+        }
+
+        public void openDatabase()
+        {
+            if (database != null)
+            {
+                throw new Exception(String.Format("Rocks Database '{0}' is already open.", dbPath));
+            }
+            lock (rockLock)
+            {
+                var options = getDefaultOptions();
+                if (optimizationType == RocksDBOptimizations.Mobiles)
+                {
+                    options = getMobilesOptions();
+                }
+                database = RocksDb.Open(options.dbOptions, dbPath, options.columnFamilies);
 
                 // initialize column family handles
                 activityCF = database.GetColumnFamily("activity");
@@ -633,6 +674,20 @@ namespace IXICore.Activity
                 return activities;
             }
         }
+
+        public void flush()
+        {
+            if (database == null)
+            {
+                throw new Exception($"Database {dbPath} is not open.");
+            }
+
+            Logging.info("RocksDB: Pruning TXIDs from blocks on database '{0}'.", dbPath);
+            lock (rockLock)
+            {
+                database.Flush(new FlushOptions().SetWaitForFlush(true));
+            }
+        }
     }
 
     public class ActivityStorage : IActivityStorage
@@ -1069,6 +1124,20 @@ namespace IXICore.Activity
             {
                 var db = getDatabase(0);
                 return db!.getActivitiesByStatus(status, includeTransaction);
+            }
+        }
+
+        public void sleep()
+        {
+            lock (openDatabases)
+            {
+                var toClose = openDatabases.Keys.ToList();
+                foreach (var key in toClose)
+                {
+                    var db = openDatabases[key];
+                    Logging.info("RocksDB: Closing '{0}'", db.dbPath);
+                    db.closeDatabase();
+                }
             }
         }
     }

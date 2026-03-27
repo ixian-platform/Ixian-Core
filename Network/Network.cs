@@ -146,7 +146,6 @@ namespace IXICore.Network
         [Obsolete("Use blockHeaders4 instead")]
         blockHeaders3 = 47,
         getRandomPresences = 48,
-        // Temporary protocol message, until we fully enable p2p transactions
         getBlockHeaders4 = 49,
         blockHeaders4 = 50,
         getWalletStateChunk = 51,

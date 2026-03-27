@@ -202,7 +202,7 @@ namespace IXICore
 
         public bool overrideCompactedCheck = false;
 
-        // TODO v14 - add frozen txCount and total diff; add tx filters
+        // TODO v14 - add frozen txCount and total diff; add tx filters; checksumLock
 
 
         public Block()

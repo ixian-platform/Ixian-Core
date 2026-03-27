@@ -325,6 +325,7 @@ namespace IXICore
             protected abstract bool prepareStorageInternal(bool optimize);
             protected abstract void shutdown();
             protected abstract void cleanupCache();
+            public abstract void sleep();
             public abstract void deleteData();
 
             public abstract void pruneBlocks(ulong pruneBlocksBelow, BlockSigPruningType pruningType, bool pruneSuperblocks);

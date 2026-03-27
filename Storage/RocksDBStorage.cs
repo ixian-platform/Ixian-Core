@@ -86,81 +86,75 @@ namespace IXICore
                 this.optimizationType = optimizationType;
             }
 
-            public void openDatabase()
+            public (DbOptions dbOptions, ColumnFamilies columnFamilies) getDefaultOptions()
             {
-                if (database != null)
-                {
-                    throw new Exception(String.Format("Rocks Database '{0}' is already open.", dbPath));
-                }
-                lock (rockLock)
-                {
-                    var rocksOptions = new DbOptions()
-                        .SetCreateIfMissing(true)
-                        .SetCreateMissingColumnFamilies(true)
-                        .SetKeepLogFileNum(2)
-                        .SetMaxLogFileSize(1 * 1024 * 1024)
-                        .SetRecycleLogFileNum(10)
-                        .IncreaseParallelism(Environment.ProcessorCount)
-                        .SetMaxBackgroundCompactions(Environment.ProcessorCount)
-                        .SetMaxBackgroundFlushes(Math.Max(1, Math.Min(4, Environment.ProcessorCount / 2)))
-                        .SetAllowMmapReads(false)
-                        .SetAllowMmapWrites(false)
-                        .SetTargetFileSizeBase(256 * 1024 * 1024)
-                        .SetTargetFileSizeMultiplier(2)
-                        .SetCompression(Compression.Zstd)
-                        .SetLevelCompactionDynamicLevelBytes(true)
-                        .SetCompactionReadaheadSize(4 * 1024 * 1024);
+                var rocksOptions = new DbOptions()
+                    .SetCreateIfMissing(true)
+                    .SetCreateMissingColumnFamilies(true)
+                    .SetKeepLogFileNum(2)
+                    .SetMaxLogFileSize(1 * 1024 * 1024)
+                    .SetRecycleLogFileNum(10)
+                    .IncreaseParallelism(Environment.ProcessorCount)
+                    .SetMaxBackgroundCompactions(Environment.ProcessorCount)
+                    .SetMaxBackgroundFlushes(Math.Max(1, Math.Min(4, Environment.ProcessorCount / 2)))
+                    .SetAllowMmapReads(false)
+                    .SetAllowMmapWrites(false)
+                    .SetTargetFileSizeBase(256 * 1024 * 1024)
+                    .SetTargetFileSizeMultiplier(2)
+                    .SetCompression(Compression.Zstd)
+                    .SetLevelCompactionDynamicLevelBytes(true)
+                    .SetCompactionReadaheadSize(4 * 1024 * 1024);
 
-                    // blocks
-                    var blocksBbto = new BlockBasedTableOptions();
-                    blocksBbto.SetBlockCache(blockCache.Handle);
-                    blocksBbto.SetBlockSize(128 * 1024);
-                    blocksBbto.SetCacheIndexAndFilterBlocks(true);
-                    blocksBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                    blocksBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
-                    blocksBbto.SetWholeKeyFiltering(true);
-                    blocksBbto.SetFormatVersion(6);
+                // blocks
+                var blocksBbto = new BlockBasedTableOptions();
+                blocksBbto.SetBlockCache(blockCache.Handle);
+                blocksBbto.SetBlockSize(128 * 1024);
+                blocksBbto.SetCacheIndexAndFilterBlocks(true);
+                blocksBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+                blocksBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
+                blocksBbto.SetWholeKeyFiltering(true);
+                blocksBbto.SetFormatVersion(6);
 
-                    // transactions
-                    var txBbto = new BlockBasedTableOptions();
-                    txBbto.SetBlockCache(blockCache.Handle);
-                    txBbto.SetBlockSize(64 * 1024);
-                    txBbto.SetCacheIndexAndFilterBlocks(true);
-                    txBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                    txBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
-                    txBbto.SetWholeKeyFiltering(true);
-                    txBbto.SetFormatVersion(6);
+                // transactions
+                var txBbto = new BlockBasedTableOptions();
+                txBbto.SetBlockCache(blockCache.Handle);
+                txBbto.SetBlockSize(64 * 1024);
+                txBbto.SetCacheIndexAndFilterBlocks(true);
+                txBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+                txBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
+                txBbto.SetWholeKeyFiltering(true);
+                txBbto.SetFormatVersion(6);
 
-                    // meta
-                    var metaBbto = new BlockBasedTableOptions();
-                    metaBbto.SetBlockCache(blockCache.Handle);
-                    metaBbto.SetBlockSize(4 * 1024);
-                    metaBbto.SetCacheIndexAndFilterBlocks(true);
-                    metaBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                    metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
-                    metaBbto.SetWholeKeyFiltering(true);
-                    metaBbto.SetFormatVersion(6);
+                // meta
+                var metaBbto = new BlockBasedTableOptions();
+                metaBbto.SetBlockCache(blockCache.Handle);
+                metaBbto.SetBlockSize(4 * 1024);
+                metaBbto.SetCacheIndexAndFilterBlocks(true);
+                metaBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+                metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
+                metaBbto.SetWholeKeyFiltering(true);
+                metaBbto.SetFormatVersion(6);
 
-                    // index CFs
-                    var blocksIndexBbto = new BlockBasedTableOptions();
-                    blocksIndexBbto.SetBlockCache(blockCache.Handle);
-                    blocksIndexBbto.SetBlockSize(16 * 1024);
-                    blocksIndexBbto.SetCacheIndexAndFilterBlocks(true);
-                    blocksIndexBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                    blocksIndexBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
-                    blocksIndexBbto.SetWholeKeyFiltering(true);
-                    blocksIndexBbto.SetFormatVersion(6);
+                // index CFs
+                var blocksIndexBbto = new BlockBasedTableOptions();
+                blocksIndexBbto.SetBlockCache(blockCache.Handle);
+                blocksIndexBbto.SetBlockSize(16 * 1024);
+                blocksIndexBbto.SetCacheIndexAndFilterBlocks(true);
+                blocksIndexBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+                blocksIndexBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
+                blocksIndexBbto.SetWholeKeyFiltering(true);
+                blocksIndexBbto.SetFormatVersion(6);
 
-                    var txIndexBbto = new BlockBasedTableOptions();
-                    txIndexBbto.SetBlockCache(blockCache.Handle);
-                    txIndexBbto.SetBlockSize(32 * 1024);
-                    txIndexBbto.SetCacheIndexAndFilterBlocks(true);
-                    txIndexBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                    txIndexBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
-                    txIndexBbto.SetWholeKeyFiltering(false);
-                    txIndexBbto.SetFormatVersion(6);
+                var txIndexBbto = new BlockBasedTableOptions();
+                txIndexBbto.SetBlockCache(blockCache.Handle);
+                txIndexBbto.SetBlockSize(32 * 1024);
+                txIndexBbto.SetCacheIndexAndFilterBlocks(true);
+                txIndexBbto.SetPinL0FilterAndIndexBlocksInCache(true);
+                txIndexBbto.SetFilterPolicy(BloomFilterPolicy.Create(16, true));
+                txIndexBbto.SetWholeKeyFiltering(false);
+                txIndexBbto.SetFormatVersion(6);
 
-                    var columnFamilies = new ColumnFamilies
+                var columnFamilies = new ColumnFamilies
                     {
                         { "blocks", new ColumnFamilyOptions()
                             .SetBlockBasedTableFactory(blocksBbto)
@@ -204,8 +198,64 @@ namespace IXICore
                             .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
                         }
                     };
+                return (rocksOptions, columnFamilies);
+            }
 
-                    database = RocksDb.Open(rocksOptions, dbPath, columnFamilies);
+            private (DbOptions dbOptions, ColumnFamilies columnFamilies) getMobilesOptions()
+            {
+                var opts = getDefaultOptions();
+
+                var dbOptions = opts.dbOptions;
+                dbOptions.SetCompression(Compression.Lz4)
+                         .SetWriteBufferSize(4UL << 20)
+                         .SetMaxWriteBufferNumber(2)
+                         .SetTargetFileSizeBase(32UL << 20)
+                         .SetMaxBackgroundCompactions(1)
+                         .SetMaxBackgroundFlushes(1)
+                         .IncreaseParallelism(1)
+                         .SetBytesPerSync(1UL << 20)
+                         .SetCompactionReadaheadSize(2UL << 20)
+                         .SetMaxOpenFiles(30);
+
+                var columnFamilies = opts.columnFamilies;
+                
+                var blocksCfOpts = columnFamilies.ToList().Find(x => x.Name == "blocks");
+                blocksCfOpts.Options.SetWriteBufferSize(4UL << 20)
+                                    .SetMaxWriteBufferNumber(2);
+
+                var txCfOpts = columnFamilies.ToList().Find(x => x.Name == "transactions");
+                txCfOpts.Options.SetWriteBufferSize(2UL << 20)
+                                .SetMaxWriteBufferNumber(2);
+
+                var idxBlocksChecksumMeta = columnFamilies.ToList().Find(x => x.Name == "index_blocks_checksum_meta");
+                idxBlocksChecksumMeta.Options.SetWriteBufferSize(1UL << 20)
+                                             .SetMaxWriteBufferNumber(2);
+
+                var idxTxAppliedTypeCfOpts = columnFamilies.ToList().Find(x => x.Name == "index_tx_applied_type");
+                idxTxAppliedTypeCfOpts.Options.SetWriteBufferSize(1UL << 20)
+                                              .SetMaxWriteBufferNumber(2);
+
+                var idxAddrTxsCfOpts = columnFamilies.ToList().Find(x => x.Name == "index_address_txs");
+                idxAddrTxsCfOpts.Options.SetWriteBufferSize(1UL << 20)
+                                        .SetMaxWriteBufferNumber(2);
+                
+                return (dbOptions, columnFamilies);
+            }
+
+            public void openDatabase()
+            {
+                if (database != null)
+                {
+                    throw new Exception(String.Format("Rocks Database '{0}' is already open.", dbPath));
+                }
+                lock (rockLock)
+                {
+                    var options = getDefaultOptions();
+                    if (optimizationType == RocksDBOptimizations.Mobiles)
+                    {
+                        options = getMobilesOptions();
+                    }
+                    database = RocksDb.Open(options.dbOptions, dbPath, options.columnFamilies);
 
                     // initialize column family handles
                     rocksCFBlocks = database.GetColumnFamily("blocks");
@@ -335,14 +385,24 @@ namespace IXICore
             private void updateBlockIndexes(WriteBatch writeBatch, Block sb)
             {
                 writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_TXS), sb.getTransactionIDsBytes(), rocksCFBlocks);
-                if (sb.version >= BlockVer.v10)
+                
+                if (sb.signatures.Count > 0)
                 {
-                    writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS), sb.getSignaturesBytes(true, false), rocksCFBlocks);
-                    writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), sb.getSignaturesBytes(true, true), rocksCFBlocks);
+                    // Blocks below v10 cannot have sigs compacted
+                    if (sb.version >= BlockVer.v10)
+                    {
+                        writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS), sb.getSignaturesBytes(true, false), rocksCFBlocks);
+                        writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), sb.getSignaturesBytes(true, true), rocksCFBlocks);
+                    }
+                    else
+                    {
+                        writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), sb.getSignaturesBytes(true, false), rocksCFBlocks);
+                    }
                 }
                 else
                 {
-                    writeBatch.Put(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), sb.getSignaturesBytes(true, false), rocksCFBlocks);
+                    writeBatch.Delete(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS), rocksCFBlocks);
+                    writeBatch.Delete(StorageIndex.combineKeys(sb.blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT), rocksCFBlocks);
                 }
 
                 var blockNumBytes = sb.blockNum.GetBytesBE();
@@ -976,6 +1036,7 @@ namespace IXICore
                                         database.Remove(keySigners, rocksCFBlocks);
                                         var keyCompact = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_SIGNERS_COMPACT);
                                         var b = new Block(blockChecksum.ToArray(), iter.Value(), null);
+                                        // Blocks v9 require the first transaction as block proposer to calculate hash
                                         if (b.version == BlockVer.v9)
                                         {
                                             var sigs = database.Get(keyCompact, rocksCFBlocks);
@@ -1036,6 +1097,7 @@ namespace IXICore
 
                             var keyTxs = StorageIndex.combineKeys(blockChecksum, BLOCKS_KEY_TXS);
                             var b = new Block(blockChecksum.ToArray(), iter.Value(), null);
+                            // Blocks below v6 require TXIDs to calculate hash and verify TIV
                             if (b.version >= BlockVer.v6)
                             {
                                 database.Remove(keyTxs, rocksCFBlocks);
@@ -1048,6 +1110,20 @@ namespace IXICore
                     }
                     blockPrunedTxids = true;
                     database.Put(META_KEY_BLOCK_PRUNED_TXIDS, new byte[] { blockPrunedTxids ? (byte)1 : (byte)0 }, rocksCFMeta);
+                }
+            }
+
+            public void flush()
+            {
+                if (database == null)
+                {
+                    throw new Exception($"Database {dbPath} is not open.");
+                }
+
+                Logging.info("RocksDB: Pruning TXIDs from blocks on database '{0}'.", dbPath);
+                lock (rockLock)
+                {
+                    database.Flush(new FlushOptions().SetWaitForFlush(true));
                 }
             }
         }
@@ -1878,6 +1954,20 @@ namespace IXICore
                         var db = getDatabase(dbBlockNum, true);
                         db!.pruneTxIDs();
                         dbBlockNum += CoreConfig.maxBlockHeadersPerDatabase;
+                    }
+                }
+            }
+
+            public override void sleep()
+            {
+                lock (openDatabases)
+                {
+                    var toClose = openDatabases.Keys.ToList();
+                    foreach (var key in toClose)
+                    {
+                        var db = openDatabases[key];
+                        Logging.info("RocksDB: Closing '{0}'", db.dbPath);
+                        db.closeDatabase();
                     }
                 }
             }

@@ -16,6 +16,7 @@ namespace IXICore.Activity
     {
         public abstract bool prepareStorage(bool optimize);
         public abstract void stopStorage();
+        public abstract void sleep();
         public abstract void deleteData();
 
         public abstract List<ActivityObject> getActivitiesBySeedHashAndType(byte[] seedHash, ActivityType? type, byte[]? fromActivityId = null, int count = 0, bool descending = false);
