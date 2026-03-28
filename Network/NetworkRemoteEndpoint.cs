@@ -673,7 +673,7 @@ namespace IXICore.Network
                         {
                             case ProtocolMessageCode.blockData2:
                                 ulong bh = active_message.data.GetIxiVarUInt(active_message.data.GetIxiVarUInt(0).bytesRead).num;
-                                if (bh == last_bh || bh == last_bh + 1)
+                                if (bh == last_bh + 1)
                                 {
                                     priority = MessagePriority.medium;
                                 }
@@ -686,11 +686,11 @@ namespace IXICore.Network
                                 break;
 
                             case ProtocolMessageCode.transactionsChunk3:
+                                msg_id = active_message.data.GetIxiVarInt(0).num;
                                 if (msg_id == (long)last_bh + 1)
                                 {
                                     priority = MessagePriority.medium;
                                 }
-                                msg_id = active_message.data.GetIxiVarInt(0).num;
                                 break;
                         }
 
@@ -924,8 +924,10 @@ namespace IXICore.Network
 
                     break;
 
+                case ProtocolMessageCode.blockData2:
                 case ProtocolMessageCode.transactionsChunk3:
                 case ProtocolMessageCode.transactionData2:
+                case ProtocolMessageCode.pitData2:
                     lock (sendQueueMessagesLowPriority)
                     {
                         addMessageToSendQueue(sendQueueMessagesLowPriority, message);
