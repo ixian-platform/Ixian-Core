@@ -466,6 +466,11 @@ namespace IXICore
                 return true;
             }
 
+            if (targetBlock.compacted)
+            {
+                return true;
+            }
+
             if (!targetBlock.calculateSignatureChecksum().SequenceEqual(header.signatureFreezeChecksum))
             {
                 return false;
