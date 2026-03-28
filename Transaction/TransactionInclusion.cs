@@ -331,6 +331,7 @@ namespace IXICore
         /// <param name="txids">List of interesting transactions, which we wish to verify.</param>
         private void requestPITForBlock(ulong block_num, List<byte[]> txids)
         {
+            return;
             lock (pitCache)
             {
                 long currentTime = Clock.getTimestamp();
@@ -1090,15 +1091,15 @@ namespace IXICore
                         continue;
                     }
 
+                    if (!entry.outgoing)
+                    {
+                        continue;
+                    }
+
                     if (cur_time - tx_time > 60) // if the transaction is pending for over 60 seconds, resend
                     {
                         Logging.warn("Transaction {0} pending for a while, resending", t.getTxIdString());
                         entry.addedTimestamp = cur_time;
-
-                        if (!entry.outgoing)
-                        {
-                            continue;
-                        }
 
                         if (entry.relayNodeAddresses != null)
                         {

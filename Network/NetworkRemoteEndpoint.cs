@@ -925,6 +925,7 @@ namespace IXICore.Network
                     break;
 
                 case ProtocolMessageCode.blockData2:
+                case ProtocolMessageCode.blockHeaders4:
                 case ProtocolMessageCode.transactionsChunk3:
                 case ProtocolMessageCode.transactionData2:
                 case ProtocolMessageCode.pitData2:
