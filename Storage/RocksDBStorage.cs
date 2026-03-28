@@ -639,7 +639,15 @@ namespace IXICore
                         if (sigBytes != null)
                         {
                             b.setSignaturesFromBytes(sigBytes, false);
-                            b.compacted = false;
+                            if (b.version == BlockVer.v9
+                                && b.signatures.Count == 1)
+                            {
+                                b.compacted = true;
+                            }
+                            else
+                            {
+                                b.compacted = false;
+                            }
                         }
                         else
                         {

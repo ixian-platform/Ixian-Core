@@ -242,6 +242,7 @@ function calculateTransactionAmounts() {
 
     var addressEls = document.getElementsByName("address");
     var amountEls = document.getElementsByName("amount");
+    var totalAmount = 0;
     for (var i = 0; i < addressEls.length; i++) {
         if (i > 0) {
             dltAPI += "-";
@@ -252,13 +253,15 @@ function calculateTransactionAmounts() {
             continue;
         }
 
+        totalAmount += parseFloat(amount.value.trim());
+
         dltAPI += addressEls[i].value.trim() + "_" + amount.value.trim();
     }
     dltAPI += "&json=true";
     $.getJSON(dltAPI, { format: "json" })
         .done(function (data) {
             if (data["result"] != null) {
-                document.getElementById("transactionFee").innerHTML = data["result"]["fee"];
+                document.getElementById("transactionFee").innerHTML = (parseFloat(data["result"]["totalAmount"]) - totalAmount).toFixed(8);
                 document.getElementById("totalAmount").innerHTML = data["result"]["totalAmount"];
             } else {
                 // fail
@@ -354,6 +357,9 @@ function getStatus() {
             } else {
                 document.getElementById("MinerSection").style.display = "none";
             }
+        })
+        .fail(function (jqXHR, status, error) {
+            document.getElementById("MinerSection").style.display = "none";
         });
 
 }

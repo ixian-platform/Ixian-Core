@@ -234,11 +234,12 @@ namespace IXICore
             {
                 return;
             }
-            lock (PendingTransactions.pendingTransactions)
+            lock (pitCache)
             {
-                var tmp_txQueue = PendingTransactions.getPendingTransactions().Where(x => x.blockHeight <= lastBlockHeader.blockNum).ToArray();
-                foreach (var tx in tmp_txQueue)
+                var tmp_txQueue = PendingTransactions.getPendingTransactions().Where(x => x.transaction.blockHeight <= lastBlockHeader.blockNum).ToArray();
+                foreach (var ptx in tmp_txQueue)
                 {
+                    var tx = ptx.transaction;
                     if (tx.applied == 0)
                     {
                         tx.applied = tx.blockHeight;
@@ -301,7 +302,7 @@ namespace IXICore
                                 // PIT cache for the correct block exists, but it was originally requested for different txids
                                 // we have to re-request it for any remaining txids in the queue. (We do not need to request the already-verified ids)
                                 requestPITForBlock(tx.applied,
-                                    PendingTransactions.pendingTransactions.Values
+                                    PendingTransactions.getPendingTransactions()
                                         .Where(x => x.transaction.applied == tx.applied && x.transaction.applied <= lastBlockHeader.blockNum)
                                         .Select(x => x.transaction.id)
                                         .ToList());
@@ -312,7 +313,7 @@ namespace IXICore
                         {
                             // PIT cache has not been received yet, or maybe it has never been requested for this block
                             requestPITForBlock(tx.applied,
-                                PendingTransactions.pendingTransactions.Values
+                                PendingTransactions.getPendingTransactions()
                                     .Where(x => x.transaction.applied == tx.applied && x.transaction.applied <= lastBlockHeader.blockNum)
                                     .Select(x => x.transaction.id)
                                     .ToList());
@@ -331,7 +332,6 @@ namespace IXICore
         /// <param name="txids">List of interesting transactions, which we wish to verify.</param>
         private void requestPITForBlock(ulong block_num, List<byte[]> txids)
         {
-            return;
             lock (pitCache)
             {
                 long currentTime = Clock.getTimestamp();
@@ -1056,10 +1056,10 @@ namespace IXICore
         private void processOutgoingTransactions()
         {
             ulong last_block_height = IxianHandler.getLastBlockHeight();
-            lock (PendingTransactions.pendingTransactions)
+            lock (pitCache)
             {
                 long cur_time = Clock.getTimestamp();
-                List<PendingTransaction> tmp_pending_transactions = new(PendingTransactions.pendingTransactions.Values);
+                var tmp_pending_transactions = PendingTransactions.getPendingTransactions();
                 foreach (var entry in tmp_pending_transactions)
                 {
                     long tx_time = entry.addedTimestamp;

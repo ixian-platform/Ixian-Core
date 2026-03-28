@@ -10,9 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore.Activity;
 using IXICore.Meta;
-using IXICore.Network;
 using IXICore.Utils;
 
 namespace IXICore
@@ -114,11 +112,11 @@ namespace IXICore
             }
         }
 
-        public static IEnumerable<Transaction> getPendingTransactions()
+        public static IEnumerable<PendingTransaction> getPendingTransactions()
         {
             lock (pendingTransactions)
             {
-                return pendingTransactions.Values.Select(tx => tx.transaction);
+                return pendingTransactions.Values.Select(tx => tx);
             }
         }
 

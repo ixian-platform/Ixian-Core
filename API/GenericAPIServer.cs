@@ -2190,7 +2190,7 @@ namespace IXICore
             t.pubKey = new Address(ws.getPrimaryPublicKey());
 
             SortedDictionary<byte[], IxiNumber> fromList = null;
-            fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + fee, t.toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+            fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + fee, t.toList.Keys.ToList(), PendingTransactions.getPendingTransactions().Select(x => x.transaction).ToList());
             t.fromList = fromList;
             t.amount = t.calculateTotalAmount();
             t.fee = t.calculateMinimumFee(ConsensusConfig.forceTransactionPrice);
@@ -2208,7 +2208,7 @@ namespace IXICore
             for (int i = 0; i < 2 && t.fee != totalTxFee; i++)
             {
                 totalTxFee = t.fee;
-                fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + totalTxFee, t.toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+                fromList = ws.generateFromList(primaryAddress, toAmount + relayFee + totalTxFee, t.toList.Keys.ToList(), PendingTransactions.getPendingTransactions().Select(x => x.transaction).ToList());
 
                 if (fromList == null || fromList.Count == 0)
                 {
@@ -2394,7 +2394,7 @@ namespace IXICore
             bool adjust_amount = false;
             if (fromList.Count == 0)
             {
-                fromList = ws.generateFromList(primary_address, to_amount + relayFee + fee, toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+                fromList = ws.generateFromList(primary_address, to_amount + relayFee + fee, toList.Keys.ToList(), PendingTransactions.getPendingTransactions().Select(x => x.transaction).ToList());
                 adjust_amount = true;
             }
 
@@ -2422,7 +2422,7 @@ namespace IXICore
                     }
 
                     total_tx_fee = transaction.fee;
-                    fromList = ws.generateFromList(primary_address, to_amount + relayFee + total_tx_fee, toList.Keys.ToList(), PendingTransactions.getPendingTransactions().ToList());
+                    fromList = ws.generateFromList(primary_address, to_amount + relayFee + total_tx_fee, toList.Keys.ToList(), PendingTransactions.getPendingTransactions().Select(x => x.transaction).ToList());
 
                     if (fromList == null || fromList.Count == 0)
                     {
