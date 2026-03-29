@@ -430,7 +430,7 @@ namespace IXICore
             // TODO TODO TODO TODO  this won't work well once wallet v3 is activated
             lock (myAddresses)
             {
-                Dictionary<byte[], IxiNumber> tmp_from_list = new Dictionary<byte[], IxiNumber>(new ByteArrayComparer());
+                Dictionary<Address, IxiNumber> tmp_from_list = new Dictionary<Address, IxiNumber>(new AddressComparer());
                 foreach (var entry in myAddresses)
                 {
                     if (!entry.Value.keyPair.addressBytes.SequenceEqual(primary_address.addressNoChecksum))
@@ -455,7 +455,7 @@ namespace IXICore
                         continue;
                     }
 
-                    tmp_from_list.Add(entry.Value.nonce, amount);
+                    tmp_from_list.Add(new Address(entry.Value.keyPair.publicKeyBytes, entry.Value.nonce), amount);
                 }
 
                 var tmp_from_list_ordered = tmp_from_list.OrderBy(x => x.Value.getAmount());
@@ -468,10 +468,15 @@ namespace IXICore
                     IxiNumber balance = entry.Value;
                     if (pending_transactions != null)
                     {
-                        var tmp_pending_froms = pending_transactions.FindAll(x => x.fromList.ContainsKey(entry.Key));
-                        foreach (var pending_from in tmp_pending_froms)
+                        foreach (var pending_tx in pending_transactions)
                         {
-                            balance -= pending_from.fromList[entry.Key];
+                            foreach (var pending_from in pending_tx.fromList)
+                            {
+                                if (new Address(pending_tx.pubKey.getInputBytes(), pending_from.Key).SequenceEqual(entry.Key))
+                                {
+                                    balance -= pending_from.Value;
+                                }
+                            }
                         }
                     }
 
@@ -483,11 +488,11 @@ namespace IXICore
                     if (tmp_total_amount + balance >= total_amount_with_fee)
                     {
                         IxiNumber tmp_amount = total_amount_with_fee - tmp_total_amount;
-                        from_list.Add(entry.Key, tmp_amount);
+                        from_list.Add(entry.Key.nonce, tmp_amount);
                         tmp_total_amount += tmp_amount;
                         break;
                     }
-                    from_list.Add(entry.Key, balance);
+                    from_list.Add(entry.Key.nonce, balance);
                     tmp_total_amount += balance;
                 }
 

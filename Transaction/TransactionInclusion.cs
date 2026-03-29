@@ -134,6 +134,20 @@ namespace IXICore
             startingBlockHeight = starting_block_height;
             startingBlockChecksum = starting_block_checksum;
 
+            Block? last_block_header = blockStorage.getBlock(blockStorage.getHighestBlockInStorage());
+
+            if (last_block_header != null)
+            {
+                lastBlockHeader = last_block_header;
+            }
+            else
+            {
+                blockStorage.stopStorage();
+                blockStorage.deleteData();
+                blockStorage.prepareStorage(false);
+                lastBlockHeader = new Block() { blockNum = startingBlockHeight, blockChecksum = startingBlockChecksum! };
+            }
+
             // Start the thread
             tiv_thread = new Thread(onUpdate);
             tiv_thread.Name = "TIV_Update_Thread";
@@ -144,44 +158,31 @@ namespace IXICore
         {
             try
             {
-                Block? last_block_header = blockStorage.getBlock(blockStorage.getHighestBlockInStorage());
-
-                if (last_block_header != null)
-                {
-                    lastBlockHeader = last_block_header;
-                }
-                else
-                {
-                    blockStorage.stopStorage();
-                    blockStorage.deleteData();
-                    blockStorage.prepareStorage(false);
-                    lastBlockHeader = new Block() { blockNum = startingBlockHeight, blockChecksum = startingBlockChecksum! };
-                }
-
                 while (running)
                 {
-                    if (requestBlockHeaders())
+                    try
                     {
-                        processUnverifiedTransactions();
-                        processOutgoingTransactions();
-                    }
+                        if (requestBlockHeaders())
+                        {
+                            processUnverifiedTransactions();
+                            processOutgoingTransactions();
+                        }
 
-                    long currentTime = Clock.getTimestamp();
-                    if (currentTime - lastPITPruneTime > pitCachePruneInterval)
+                        long currentTime = Clock.getTimestamp();
+                        if (currentTime - lastPITPruneTime > pitCachePruneInterval)
+                        {
+                            prunePITCache();
+                        }
+                    } catch(Exception e)
                     {
-                        prunePITCache();
+                        Logging.error("OnUpdate exception: {0}", e);
                     }
-
                     Thread.Sleep(ConsensusConfig.blockGenerationInterval);
                 }
             }
             catch (ThreadInterruptedException)
             {
 
-            }
-            catch (Exception e)
-            {
-                Logging.error("OnUpdate exception: {0}", e);
             }
         }
 
@@ -283,7 +284,8 @@ namespace IXICore
                             {
                                 txid = tx.id;
                             }
-                            if (pitCache[tx.applied].requestedForTXIDs.Contains(tx.id, new ByteArrayComparer()))
+                            if (pitCache[tx.applied].requestedForTXIDs.Contains(tx.id, new ByteArrayComparer())
+                                || pitCache[tx.applied].pit.contains(txid))
                             {
                                 if (pitCache[tx.applied].pit.contains(txid))
                                 {
@@ -1093,11 +1095,6 @@ namespace IXICore
                         Logging.error("Error sending the transaction {0}, rejected", t.getTxIdString());
                         transactionInclusionCallbacks.transactionRejected(t);
                         PendingTransactions.remove(t.id);
-                        continue;
-                    }
-
-                    if (!entry.outgoing)
-                    {
                         continue;
                     }
 
