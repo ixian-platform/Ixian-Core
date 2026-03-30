@@ -725,6 +725,49 @@ namespace IXICore.Network
             return messageCount;
         }
 
+        public string getMyAddress()
+        {
+            lock (networkClients)
+            {
+                Dictionary<string, int> addresses = new Dictionary<string, int>();
+                foreach (NetworkClient client in networkClients)
+                {
+                    if (client.myAddress == "" || client.myAddress == null)
+                    {
+                        continue;
+                    }
+                    if (!client.myAddress.Contains(":"))
+                    {
+                        continue;
+                    }
+
+                    string ip_address = client.myAddress.Substring(0, client.myAddress.IndexOf(":"));
+
+                    if (!NetworkUtils.validateIP(ip_address))
+                    {
+                        continue;
+                    }
+                    if (addresses.ContainsKey(ip_address))
+                    {
+                        addresses[ip_address]++;
+                    }
+                    else
+                    {
+                        addresses.Add(ip_address, 1);
+                    }
+                }
+                if (addresses.Count > 0)
+                {
+                    var address = addresses.OrderByDescending(x => x.Value).First();
+                    if (address.Value > 1)
+                    {
+                        return address.Key;
+                    }
+                }
+                return null;
+            }
+        }
+
         public bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint skip_endpoint)
         {
             lock (networkClients)

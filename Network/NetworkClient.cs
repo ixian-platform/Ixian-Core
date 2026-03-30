@@ -32,6 +32,8 @@ namespace IXICore.Network
 
         private object reconnectLock = new object();
 
+        public string myAddress = ""; // My address as reported by the node
+
         private IPEndPoint? bindEndpoint = null;
 
         public NetworkClient(string bindAddress, Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null) : base(handler)
