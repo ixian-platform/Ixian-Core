@@ -1052,7 +1052,7 @@ namespace IXICore
                                             {
                                                 b.setSignaturesFromBytes(sigs, true);
                                                 b.signatures = b.signatures.Take(1).ToList();
-                                                database.Put(keyCompact, b.getSignaturesBytes(true, false));
+                                                database.Put(keyCompact, b.getSignaturesBytes(true, false), rocksCFBlocks);
                                             }
                                         }
                                         else

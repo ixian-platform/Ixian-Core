@@ -69,6 +69,10 @@ namespace IXICore
                 { SpixiMessageCode.getAppProtocols, data => data },
                 { SpixiMessageCode.appProtocols, data => new AppProtocolsMessage(data) },
                 { SpixiMessageCode.appProtocolData, data => new AppDataMessage(data) },
+                { SpixiMessageCode.transactionRequest, data => new TransactionRequest(data) },
+                { SpixiMessageCode.transactionSend, data => new TransactionSend(data) },
+                { SpixiMessageCode.transactionSendRequest, data => new TransactionSendRequest(data) },
+                { SpixiMessageCode.transactionSendResponse, data => new TransactionSendResponse(data) },
             };
 
         public static object MapTypeToModel(SpixiMessageCode type, byte[] data)

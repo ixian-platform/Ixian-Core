@@ -11,9 +11,6 @@
 // MIT License for more details.
 
 using IXICore.Utils;
-using Newtonsoft.Json;
-using System;
-using System.Linq;
 
 namespace IXICore
 {

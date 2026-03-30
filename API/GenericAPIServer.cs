@@ -2349,7 +2349,10 @@ namespace IXICore
                     to_amount += single_to_amount;
                     ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()), single_to_amount, single_to_address.Tag, null);
                     toList.Add(single_to_address.PaymentAddress, toEntry);
-                    extendedAddresses.Add(single_to_address);
+                    if (single_to_address.Flag != AddressPaymentFlag.Primary)
+                    {
+                        extendedAddresses.Add(single_to_address);
+                    }
                 }
             }
 
@@ -2358,26 +2361,32 @@ namespace IXICore
                 fee = new IxiNumber((string)parameters["fee"]);
             }
 
-            List<Address> relayNodeAddresses = null;
+            List<Address>? relayNodeAddresses = null;
             IxiNumber relayFee = 0;
             if (PresenceList.myPresenceType == 'C')
             {
+                List<Address> tmpRelayNodeAddresses;
                 if (parameters.ContainsKey("relayNodeAddress"))
                 {
-                    relayNodeAddresses = new() { new Address((string)parameters["relayNodeAddress"]) };
+                    tmpRelayNodeAddresses = new() { new Address((string)parameters["relayNodeAddress"]) };
                 }
                 else
                 {
-                    relayNodeAddresses = NetworkClientManager.getRandomConnectedClientAddresses(2);
+                    tmpRelayNodeAddresses = NetworkClientManager.getRandomConnectedClientAddresses(2);
                 }
 
-
-                foreach (Address relayNodeAddress in relayNodeAddresses)
+                relayNodeAddresses = new();
+                foreach (Address relayNodeAddress in tmpRelayNodeAddresses)
                 {
+                    if (toList.ContainsKey(relayNodeAddress))
+                    {
+                        continue;
+                    }
                     ToEntry toEntry = new ToEntry(getExpectedVersion(IxianHandler.getLastBlockVersion()),
                                                   fee,
                                                   null,
                                                   null);
+                    relayNodeAddresses.Add(relayNodeAddress);
                     toList.Add(relayNodeAddress, toEntry);
                     relayFee += fee;
                 }
@@ -2731,10 +2740,10 @@ namespace IXICore
     internal class TransactionWithRelays
     {
         public Transaction transaction { get; private set; }
-        public List<Address> relayNodeAddresses { get; private set; }
+        public List<Address>? relayNodeAddresses { get; private set; }
         public List<ExtendedAddress> extendedAddresses { get; private set; }
 
-        public TransactionWithRelays(Transaction transaction, List<Address> relayNodeAddresses, List<ExtendedAddress> extendedAddresses)
+        public TransactionWithRelays(Transaction transaction, List<Address>? relayNodeAddresses, List<ExtendedAddress> extendedAddresses)
         {
             this.transaction = transaction;
             this.relayNodeAddresses = relayNodeAddresses;

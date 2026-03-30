@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -13,12 +13,8 @@
 using IXICore.Inventory;
 using IXICore.Meta;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 
 namespace IXICore.Network
 {
@@ -613,12 +609,12 @@ namespace IXICore.Network
         /// </summary>
         /// <param name="idx">Sequential index of the client.</param>
         /// <returns>Client at the given index, or null if out of bounds.</returns>
-        public static RemoteEndpoint getClient(int idx)
+        public static RemoteEndpoint? getClient(int idx)
         {
             lock (connectedClients)
             {
                 int i = 0;
-                RemoteEndpoint lastClient = null;
+                RemoteEndpoint? lastClient = null;
                 foreach (RemoteEndpoint client in connectedClients)
                 {
                     if (client.isConnected())
@@ -635,7 +631,7 @@ namespace IXICore.Network
             }
         }
 
-        public static RemoteEndpoint getClient(Address clientAddress, bool fullyConnected = true)
+        public static RemoteEndpoint? getClient(Address clientAddress, bool fullyConnected = true)
         {
             lock (connectedClients)
             {
@@ -664,6 +660,40 @@ namespace IXICore.Network
             return null;
         }
 
+        public static RemoteEndpoint? getClient(Peer peer, bool fullyConnected = true)
+        {
+            lock (connectedClients)
+            {
+                foreach (RemoteEndpoint c in connectedClients)
+                {
+                    if (fullyConnected)
+                    {
+                        if (!c.isConnected() || !c.helloReceived)
+                        {
+                            continue;
+                        }
+                        if (c.presenceAddress == null)
+                        {
+                            continue;
+                        }
+                    }
+
+                    if (c.serverWalletAddress != null
+                        && peer.walletAddress != null
+                        && c.serverWalletAddress.SequenceEqual(peer.walletAddress))
+                    {
+                        return c;
+                    }
+
+                    if (c.getFullAddress() == peer.hostname)
+                    {
+                        return c;
+                    }
+                }
+            }
+
+            return null;
+        }
 
         /// <summary>
         ///  Adds the speficied node to the blacklist by public IP.

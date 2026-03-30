@@ -14,11 +14,7 @@ using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Streaming.Models;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace IXICore.Streaming
 {
@@ -26,40 +22,39 @@ namespace IXICore.Streaming
     /// Provider responsible for fetching sector nodes for a friend.
     /// Uses CoreStreamProcessor.fetchFriendsPresence to retrieve sector nodes.
     /// </summary>
-    public class SectorProvider
+    public class ClientSectorProvider : ISectorProvider
     {
-        private readonly Friend _friend;
         private readonly int _timeoutMs;
 
-        public SectorProvider(Friend friend, int timeoutMs = 5000)
+        public ClientSectorProvider(int timeoutMs = 5000)
         {
-            _friend = friend ?? throw new ArgumentNullException(nameof(friend));
             _timeoutMs = timeoutMs;
         }
 
         /// <summary>
         /// Fetches sector nodes for the friend. Initiates a fetch request and waits for the nodes to be populated.
         /// </summary>
+        /// <param name="friend">Friend for which to fetch sector nodes</param>
         /// <returns>List of sector nodes, or empty list if timeout occurs</returns>
-        public async Task<List<Peer>> FetchSectorNodesAsync()
+        public async Task<List<Peer>> FetchSectorNodesAsync(Friend friend)
         {
-            if (_friend.sectorNodes.Count > 0)
+            if (friend.sectorNodes.Count > 0)
             {
-                return _friend.sectorNodes;
+                return friend.sectorNodes;
             }
 
             // Initiate the fetch
-            CoreProtocolMessage.fetchSectorNodes(_friend.walletAddress, CoreConfig.maxRelaySectorNodesToRequest);
+            CoreProtocolMessage.fetchSectorNodes(friend.walletAddress, CoreConfig.maxRelaySectorNodesToRequest);
 
             // Wait for sector nodes to be populated
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            while (_friend.sectorNodes.Count == 0 && stopwatch.ElapsedMilliseconds < _timeoutMs)
+            while (friend.sectorNodes.Count == 0 && stopwatch.ElapsedMilliseconds < _timeoutMs)
             {
                 await Task.Delay(100);
             }
             stopwatch.Stop();
 
-            return _friend.sectorNodes;
+            return friend.sectorNodes;
         }
     }
 
@@ -146,6 +141,7 @@ namespace IXICore.Streaming
                         }
                         if (p != null && p.wallet.SequenceEqual(_friend.walletAddress))
                         {
+                            // TODO use actual wallet address once Presence hostname contains such address
                             _friend.relayNode = new Peer(p.addresses[0].address, null, p.addresses[0].lastSeenTime, 0, 0, 0);
                             Logging.warn("Setting relay node to {0}", _friend.relayNode.hostname);
                             _friend.setPublicKey(p.pubkey);
@@ -274,7 +270,7 @@ namespace IXICore.Streaming
     public class IXISocket : IDisposable
     {
         private readonly Friend _friend;
-        private readonly SectorProvider _sectorProvider;
+        private readonly ISectorProvider _sectorProvider;
         private readonly PresenceProvider _presenceProvider;
         private NetworkClient? _relayConnection;
         private bool _isConnected;
@@ -285,7 +281,7 @@ namespace IXICore.Streaming
 
         public event EventHandler<ConnectionStateChangedEventArgs>? ConnectionStateChanged;
 
-        public IXISocket(Friend friend, SectorProvider sectorProvider, PresenceProvider presenceProvider, IxianKeyPair? keyPair = null)
+        public IXISocket(Friend friend, ISectorProvider sectorProvider, PresenceProvider presenceProvider, IxianKeyPair? keyPair = null)
         {
             _friend = friend ?? throw new ArgumentNullException(nameof(friend));
             _sectorProvider = sectorProvider;
@@ -330,7 +326,7 @@ namespace IXICore.Streaming
 
                 // Step 1: Fetch sector nodes
                 Logging.trace("Fetching sector nodes for {0}", _friend.walletAddress.ToString());
-                var sectorNodes = await _sectorProvider.FetchSectorNodesAsync();
+                var sectorNodes = await _sectorProvider.FetchSectorNodesAsync(_friend);
                 if (sectorNodes.Count == 0)
                 {
                     Logging.warn("Failed to fetch sector nodes for {0}", _friend.walletAddress.ToString());

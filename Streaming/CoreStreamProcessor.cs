@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2025 Ixian
+// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -13,18 +13,9 @@
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.SpixiBot;
-using IXICore.Storage;
 using IXICore.Streaming.Models;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading;
-using System.Threading.Tasks;
-using static IXICore.Transaction;
 
 namespace IXICore.Streaming
 {
@@ -52,11 +43,11 @@ namespace IXICore.Streaming
     {
         public SpixiMessage spixiMessage { get; private set; }
         public StreamMessage streamMessage { get; private set; }
-        public Friend friend { get; private set; }
+        public Friend? friend { get; private set; }
         public Address senderAddress { get; private set; }
-        public Address realSenderAddress { get; private set; }
+        public Address? realSenderAddress { get; private set; }
 
-        public ReceiveDataResponse(SpixiMessage spixiMessage, StreamMessage streamMessage, Friend friend, Address senderAddress, Address realSenderAddress)
+        public ReceiveDataResponse(SpixiMessage spixiMessage, StreamMessage streamMessage, Friend? friend, Address senderAddress, Address? realSenderAddress)
         {
             this.spixiMessage = spixiMessage;
             this.streamMessage = streamMessage;
@@ -73,7 +64,7 @@ namespace IXICore.Streaming
 
         protected bool running = false;
 
-        protected static PendingMessageProcessor pendingMessageProcessor = null;
+        protected static PendingMessageProcessor pendingMessageProcessor;
         public static StreamCapabilities streamCapabilities { get; protected set; }
 
         protected List<Timer> _typingTimers = new();
@@ -128,15 +119,10 @@ namespace IXICore.Streaming
                 }
             }
 
-            Address relayAddress = friend.walletAddress;
-            if (friend.relayNode != null)
-            {
-                relayAddress = friend.relayNode.walletAddress;
-            }
-
             Task.Run(() =>
             {
-                if (NetworkServer.getClient(relayAddress) == null)
+                if (NetworkServer.getClient(friend.walletAddress) == null
+                    && (friend.relayNode == null || NetworkServer.getClient(friend.relayNode) == null))
                 {
                     if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
                         && friend.relayNode != null
@@ -650,6 +636,10 @@ namespace IXICore.Streaming
                     switch (spixi_message.type)
                     {
                         case SpixiMessageCode.msgReceived:
+                        case SpixiMessageCode.transactionRequest:
+                        case SpixiMessageCode.transactionSend:
+                        case SpixiMessageCode.transactionSendRequest:
+                        case SpixiMessageCode.transactionSendResponse:
                             break;
                         default:
                             Logging.error("Payment friend {0} sent invalid message type {1}", sender_address.ToString(), spixi_message.type);
@@ -868,7 +858,7 @@ namespace IXICore.Streaming
                             }
                             else
                             {
-                                if (!handleRequestAdd(message.id, sender_address, spixi_message.data, message.timestamp))
+                                if (!handleRequestAdd(sender_address, spixi_message.data, message.timestamp))
                                 {
                                     return null;
                                 }
@@ -895,7 +885,7 @@ namespace IXICore.Streaming
                             }
                             else
                             {
-                                if (!handleRequestAdd2(message.id, sender_address, spixi_message.data, message.timestamp))
+                                if (!handleRequestAdd2(sender_address, spixi_message.data, message.timestamp))
                                 {
                                     return null;
                                 }
@@ -1399,7 +1389,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        protected bool handleRequestAdd(byte[] id, Address sender_wallet, byte[] pub_key, long received_timestamp)
+        protected bool handleRequestAdd(Address sender_wallet, byte[] pub_key, long received_timestamp)
         {
             if (!(new Address(pub_key)).SequenceEqual(sender_wallet))
             {
@@ -1409,7 +1399,20 @@ namespace IXICore.Streaming
 
             Logging.info("In handle request add");
 
-            Friend new_friend = FriendList.addFriend(FriendType.Normal, FriendState.RequestReceived, sender_wallet, pub_key, sender_wallet.ToString(), null, null, 0, false);
+            Friend? new_friend = FriendList.getFriend(sender_wallet);
+            if (new_friend == null)
+            {
+                if (!FriendList.allowAddRequests)
+                {
+                    Logging.warn("Received request add from {0} but add requests are disabled, ignoring.", sender_wallet);
+                    return false;
+                }
+                new_friend = FriendList.addFriend(FriendType.Normal, FriendState.RequestReceived, sender_wallet, pub_key, sender_wallet.ToString(), null, null, 0, false);
+            }
+            else
+            {
+                new_friend = null;
+            }
 
             if (new_friend != null)
             {
@@ -1451,8 +1454,7 @@ namespace IXICore.Streaming
             return false;
         }
 
-
-        protected bool handleRequestAdd2(byte[] id, Address sender_wallet, byte[] data, long received_timestamp)
+        protected bool handleRequestAdd2(Address sender_wallet, byte[] data, long received_timestamp)
         {
             var version_with_offset = data.GetIxiVarUInt(0);
             int version = (int)version_with_offset.num;
@@ -1471,7 +1473,20 @@ namespace IXICore.Streaming
 
             Logging.info("In handle request add2");
 
-            Friend new_friend = FriendList.addFriend(FriendType.Normal, FriendState.RequestReceived, sender_wallet, pub_key, sender_wallet.ToString(), null, null, 0, false);
+            Friend? new_friend = FriendList.getFriend(sender_wallet);
+            if (new_friend == null)
+            {
+                if (!FriendList.allowAddRequests)
+                {
+                    Logging.warn("Received request add2 from {0} but add requests are disabled, ignoring.", sender_wallet);
+                    return false;
+                }
+                new_friend = FriendList.addFriend(FriendType.Normal, FriendState.RequestReceived, sender_wallet, pub_key, sender_wallet.ToString(), null, null, 0, false);
+            }
+            else
+            {
+                new_friend = null;
+            }
 
             if (new_friend != null)
             {
@@ -2269,7 +2284,6 @@ namespace IXICore.Streaming
             pendingMessageProcessor.deleteAll();
         }
 
-
         protected bool onBotAction(byte[] action_data, Friend bot, int channel_id)
         {
             if (!bot.bot)
@@ -2965,6 +2979,14 @@ namespace IXICore.Streaming
                 {
                     var p = PresenceList.getPresenceByAddress(extendedAddress.RoutingAddress);
                     friend = FriendList.addFriend(FriendType.Payment, FriendState.Unknown, extendedAddress.RoutingAddress, p?.pubkey, extendedAddress.RoutingAddress.ToString(), null, null, 0, false);
+                    if (p != null)
+                    {
+                        // TODO use actual wallet address once Presence hostname contains such address
+                        friend.relayNode = new Peer(p.addresses.First().address, null, p.addresses.First().lastSeenTime, 0, 0, 0);
+                        friend.updatedStreamingNodes = friend.relayNode.lastSeen;
+                        friend.lastSeenTime = friend.relayNode.lastSeen;
+                        friend.online = true;
+                    }
                     friend.save();
                 }
                 transactionSend(friend, tx, requestId);
@@ -3031,7 +3053,7 @@ namespace IXICore.Streaming
             Friend? connection = new Friend(FriendType.Temporary, FriendState.Unknown, extendedAddress.RoutingAddress, null, null, null, null, 0, false);
             ExtendedAddress? resolvedAddress = null;
             IXISocketConnections.AddPendingSectorRequest(connection);
-            using (IXISocket ixiSocket = new IXISocket(connection, new SectorProvider(connection), new PresenceProvider(connection)))
+            using (IXISocket ixiSocket = new IXISocket(connection, new ClientSectorProvider(), new PresenceProvider(connection)))
             {
                 if (!await ixiSocket.ConnectAsync())
                 {

@@ -11,13 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
-using IXICore.Network;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
 
 namespace IXICore.Streaming
 {
@@ -30,8 +24,9 @@ namespace IXICore.Streaming
         public static string accountsPath { get; private set; } = "Acc";
 
         public static bool contactsLoaded = false;
+        public static bool allowAddRequests = true;
 
-        public static void init(string base_path)
+        public static void init(string base_path, bool allowAddRequests)
         {
             accountsPath = Path.Combine(base_path, accountsPath);
             if(!Directory.Exists(accountsPath))
@@ -39,10 +34,11 @@ namespace IXICore.Streaming
                 Directory.CreateDirectory(accountsPath);
             }
             contactsLoaded = false;
+            FriendList.allowAddRequests = allowAddRequests;
         }
 
         // Retrieves a friend based on the wallet_address
-        public static Friend getFriend(Address wallet_address)
+        public static Friend? getFriend(Address wallet_address)
         {
             foreach (Friend friend in friends)
             {
@@ -71,7 +67,7 @@ namespace IXICore.Streaming
         // Set the nickname for a specific wallet address
         public static void setNickname(Address wallet_address, string nick, Address real_sender_address)
         {
-            Friend friend = getFriend(wallet_address);
+            Friend? friend = getFriend(wallet_address);
             if (friend == null)
             {
                 Logging.error("Received nickname for a friend that's not in the friend list.");
@@ -157,7 +153,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public static FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
+        public static FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
             Friend friend = getFriend(wallet_address);
             if(friend == null)
@@ -269,13 +265,13 @@ namespace IXICore.Streaming
             friends = friends.OrderBy(x => x.nickname).ToList();
         }
 
-        public static Friend addFriend(FriendType type, FriendState state, Address wallet_address, byte[] public_key, string name, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approved = true)
+        public static Friend addFriend(FriendType type, FriendState state, Address wallet_address, byte[]? public_key, string name, byte[]? aes_key, byte[]? chacha_key, long key_generated_time, bool approved = true)
         {
             Friend new_friend = new Friend(type, state, wallet_address, public_key, name, aes_key, chacha_key, key_generated_time, approved);
             return addFriend(new_friend);
         }
 
-        public static Friend addFriend(Friend new_friend)
+        public static Friend? addFriend(Friend new_friend)
         {
             if(friends.Find(x => x.walletAddress.SequenceEqual(new_friend.walletAddress)) != null)
             {

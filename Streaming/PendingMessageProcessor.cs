@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -12,13 +12,7 @@
 
 using IXICore.Meta;
 using IXICore.Network;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Threading;
 using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace IXICore.Streaming
 {
@@ -384,15 +378,14 @@ namespace IXICore.Streaming
             {
                 if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration)
                 {
-
-                    RemoteEndpoint connected_client = null;
+                    RemoteEndpoint? connected_client = null;
                     if ((CoreStreamProcessor.streamCapabilities & StreamCapabilities.Incoming) != 0)
                     {
                         connected_client = NetworkServer.getClient(friend.walletAddress);
                         if (connected_client == null
                             && friend.relayNode != null)
                         {
-                            connected_client = NetworkServer.getClient(friend.relayNode.walletAddress);
+                            connected_client = NetworkServer.getClient(friend.relayNode);
                         }
                     }
                     if (connected_client != null)

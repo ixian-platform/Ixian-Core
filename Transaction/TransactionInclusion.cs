@@ -177,7 +177,7 @@ namespace IXICore
                     {
                         Logging.error("OnUpdate exception: {0}", e);
                     }
-                    Thread.Sleep(ConsensusConfig.blockGenerationInterval);
+                    Thread.Sleep(1000);
                 }
             }
             catch (ThreadInterruptedException)
@@ -210,20 +210,24 @@ namespace IXICore
             // Check if the request expired
             if (force_update || currentTime - lastRequestedBlockTime > ConsensusConfig.blockGenerationInterval)
             {
-                lastRequestedBlockTime = currentTime;
-
+                bool requested = false;
                 // request next blocks
                 if (lastBlockHeader!.blockNum > 0
                     && lastBlockHeader.version == 0)
                 {
-                    requestBlockHeaders(lastBlockHeader.blockNum, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
+                    requested = requestBlockHeaders(lastBlockHeader.blockNum, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
                 }
                 else
                 {
-                    requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
+                    requested = requestBlockHeaders(lastBlockHeader.blockNum + 1, blockHeadersToRequestInChunk, CoreProtocolMessage.getMyAddressesCuckooFilter(), endpoint);
                 }
 
-                return true;
+                if (requested)
+                {
+                    lastRequestedBlockTime = currentTime;
+                }
+
+                return requested;
             }
 
             return false;
@@ -608,7 +612,8 @@ namespace IXICore
             if (header.blockNum > ConsensusConfig.rewardMaturity + 1
                 && blockVerificationMode == TIVBlockVerificationMode.Transactions)
             {
-                if (header.transactions.Count == 0)
+                if (header.version != BlockVer.v10
+                    && header.transactions.Count == 0)
                 {
                     Logging.error("TIV: Block header does not contain transactions, but transaction verification mode is enabled. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                     return false;
@@ -923,7 +928,7 @@ namespace IXICore
                                     if (header.blockChecksum.SequenceEqual(lastBlockHeader.blockChecksum))
                                     {
                                         // Correct first block, replace with full data
-                                        if (header.blockNum > 1)
+                                        if (header.blockNum > 1 && (header.version >= BlockVer.v10))
                                         {
                                             populateBlockSignatures(header);
                                         }
@@ -983,7 +988,7 @@ namespace IXICore
             }
         }
 
-        private void requestBlockHeaders(ulong from, ulong count, Cuckoo? filter, RemoteEndpoint? endpoint = null)
+        private bool requestBlockHeaders(ulong from, ulong count, Cuckoo? filter, RemoteEndpoint? endpoint = null)
         {
             Logging.info("Requesting block headers from {0} to {1}", from, from + count);
             using (MemoryStream mOut = new MemoryStream())
@@ -1009,9 +1014,10 @@ namespace IXICore
                     {
                         node_types = new char[] { 'M', 'H', 'R' };
                     }
-                    CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getBlockHeaders4, mOut.ToArray(), 0);
+                    return CoreProtocolMessage.broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getBlockHeaders4, mOut.ToArray(), 0);
                 }
             }
+            return false;
         }
 
         private void prunePITCache()

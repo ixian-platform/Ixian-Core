@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -18,10 +18,6 @@ using IXICore.Network.Messages;
 using IXICore.RegNames;
 using IXICore.Streaming;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 
@@ -32,9 +28,6 @@ namespace IXICore
     /// </summary>
     public static class CoreProtocolMessage
     {
-        public static ulong bytesForRelayReceived = 0;
-        public static ulong bytesRelayed = 0;
-
         /// <summary>
         /// Prepares and sends the disconnect message to the specified remote endpoint.
         /// </summary>
@@ -69,7 +62,6 @@ namespace IXICore
                 {
                     PresenceList.removeAddressEntry(endpoint.presence.wallet, endpoint.presenceAddress);
                 }
-                //PeerStorage.removePeer(endpoint.getFullAddress(true));
             }
         }
 
@@ -163,23 +155,6 @@ namespace IXICore
 
             if (code == ProtocolMessageCode.s2data)
             {
-                if (PresenceList.myPresenceType == 'R')
-                {
-                    bytesForRelayReceived += (ulong)raw_message.data.Length;
-                    var sm = new StreamMessage(raw_message.data);
-                    if (!IxianHandler.isMyAddress(sm.recipient))
-                    {
-                        if (!NetworkServer.forwardMessage(sm.recipient, ProtocolMessageCode.s2data, raw_message.data))
-                        {
-                            // Couldn't forward the message, send failed to client
-                            sendStreamError(sm.sender, sm.recipient, sm.id, endpoint);
-                            return;
-                        }
-                        bytesRelayed += (ulong)raw_message.data.Length;
-                        return;
-                    }
-                }
-
                 // Bypass Network Queue and process s2data messages directly for low latency
                 IxianHandler.parseProtocolMessage(code, raw_message.data, endpoint);
                 return;
@@ -817,7 +792,7 @@ namespace IXICore
             return filter;
         }
 
-        public static bool broadcastGetTransaction(byte[] txid, ulong block_num, RemoteEndpoint endpoint = null, bool broadcast_to_single_node = true)
+        public static bool broadcastGetTransaction(byte[] txid, ulong block_num, RemoteEndpoint? endpoint = null, bool broadcast_to_single_node = true)
         {
             using (MemoryStream mw = new MemoryStream())
             {

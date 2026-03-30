@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -23,9 +23,9 @@ namespace IXICore.Streaming
 {
     public class FriendMetaData
     {
-        public BotInfo botInfo = null;
+        public BotInfo? botInfo = null;
         public Dictionary<int, byte[]> lastReceivedMessageIds = new Dictionary<int, byte[]>(); // Used primarily for bot purposes
-        public FriendMessage lastMessage { get; private set; }
+        public FriendMessage? lastMessage { get; private set; }
         public int lastMessageChannel { get; private set; }
 
         public int unreadMessageCount = 0;
@@ -167,15 +167,15 @@ namespace IXICore.Streaming
     public class Friend
     {
         public Address walletAddress { get; private set; }
-        public byte[] publicKey { get; private set; }
+        public byte[]? publicKey { get; private set; }
 
         private string _nick = "";
         private string userDefinedNick = "";
 
         [JsonIgnore]
-        public byte[] chachaKey = null; // TODO TODO don't keep keys in plaintext in memory
+        public byte[]? chachaKey = null; // TODO TODO don't keep keys in plaintext in memory
         [JsonIgnore]
-        public byte[] aesKey = null; // TODO TODO don't keep keys in plaintext in memory
+        public byte[]? aesKey = null; // TODO TODO don't keep keys in plaintext in memory
         public long keyGeneratedTime = 0;
 
         public bool online = false;
@@ -187,9 +187,9 @@ namespace IXICore.Streaming
 
         private Dictionary<int, List<FriendMessage>> messages = new Dictionary<int, List<FriendMessage>>();
 
-        public BotUsers users = null;
-        public BotGroups groups = null;
-        public BotChannels channels = null;
+        public BotUsers? users = null;
+        public BotGroups? groups = null;
+        public BotChannels? channels = null;
         public FriendMetaData metaData = new FriendMetaData();
 
         public bool approved = true;
@@ -213,7 +213,7 @@ namespace IXICore.Streaming
 
         public long requestedPresence = 0;
         public long updatedStreamingNodes = 0;
-        public Peer relayNode = null;
+        public Peer? relayNode = null;
         public long lastSeenTime = 0;
         public int protocolVersion = 0;
 
@@ -221,15 +221,15 @@ namespace IXICore.Streaming
         public List<byte[]> supportedProtocols = new();
 
         [JsonIgnore]
-        public byte[] ecdhPrivateKey = null;
+        public byte[]? ecdhPrivateKey = null;
         [JsonIgnore]
-        public byte[] mlKemPrivateKey = null;
+        public byte[]? mlKemPrivateKey = null;
         [JsonIgnore]
-        public byte[] aesSalt = null;
+        public byte[]? aesSalt = null;
 
         public FriendType type = FriendType.Normal;
 
-        public Friend(FriendType friend_type, FriendState friend_state, Address wallet, byte[] public_key, string nick, byte[] aes_key, byte[] chacha_key, long key_generated_time, bool approve = true)
+        public Friend(FriendType friend_type, FriendState friend_state, Address wallet, byte[]? public_key, string nick, byte[]? aes_key, byte[]? chacha_key, long key_generated_time, bool approve = true)
         {
             type = friend_type;
             state = friend_state;
@@ -624,7 +624,7 @@ namespace IXICore.Streaming
                     {
                         // Read and assign the aes password
                         int aes_length = reader.ReadInt32();
-                        byte[] aes = null;
+                        byte[]? aes = null;
                         if (aes_length > 0)
                         {
                             aes = reader.ReadBytes(aes_length);
@@ -632,7 +632,7 @@ namespace IXICore.Streaming
 
                         // Read the chacha key
                         int cc_length = reader.ReadInt32();
-                        byte[] chacha = null;
+                        byte[]? chacha = null;
                         if (cc_length > 0)
                         {
                             chacha = reader.ReadBytes(cc_length);
@@ -669,7 +669,7 @@ namespace IXICore.Streaming
                 return false;
             }
 
-            FriendMessage msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set read indicator, message does not exist");
@@ -706,7 +706,7 @@ namespace IXICore.Streaming
             {
                 return false;
             }
-            FriendMessage msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set received indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
@@ -739,7 +739,7 @@ namespace IXICore.Streaming
             {
                 return false;
             }
-            FriendMessage msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
@@ -771,7 +771,7 @@ namespace IXICore.Streaming
             {
                 return false;
             }
-            FriendMessage msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
@@ -844,7 +844,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public FriendMessage endCall(byte[] session_id, bool call_accepted, long call_duration, bool local_sender)
+        public FriendMessage? endCall(byte[] session_id, bool call_accepted, long call_duration, bool local_sender)
         {
             if(session_id == null)
             {
@@ -878,7 +878,7 @@ namespace IXICore.Streaming
             return true;
         }
 
-        public List<FriendMessage> getMessages(int channel, int msg_count = 100)
+        public List<FriendMessage>? getMessages(int channel, int msg_count = 100)
         {
             try
             {
@@ -905,7 +905,7 @@ namespace IXICore.Streaming
         }
 
 
-        public FriendMessage getMessage(int channel, byte[] msg_id)
+        public FriendMessage? getMessage(int channel, byte[] msg_id)
         {
             try
             {
@@ -940,7 +940,7 @@ namespace IXICore.Streaming
                 {
                     return false;
                 }
-                FriendMessage fm = tmp_messages.Find(x => x.id.SequenceEqual(msg_id));
+                FriendMessage? fm = tmp_messages.Find(x => x.id.SequenceEqual(msg_id));
                 if (fm != null)
                 {
                     fm.message = "";
@@ -984,7 +984,7 @@ namespace IXICore.Streaming
                 {
                     return false;
                 }
-                FriendMessage fm = tmp_messages.Find(x => x.id.SequenceEqual(reaction_data.msgId));
+                FriendMessage? fm = tmp_messages.Find(x => x.id.SequenceEqual(reaction_data.msgId));
                 if (fm != null)
                 {
                     if (fm.reactions.Count >= 10)

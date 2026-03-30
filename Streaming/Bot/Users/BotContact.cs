@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -10,8 +10,6 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using System;
-using System.IO;
 using System.Text;
 
 namespace IXICore.SpixiBot
@@ -27,14 +25,14 @@ namespace IXICore.SpixiBot
     public class BotContact
     {
         private string nick = "";
-        public byte[] nickData { get; private set; }
-        public byte[] publicKey;
+        public byte[]? nickData { get; private set; }
+        public byte[]? publicKey;
         private string role = "";
         public bool hasAvatar = false;
         public bool sendNotification = false;
         public BotContactStatus status = BotContactStatus.normal;
 
-        public BotContact(byte[] nick_data, byte[] public_key, int role_index, bool has_avatar, bool send_notification = false, BotContactStatus status = BotContactStatus.normal)
+        public BotContact(byte[]? nick_data, byte[]? public_key, int role_index, bool has_avatar, bool send_notification = false, BotContactStatus status = BotContactStatus.normal)
         {
             setNick(nick_data);
             publicKey = public_key;
@@ -55,7 +53,7 @@ namespace IXICore.SpixiBot
             this.nick = nick;
         }
 
-        public void setNick(byte[] nick_data)
+        public void setNick(byte[]? nick_data)
         {
             nickData = nick_data;
             if(nickData != null)
