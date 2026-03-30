@@ -604,33 +604,6 @@ namespace IXICore.Network
             return messageCount;
         }
 
-        /// <summary>
-        ///  Gets the client by sequential index.
-        /// </summary>
-        /// <param name="idx">Sequential index of the client.</param>
-        /// <returns>Client at the given index, or null if out of bounds.</returns>
-        public static RemoteEndpoint? getClient(int idx)
-        {
-            lock (connectedClients)
-            {
-                int i = 0;
-                RemoteEndpoint? lastClient = null;
-                foreach (RemoteEndpoint client in connectedClients)
-                {
-                    if (client.isConnected())
-                    {
-                        lastClient = client;
-                    }
-                    if (i == idx && lastClient != null)
-                    {
-                        break;
-                    }
-                    i++;
-                }
-                return lastClient;
-            }
-        }
-
         public static RemoteEndpoint? getClient(Address clientAddress, bool fullyConnected = true)
         {
             lock (connectedClients)

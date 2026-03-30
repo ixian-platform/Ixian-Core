@@ -488,6 +488,22 @@ namespace IXICore.Network
             return null;
         }
 
+        public static bool isConnectedTo(RemoteEndpoint endpoint)
+        {
+            lock (streamClients)
+            {
+                foreach (NetworkClient client in streamClients)
+                {
+                    if (client == endpoint)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
         // Returns all the connected clients
         public static string[] getConnectedClients(bool only_fully_connected = false)
         {

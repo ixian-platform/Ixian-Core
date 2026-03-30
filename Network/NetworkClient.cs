@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -11,7 +11,6 @@
 // MIT License for more details.
 
 using IXICore.Meta;
-using System;
 using System.Net;
 using System.Net.Sockets;
 
@@ -23,9 +22,9 @@ namespace IXICore.Network
     public class NetworkClient : RemoteEndpoint
     {
         /// <summary>
-        ///  Unerlying framework connection, if an operation must be performed directly on it.
+        ///  Underlying framework connection, if an operation must be performed directly on it.
         /// </summary>
-        public TcpClient tcpClient = null;
+        public TcpClient tcpClient;
 
         private string tcpHostname = "";
         private int tcpPort = 0;
@@ -33,9 +32,7 @@ namespace IXICore.Network
 
         private object reconnectLock = new object();
 
-        public string myAddress = ""; // My address as reported by the node
-
-        private IPEndPoint bindEndpoint = null;
+        private IPEndPoint? bindEndpoint = null;
 
         public NetworkClient(string bindAddress, Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null) : base(handler)
         {
