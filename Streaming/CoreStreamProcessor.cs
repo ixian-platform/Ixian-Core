@@ -66,14 +66,23 @@ namespace IXICore.Streaming
 
         protected static PendingMessageProcessor pendingMessageProcessor;
         public static StreamCapabilities streamCapabilities { get; protected set; }
+        protected static ISectorProvider? sectorProvider = null;
 
         protected List<Timer> _typingTimers = new();
 
         // Initialize the global stream processor
-        public CoreStreamProcessor(PendingMessageProcessor pendingMessageProcessor, StreamCapabilities streamCapabilities)
+        public CoreStreamProcessor(PendingMessageProcessor pendingMessageProcessor, StreamCapabilities streamCapabilities, ISectorProvider? sectorProvider = null)
         {
             CoreStreamProcessor.pendingMessageProcessor = pendingMessageProcessor;
             CoreStreamProcessor.streamCapabilities = streamCapabilities;
+            if (sectorProvider == null)
+            {
+                CoreStreamProcessor.sectorProvider = new ClientSectorProvider();
+            }
+            else
+            {
+                CoreStreamProcessor.sectorProvider = sectorProvider;
+            }
         }
 
         public void start()
@@ -3053,7 +3062,12 @@ namespace IXICore.Streaming
             Friend? connection = new Friend(FriendType.Temporary, FriendState.Unknown, extendedAddress.RoutingAddress, null, null, null, null, 0, false);
             ExtendedAddress? resolvedAddress = null;
             IXISocketConnections.AddPendingSectorRequest(connection);
-            using (IXISocket ixiSocket = new IXISocket(connection, new ClientSectorProvider(), new PresenceProvider(connection)))
+            ISectorProvider? selSectorProvider = sectorProvider;
+            if (selSectorProvider == null)
+            {
+                selSectorProvider = new ClientSectorProvider();
+            }
+            using (IXISocket ixiSocket = new IXISocket(connection, selSectorProvider, new PresenceProvider(connection)))
             {
                 if (!await ixiSocket.ConnectAsync())
                 {
