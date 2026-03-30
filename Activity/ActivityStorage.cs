@@ -10,8 +10,6 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-#if __ROCKS_DB_SHARP__
-
 using IXICore.Meta;
 using IXICore.Storage;
 using IXICore.Utils;
@@ -1142,5 +1140,3 @@ namespace IXICore.Activity
         }
     }
 }
-
-#endif
