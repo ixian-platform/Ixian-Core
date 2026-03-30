@@ -34,12 +34,13 @@ namespace IXICore.Network
 
         private static int simultaneousConnectedNeighbors;
         private static bool automaticallySetPublicIP;
+        private static bool connectToRandomStreamNodes;
 
         private static HashSet<string> pinnedNodes = new();
 
         private static string bindAddress = null;
 
-        public static void start(int simultaneousConnectedNeighbors, bool automaticallySetPublicIP, string bindAddress = null)
+        public static void start(int simultaneousConnectedNeighbors, bool automaticallySetPublicIP, bool connectToRandomStreamNodes, string bindAddress = null)
         {
             if (ctsLoop != null)
             {
@@ -48,6 +49,7 @@ namespace IXICore.Network
 
             StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
             StreamClientManager.automaticallySetPublicIP = automaticallySetPublicIP;
+            StreamClientManager.connectToRandomStreamNodes = connectToRandomStreamNodes;
             StreamClientManager.bindAddress = bindAddress;
 
             streamClients.Clear();
@@ -124,7 +126,7 @@ namespace IXICore.Network
             stop();
             Thread.Sleep(100);
             Logging.info("Starting stream clients...");
-            start(simultaneousConnectedNeighbors, automaticallySetPublicIP);
+            start(simultaneousConnectedNeighbors, automaticallySetPublicIP, false);
         }
 
         // Send data to all connected nodes
@@ -239,7 +241,8 @@ namespace IXICore.Network
                         string[] netClients = getConnectedClients();
 
                         // Check if we need to connect to more neighbors
-                        if (netClients.Length < 1)
+                        if (connectToRandomStreamNodes
+                            && netClients.Length < 1)
                         {
                             // Scan for and connect to a new neighbor
                             connectToRandomStreamNode();

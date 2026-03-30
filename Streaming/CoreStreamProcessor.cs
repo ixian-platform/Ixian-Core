@@ -1309,7 +1309,6 @@ namespace IXICore.Streaming
             sendMessage(friend, msg_received, true, true, false, true, channel);
         }
 
-
         protected void sendReceivedConfirmation(byte[] pubKey, Address senderAddress, byte[] messageId, int channel, RemoteEndpoint endpoint)
         {
             // Send received confirmation
