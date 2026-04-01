@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -11,11 +11,6 @@
 // MIT License for more details.
 
 using IXICore.Meta;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -40,51 +35,59 @@ namespace IXICore.Network
 
         private static string bindAddress = null;
 
+        private static bool paused = false;
+
         public static void start(int simultaneousConnectedNeighbors, bool automaticallySetPublicIP, bool connectToRandomStreamNodes, string bindAddress = null)
         {
-            if (ctsLoop != null)
+            lock (streamClients)
             {
-                return;
+                if (ctsLoop != null)
+                {
+                    return;
+                }
+
+                StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
+                StreamClientManager.automaticallySetPublicIP = automaticallySetPublicIP;
+                StreamClientManager.connectToRandomStreamNodes = connectToRandomStreamNodes;
+                StreamClientManager.bindAddress = bindAddress;
+
+                streamClients.Clear();
+                connectingClients.Clear();
+
+                ctsLoop = new CancellationTokenSource();
+
+                // Start the reconnect thread
+                autoReconnect = true;
+                reconnectTask = Task.Run(() => reconnectLoop(ctsLoop.Token));
             }
-
-            StreamClientManager.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
-            StreamClientManager.automaticallySetPublicIP = automaticallySetPublicIP;
-            StreamClientManager.connectToRandomStreamNodes = connectToRandomStreamNodes;
-            StreamClientManager.bindAddress = bindAddress;
-
-            streamClients.Clear();
-            connectingClients.Clear();
-
-            ctsLoop = new CancellationTokenSource();
-
-            // Start the reconnect thread
-            autoReconnect = true;
-            reconnectTask = Task.Run(() => reconnectLoop(ctsLoop.Token));
         }
 
         public static void stop()
         {
-            if (ctsLoop == null)
+            lock (streamClients)
             {
-                return;
-            }
+                if (ctsLoop == null)
+                {
+                    return;
+                }
 
-            autoReconnect = false;
-            isolate();
+                autoReconnect = false;
+                isolate();
 
-            ctsLoop.Cancel();
-            wakeSignal.TrySetResult();
-            try
-            {
-                // Wait for reconnect loop to finish
-                reconnectTask.GetAwaiter().GetResult();
-            }
-            catch (OperationCanceledException) { }
-            finally
-            {
-                ctsLoop.Dispose();
-                ctsLoop = null;
-                reconnectTask = null;
+                ctsLoop.Cancel();
+                wakeSignal.TrySetResult();
+                try
+                {
+                    // Wait for reconnect loop to finish
+                    reconnectTask.GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException) { }
+                finally
+                {
+                    ctsLoop.Dispose();
+                    ctsLoop = null;
+                    reconnectTask = null;
+                }
             }
         }
 
@@ -100,6 +103,17 @@ namespace IXICore.Network
 
                 StreamClientManager.pinnedNodes = pinnedNodes.ToHashSet();
             }
+        }
+
+        public static void pause()
+        {
+            paused = true;
+            isolate();
+        }
+
+        public static void resume()
+        {
+            paused = false;
         }
 
         // Immediately disconnects all clients
@@ -202,81 +216,84 @@ namespace IXICore.Network
         {
             try
             {
-                while (autoReconnect)
+                while (autoReconnect && !token.IsCancellationRequested)
                 {
-                    try
+                    if (!paused)
                     {
-                        handleDisconnectedClients();
-
-                        if (getConnectedClients(true).Count() > simultaneousConnectedNeighbors)
+                        try
                         {
-                            NetworkClient? client = null;
-                            lock (streamClients)
+                            handleDisconnectedClients();
+
+                            if (getConnectedClients(true).Count() > simultaneousConnectedNeighbors)
                             {
-                                foreach (var tmpClient in streamClients)
+                                NetworkClient? client = null;
+                                lock (streamClients)
                                 {
-                                    if (tmpClient.getFullAddress(true) == primaryS2Address)
+                                    foreach (var tmpClient in streamClients)
                                     {
-                                        continue;
+                                        if (tmpClient.getFullAddress(true) == primaryS2Address)
+                                        {
+                                            continue;
+                                        }
+                                        if (pinnedNodes.Contains(tmpClient.getFullAddress(true)))
+                                        {
+                                            continue;
+                                        }
+                                        client = tmpClient;
+                                        break;
                                     }
-                                    if (pinnedNodes.Contains(tmpClient.getFullAddress(true)))
+                                    if (client != null)
                                     {
-                                        continue;
+                                        streamClients.Remove(client);
                                     }
-                                    client = tmpClient;
-                                    break;
                                 }
                                 if (client != null)
                                 {
-                                    streamClients.Remove(client);
+                                    CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
+                                    client.stop();
                                 }
                             }
-                            if (client != null)
+
+                            string[] netClients = getConnectedClients();
+
+                            // Check if we need to connect to more neighbors
+                            if (connectToRandomStreamNodes
+                                && netClients.Length < 1)
                             {
-                                CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
-                                client.stop();
+                                // Scan for and connect to a new neighbor
+                                connectToRandomStreamNode();
                             }
-                        }
 
-                        string[] netClients = getConnectedClients();
-
-                        // Check if we need to connect to more neighbors
-                        if (connectToRandomStreamNodes
-                            && netClients.Length < 1)
-                        {
-                            // Scan for and connect to a new neighbor
-                            connectToRandomStreamNode();
-                        }
-
-                        if (!netClients.Contains(primaryS2Address))
-                        {
-                            if (automaticallySetPublicIP)
+                            if (!netClients.Contains(primaryS2Address))
                             {
-                                var connectedClients = getConnectedClients(true);
-                                if (connectedClients.Length > 0)
+                                if (automaticallySetPublicIP)
                                 {
-                                    primaryS2Address = connectedClients.First();
-
-                                    var endpoint = streamClients.Find(x => x.getFullAddress(true) == primaryS2Address);
-                                    if (endpoint != null)
+                                    var connectedClients = getConnectedClients(true);
+                                    if (connectedClients.Length > 0)
                                     {
-                                        IxianHandler.publicPort = endpoint.incomingPort;
-                                        IxianHandler.publicIP = endpoint.address;
-                                        PresenceList.forceSendKeepAlive = true;
-                                        Logging.info("Forcing KA from StreamClientManager");
+                                        primaryS2Address = connectedClients.First();
+
+                                        var endpoint = streamClients.Find(x => x.getFullAddress(true) == primaryS2Address);
+                                        if (endpoint != null)
+                                        {
+                                            IxianHandler.publicPort = endpoint.incomingPort;
+                                            IxianHandler.publicIP = endpoint.address;
+                                            PresenceList.forceSendKeepAlive = true;
+                                            Logging.info("Forcing KA from StreamClientManager");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        primaryS2Address = "";
+                                        IxianHandler.publicIP = "";
                                     }
                                 }
-                                else
-                                {
-                                    primaryS2Address = "";
-                                    IxianHandler.publicIP = "";
-                                }
                             }
                         }
-                    }
-                    catch (Exception e) when (e is not OperationCanceledException)
-                    {
-                        Logging.error("Fatal exception in reconnectClients: {0}", e);
+                        catch (Exception e) when (e is not OperationCanceledException)
+                        {
+                            Logging.error("Fatal exception in reconnectClients: {0}", e);
+                        }
                     }
 
                     // wait either interval or wake signal

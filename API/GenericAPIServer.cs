@@ -292,6 +292,11 @@ namespace IXICore
                 response = onIsolate();
             }
 
+            if (methodName.Equals("resumenetworkoperations", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onResumeNetworkOperations();
+            }
+
             if (methodName.Equals("addtransaction", StringComparison.OrdinalIgnoreCase))
             {
                 response = onAddTransaction(parameters);
@@ -462,12 +467,14 @@ namespace IXICore
             if (methodName.Equals("pauseClient", StringComparison.OrdinalIgnoreCase))
             {
                 NetworkClientManager.pause();
+                StreamClientManager.pause();
                 response = new JsonResponse { result = "Network Client paused.", error = null };
             }
 
             if (methodName.Equals("resumeClient", StringComparison.OrdinalIgnoreCase))
             {
                 NetworkClientManager.resume();
+                StreamClientManager.resume();
                 response = new JsonResponse { result = "Network Client resumed.", error = null };
             }
 
@@ -885,7 +892,7 @@ namespace IXICore
 
             return new JsonResponse { result = string.Format("Connecting to node {0}", to), error = error };
         }
-
+        
         private JsonResponse onIsolate()
         {
             JsonError? error = null;
@@ -895,6 +902,14 @@ namespace IXICore
             return new JsonResponse { result = "Isolating from network now.", error = error };
         }
 
+        private JsonResponse onResumeNetworkOperations()
+        {
+            JsonError? error = null;
+
+            NetworkUtils.resumeNetworkOperations();
+
+            return new JsonResponse { result = "Reconnecting to network now.", error = error };
+        }
 
         public JsonResponse onAddTransaction(Dictionary<string, object> parameters)
         {
@@ -1783,17 +1798,7 @@ namespace IXICore
                 address = (string)parameters["address"];
             }
 
-            byte[]? address_bytes = null;
-            try
-            {
-                address_bytes = Base58Check.Base58CheckEncoding.DecodePlain(address);
-            }
-            catch (Exception)
-            {
-                address_bytes = null;
-            }
-
-            if (address_bytes == null || !Address.validateChecksum(address_bytes))
+            if (address == null || !ExtendedAddress.Validate(address))
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_ADDRESS_OR_KEY, message = "Invalid address was specified" } };
             }

@@ -139,7 +139,7 @@ namespace IXICore.Network
         }
 
 
-        public static bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint skip_endpoint)
+        public static bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint? skip_endpoint)
         {
             return clientManagerBase.addToInventory(types, item, skip_endpoint);
         }

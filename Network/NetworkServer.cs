@@ -58,39 +58,42 @@ namespace IXICore.Network
         /// </summary>
         public static void beginNetworkOperations()
         {
-            if (netControllerThread != null)
+            lock (connectedClients)
             {
-                // already running
-                Logging.info("Network server thread is already running.");
-                return;
+                if (netControllerThread != null)
+                {
+                    // already running
+                    Logging.info("Network server thread is already running.");
+                    return;
+                }
+
+                if (IxianHandler.publicPort <= 0 || IxianHandler.publicPort > 65535)
+                {
+                    Logging.error("Cannot start network server, public port is invalid");
+                    return;
+                }
+
+                if (CoreConfig.preventNetworkOperations)
+                {
+                    Logging.warn("Not starting NetworkClientManager thread due to preventNetworkOperations flag being set.");
+                    return;
+                }
+
+                TLC = new ThreadLiveCheck();
+                netControllerThread = new Thread(networkOpsLoop);
+                netControllerThread.Name = "Network_Server_Controller_Thread";
+                connectedClients = new List<RemoteEndpoint>();
+                continueRunning = true;
+
+                // Read the server port from the configuration
+                NetOpsData nod = new NetOpsData();
+                nod.listenAddress = new IPEndPoint(IPAddress.Any, IxianHandler.publicPort);
+                netControllerThread.Start(nod);
+
+                Logging.info("Public network node address: {0} port {1}", IxianHandler.publicIP, IxianHandler.publicPort);
+
+                paused = false;
             }
-
-            if(IxianHandler.publicPort <= 0 || IxianHandler.publicPort > 65535)
-            {
-                Logging.error("Cannot start network server, public port is invalid");
-                return;
-            }
-
-            if (CoreConfig.preventNetworkOperations)
-            {
-                Logging.warn("Not starting NetworkClientManager thread due to preventNetworkOperations flag being set.");
-                return;
-            }
-
-            TLC = new ThreadLiveCheck();
-            netControllerThread = new Thread(networkOpsLoop);
-            netControllerThread.Name = "Network_Server_Controller_Thread";
-            connectedClients = new List<RemoteEndpoint>();
-            continueRunning = true;
-
-            // Read the server port from the configuration
-            NetOpsData nod = new NetOpsData();
-            nod.listenAddress = new IPEndPoint(IPAddress.Any, IxianHandler.publicPort);
-            netControllerThread.Start(nod);
-
-            Logging.info("Public network node address: {0} port {1}", IxianHandler.publicIP, IxianHandler.publicPort);
-
-            paused = false;
         }
 
         /// <summary>
@@ -98,39 +101,42 @@ namespace IXICore.Network
         /// </summary>
         public static void stopNetworkOperations()
         {
-            if (netControllerThread == null)
-            {
-                // not running
-                Logging.info("Network server thread was already halted.");
-                return;
-            }
-            continueRunning = false;
-
-            // Close blocking socket
-            listener.Stop();
-
-            netControllerThread.Interrupt();
-            netControllerThread.Join();
-            netControllerThread = null;
-
-            Logging.info("Closing network server connected clients");
-            // Clear all clients
             lock (connectedClients)
             {
-                // Immediately close all connected client sockets
-                foreach (RemoteEndpoint client in connectedClients)
+                if (netControllerThread == null)
                 {
-                    client.stop();
+                    // not running
+                    Logging.info("Network server thread was already halted.");
+                    return;
                 }
+                continueRunning = false;
 
-                connectedClients.Clear();
+                // Close blocking socket
+                listener.Stop();
+
+                netControllerThread.Interrupt();
+                netControllerThread.Join();
+                netControllerThread = null;
+
+                Logging.info("Closing network server connected clients");
+                // Clear all clients
+                lock (connectedClients)
+                {
+                    // Immediately close all connected client sockets
+                    foreach (RemoteEndpoint client in connectedClients)
+                    {
+                        client.stop();
+                    }
+
+                    connectedClients.Clear();
+                }
             }
         }
 
         public static void pause()
         {
-            restartNetworkOperations();
             paused = true;
+            restartNetworkOperations();
         }
 
         public static void resume()
@@ -319,7 +325,7 @@ namespace IXICore.Network
         /// <param name="helper_data">Optional, additional data to transmit after `data`.</param>
         /// <param name="skipEndpoint">If given, the message will not be sent to this remote endpoint. This prevents echoing the message to the originating node.</param>
         /// <returns>True, if at least one message was sent to at least one client.</returns>
-        public static bool broadcastEventData(NetworkEvents.Type type, ProtocolMessageCode code, byte[] data, byte[] address, byte[] helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastEventData(NetworkEvents.Type type, ProtocolMessageCode code, byte[] data, byte[] address, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
         {
             bool result = false;
             try
@@ -731,7 +737,7 @@ namespace IXICore.Network
             return connectable;
         }
 
-        public static bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint skip_endpoint)
+        public static bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint? skip_endpoint)
         {
             lock (connectedClients)
             {

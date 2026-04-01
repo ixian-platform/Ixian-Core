@@ -228,5 +228,18 @@ namespace IXICore
                 return extendedData;
             }
         }
+
+        public static bool Validate(string base58Address)
+        {
+            try
+            {
+                new ExtendedAddress(base58Address);
+                return true;
+            }
+            catch
+            {
+            }
+            return false;
+        }
     }
 }
