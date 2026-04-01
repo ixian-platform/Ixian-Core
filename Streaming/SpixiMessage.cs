@@ -23,7 +23,9 @@ namespace IXICore
         nick = 2,
         requestAdd = 3,
         acceptAdd = 4,
+        [Obsolete ("Deprecated in favor of transactionRequest")]
         sentFunds = 5,
+        [Obsolete("Deprecated in favor of transactionSend")]
         requestFunds = 6,
         keys = 7,
         msgRead = 8,

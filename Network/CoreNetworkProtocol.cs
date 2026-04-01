@@ -596,7 +596,7 @@ namespace IXICore
         /// <param name="helper_data">Additional information, as required by the protocol message</param>
         /// <param name="skipEndpoint">Remote endpoint which should be skipped (data should not be sent to it).</param>
         /// <returns>True, if at least one message was sent to at least one other node. False if no messages were sent.</returns>
-        public static bool broadcastProtocolMessage(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastProtocolMessage(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
         {
             if (data == null)
             {
@@ -633,7 +633,7 @@ namespace IXICore
         /// <param name="helper_data">Optional additional data, as required by `code`.</param>
         /// <param name="skipEndpoint">Endpoint to skip when broadcasting.</param>
         /// <returns>True, if at least one message was sent to at least one remote endpoint. False if no messages were sent.</returns>
-        public static bool broadcastEventDataMessage(NetworkEvents.Type type, byte[] address, ProtocolMessageCode code, byte[] data, byte[] helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastEventDataMessage(NetworkEvents.Type type, byte[] address, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
         {
             // Send it to subscribed C nodes
             bool f_result = NetworkServer.broadcastEventData(type, code, data, address, helper_data, skipEndpoint);
@@ -660,7 +660,7 @@ namespace IXICore
         /// <param name="helper_data">Additional information, to prevent sending duplicate messages. In case of duplicate message will be replaced with latest message.</param>
         /// <param name="msg_id">Message id, usually related to block height, which prioritizes relevant incoming messages.</param>
         /// <returns>True, if at least one message was sent to at least one remote endpoint. False if no messages were sent.</returns>
-        public static bool broadcastProtocolMessageToSingleRandomNode(char[] types, ProtocolMessageCode code, byte[] data, ulong block_num, RemoteEndpoint skipEndpoint = null, byte[] helper_data = null, long msg_id = 0)
+        public static bool broadcastProtocolMessageToSingleRandomNode(char[] types, ProtocolMessageCode code, byte[] data, ulong block_num, RemoteEndpoint? skipEndpoint = null, byte[]? helper_data = null, long msg_id = 0)
         {
             if (data == null)
             {
@@ -674,8 +674,8 @@ namespace IXICore
                 {
                     int serverCount = 0;
                     int clientCount = 0;
-                    List<NetworkClient> servers = null;
-                    List<RemoteEndpoint> clients = null;
+                    List<NetworkClient> servers;
+                    List<RemoteEndpoint> clients;
 
                     if (types == null)
                     {
@@ -716,7 +716,7 @@ namespace IXICore
 
                     int rIdx = Random.Shared.Next(serverCount + clientCount);
 
-                    RemoteEndpoint re = null;
+                    RemoteEndpoint re;
 
                     if (rIdx < serverCount)
                     {
@@ -831,7 +831,7 @@ namespace IXICore
             }
         }
 
-        public static void broadcastGetPresence(byte[] address, RemoteEndpoint endpoint)
+        public static void broadcastGetPresence(byte[] address, RemoteEndpoint? endpoint)
         {
             using (MemoryStream mw = new MemoryStream())
             {
@@ -857,7 +857,7 @@ namespace IXICore
             }
         }
 
-        public static bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint skip_endpoint)
+        public static bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint? skip_endpoint)
         {
             bool c_result = NetworkClientManager.addToInventory(types, item, skip_endpoint);
             bool s_result = NetworkServer.addToInventory(types, item, skip_endpoint);
@@ -1102,7 +1102,7 @@ namespace IXICore
             return netBh;
         }
 
-        public static void broadcastGetTransactions(List<byte[]> tx_list, long block_num, RemoteEndpoint endpoint)
+        public static void broadcastGetTransactions(List<byte[]> tx_list, long block_num, RemoteEndpoint? endpoint)
         {
             int tx_count = tx_list.Count;
             int max_tx_per_chunk = CoreConfig.maximumTransactionsPerChunk;
@@ -1241,7 +1241,7 @@ namespace IXICore
             endpoint?.sendData(ProtocolMessageCode.rejected, new Rejected(code, data).getBytes());
         }
 
-        public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest, RemoteEndpoint endpoint = null)
+        public static void fetchSectorNodes(Address address, int maxSectorNodesToRequest, RemoteEndpoint? endpoint = null)
         {
             Logging.trace("Fetching sector nodes for " + address.ToString());
             using (MemoryStream mw = new MemoryStream())
@@ -1272,7 +1272,7 @@ namespace IXICore
 
 
         // Sends an error stream message to a recipient
-        public static void sendStreamError(Address recipient, Address sender, byte[] data, RemoteEndpoint endpoint = null)
+        public static void sendStreamError(Address recipient, Address sender, byte[] data, RemoteEndpoint? endpoint = null)
         {
             StreamMessage message = new StreamMessage();
             message.type = StreamMessageCode.error;

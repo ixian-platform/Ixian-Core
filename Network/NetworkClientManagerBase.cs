@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2025 Ixian
+// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -12,11 +12,6 @@
 
 using IXICore.Inventory;
 using IXICore.Meta;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace IXICore.Network
 {
@@ -63,22 +58,25 @@ namespace IXICore.Network
         // Afterwards, it starts the reconnect and keepalive threads
         public void start(int connections_to_wait_for = 0)
         {
-            if (ctsLoop != null)
+            lock (networkClients)
             {
-                return;
+                if (ctsLoop != null)
+                {
+                    return;
+                }
+
+                if (CoreConfig.preventNetworkOperations)
+                {
+                    Logging.warn("Not starting NetworkClientManager thread due to preventNetworkOperations flag being set.");
+                    return;
+                }
+
+                networkClients.Clear();
+                connectingClients.Clear();
+
+                ctsLoop = new CancellationTokenSource();
+
             }
-
-            if (CoreConfig.preventNetworkOperations)
-            {
-                Logging.warn("Not starting NetworkClientManager thread due to preventNetworkOperations flag being set.");
-                return;
-            }
-
-            networkClients.Clear();
-            connectingClients.Clear();
-
-            ctsLoop = new CancellationTokenSource();
-
             if (connections_to_wait_for > 0)
             {
                 // Connect to a random node first
@@ -187,44 +185,50 @@ namespace IXICore.Network
         // Starts the Network Client Manager in debug mode with a single connection and no reconnect. Used for development only.
         public bool startWithSingleConnection(string address)
         {
-            if (ctsLoop != null)
+            lock (networkClients)
             {
-                return false;
+                if (ctsLoop != null)
+                {
+                    return false;
+                }
+
+                ctsLoop = new CancellationTokenSource();
+
+                networkClients.Clear();
+                connectingClients.Clear();
+
+                bool result = connectTo(address, null);
+
+                return result;
             }
-
-            ctsLoop = new CancellationTokenSource();
-
-            networkClients.Clear();
-            connectingClients.Clear();
-
-            bool result = connectTo(address, null);
-
-            return result;
         }
 
         public void stop()
         {
-            if (ctsLoop == null)
+            lock (networkClients)
             {
-                return;
-            }
+                if (ctsLoop == null)
+                {
+                    return;
+                }
 
-            autoReconnect = false;
-            isolate();
+                autoReconnect = false;
+                isolate();
 
-            ctsLoop.Cancel();
-            wakeSignal.TrySetResult();
-            try
-            {
-                // Wait for reconnect loop to finish
-                reconnectTask.GetAwaiter().GetResult();
-            }
-            catch (OperationCanceledException) { }
-            finally
-            {
-                ctsLoop.Dispose();
-                ctsLoop = null;
-                reconnectTask = null;
+                ctsLoop.Cancel();
+                wakeSignal.TrySetResult();
+                try
+                {
+                    // Wait for reconnect loop to finish
+                    reconnectTask?.GetAwaiter().GetResult();
+                }
+                catch (OperationCanceledException) { }
+                finally
+                {
+                    ctsLoop.Dispose();
+                    ctsLoop = null;
+                    reconnectTask = null;
+                }
             }
         }
 
@@ -768,7 +772,7 @@ namespace IXICore.Network
             }
         }
 
-        public bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint skip_endpoint)
+        public bool addToInventory(char[] types, InventoryItem item, RemoteEndpoint? skip_endpoint)
         {
             lock (networkClients)
             {

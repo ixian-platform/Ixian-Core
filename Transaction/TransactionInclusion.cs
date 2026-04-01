@@ -914,6 +914,10 @@ namespace IXICore
 
                             // Create the blockheader from the data and process it
                             Block header = new Block(header_bytes, true);
+                            if (header.blockNum > lastBlockHeader?.blockNum + 1)
+                            {
+                                break;
+                            }
 
                             if (InventoryCache.Instance != null)
                             {
@@ -1005,6 +1009,7 @@ namespace IXICore
                 if (endpoint != null)
                 {
                     endpoint.sendData(ProtocolMessageCode.getBlockHeaders4, mOut.ToArray());
+                    return true;
                 }
                 else
                 {

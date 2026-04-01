@@ -111,7 +111,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\SpixiMessageObjectMap.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\ReactionMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\LocalStorage.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Storage\Models\StorageTransaction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransaction.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\StreamTransactionRequest.cs" />

@@ -483,7 +483,7 @@ namespace IXICore.Streaming
             Address real_sender_address = null;
             Address sender_address = message.sender;
 
-            Friend tmp_friend = FriendList.getFriend(message.recipient);
+            Friend? tmp_friend = FriendList.getFriend(message.recipient);
             if (tmp_friend != null)
             {
                 if (tmp_friend.bot)

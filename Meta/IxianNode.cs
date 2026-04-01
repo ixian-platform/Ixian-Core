@@ -15,18 +15,15 @@ using IXICore.Network;
 using IXICore.RegNames;
 using IXICore.Storage;
 using IXICore.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace IXICore.Meta
 {
     public class Balance
     {
-        public Address address = null;
+        public Address address;
         public IxiNumber balance = 0;
         public ulong blockHeight = 0;
-        public byte[] blockChecksum = null;
+        public byte[]? blockChecksum = null;
         public bool verified = false;
         public long lastUpdate = 0;
 
@@ -65,8 +62,6 @@ namespace IXICore.Meta
         public abstract bool addIncomingTransaction(Transaction tx);
         public abstract bool addTransaction(Transaction tx, List<Address> relayNodeAddresses, List<ExtendedAddress>? extendedAddresses, byte[]? requestId, bool force_broadcast);
         public abstract bool isAcceptingConnections();
-        public abstract Wallet getWallet(Address id);
-        public abstract IxiNumber getWalletBalance(Address id);
         public abstract void parseProtocolMessage(ProtocolMessageCode code, byte[] data, RemoteEndpoint endpoint);
 
         public abstract void shutdown();
@@ -84,6 +79,22 @@ namespace IXICore.Meta
             }
             return Clock.getNetworkTimestamp() - lb.timestamp;
         }
+
+        public virtual Wallet getWallet(Address id)
+        {
+            if (IxianHandler.balances.TryGetValue(id, out var balance))
+                return new Wallet(id, balance.balance);
+
+            return new Wallet(id, 0);
+        }
+
+        public virtual IxiNumber getWalletBalance(Address id)
+        {
+            if (IxianHandler.balances.TryGetValue(id, out var balance))
+                return balance.balance;
+
+            return 0;
+        }
     }
 
     public static class IxianHandler
@@ -92,7 +103,7 @@ namespace IXICore.Meta
 
         public static LocalStorage localStorage = null;
 
-        public static List<Balance> balances = new List<Balance>(); // Stores the last known balances for this node
+        public static Dictionary<Address, Balance> balances = new (new AddressComparer()); // Stores the last known balances for this node
 
         public static bool forceIP = false;
         private static string _publicIP = "";

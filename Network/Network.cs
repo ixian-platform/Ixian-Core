@@ -642,17 +642,28 @@ namespace IXICore.Network
             }
 
             NetworkClientManager.restartClients();
+            StreamClientManager.restartClients();
         }
 
         /// <summary>
-        /// Isolates the node from the network.
+        /// Isolates the node from the network - pauses all network operations.
         /// </summary>
         static public void isolate()
         {
             NetworkClientManager.pause();
             NetworkServer.pause();
+            StreamClientManager.pause();
         }
 
+        /// <summary>
+        /// Resumes all paused network operations for clients and servers.
+        /// </summary>
+        static public void resumeNetworkOperations()
+        {
+            NetworkClientManager.resume();
+            NetworkServer.resume();
+            StreamClientManager.resume();
+        }
 
         public static string resolveHostname(string hostname)
         {

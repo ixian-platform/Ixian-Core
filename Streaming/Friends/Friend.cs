@@ -1006,7 +1006,7 @@ namespace IXICore.Streaming
         {
             lock(messages)
             {
-                IxianHandler.localStorage.flush();
+                IxianHandler.localStorage?.flush();
                 messages.Clear();
             }
         }
