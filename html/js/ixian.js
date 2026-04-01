@@ -6,26 +6,17 @@ var qrcode = null;
 
 var selectedReceiveAddress = null;
 
-// copyToClipboard function copied from https://hackernoon.com/copying-text-to-clipboard-with-javascript-df4d4988697f
-const copyToClipboard = str => {
-    const el = document.createElement('textarea');  // Create a <textarea> element
-    el.value = str;                                 // Set its value to the string that you want copied
-    el.setAttribute('readonly', '');                // Make it readonly to be tamper-proof
-    el.style.position = 'absolute';
-    el.style.left = '-9999px';                      // Move outside the screen to make it invisible
-    document.body.appendChild(el);                  // Append the <textarea> element to the HTML document
-    const selected =
-        document.getSelection().rangeCount > 0        // Check if there is any content selected previously
-            ? document.getSelection().getRangeAt(0)     // Store selection if found
-            : false;                                    // Mark as false to know no selection existed before
-    el.select();                                    // Select the <textarea> content
-    document.execCommand('copy');                   // Copy - only works as a result of a user action (e.g. click events)
-    document.body.removeChild(el);                  // Remove the <textarea> element
-    if (selected) {                                 // If a selection existed before copying
-        document.getSelection().removeAllRanges();    // Unselect everything on the HTML document
-        document.getSelection().addRange(selected);   // Restore the original selection
-    }
-};
+function copyToClipboard(addr) {
+    navigator.clipboard.writeText(addr)
+        .then(() => {
+            const el = document.getElementById("selectedReceiveAddress");
+            el.classList.add("copied");
+
+            // Remove the class after animation
+            setTimeout(() => el.classList.remove("copied"), 800);
+        })
+        .catch(err => console.error("Copy failed", err));
+}
 
 function setReceiveAddress(address) {
     selectedReceiveAddress = address;
@@ -74,7 +65,7 @@ function getMyWallet() {
                         primaryDesignator = " - Primary Address";
                         first = false;
                     }
-                    html += "<span onclick=\"setReceiveAddress('" + i + "');\">" + i + " (" + data[i] + ")" + primaryDesignator + "</span><br/>";
+                    html += "<span onclick=\"setReceiveAddress('" + i + "');\" class=\"" + (primaryDesignator != "" ? "primary" : "") + "\">" + i + " (" + data[i] + ")" + primaryDesignator + "</span><br/>";
                 }
 
                 html += "</div>";
@@ -101,14 +92,27 @@ function statusToString(status, type) {
         default:
             return "Unknown - " + status;
     }
-
 }
 
-function jsonToHtml(jsonArr)
-{
+
+function statusToClassName(status) {
+    switch (status) {
+        case 1:
+            return "pending";
+        case 2:
+            return "final";
+        case 3:
+            return "error";
+        case 4:
+            return "reverted";
+        default:
+            return "error";
+    }
+}
+
+function jsonToHtml(jsonArr) {
     var html = "";
-    for (var key in jsonArr)
-    {
+    for (var key in jsonArr) {
         html += "<b>" + key + "</b>: " + jsonArr[key] + "<br/>";
 
     }
@@ -175,6 +179,8 @@ function getActivity() {
                 htmlEl.getElementsByClassName("pamount")[0].innerHTML += "<br/><span class=\"pdate\">" + date.toLocaleString() + "</span>";
                 var status = statusToString(data["result"][i]["status"], type);
                 htmlEl.getElementsByClassName("pdesc")[0].innerHTML += " - " + status;
+                var statusClassName = statusToClassName(data["result"][i]["status"]);
+                htmlEl.className += " " + statusClassName;
             }
         });
 }
@@ -191,8 +197,7 @@ function sendTransaction() {
         }
 
         var amount = amountEls[i];
-        if (amount == null || amount.value.trim() <= 0)
-        {
+        if (amount == null || amount.value.trim() <= 0) {
             alert("Incorrect amount specified.");
             return;
         }
@@ -269,6 +274,21 @@ function calculateTransactionAmounts() {
         });
 
 }
+function showSyncProgress(percent, text = "Syncing blockchain...") {
+    const bar = document.getElementById('warning_bar');
+    const label = document.getElementById('warning_text');
+    const percentLabel = document.getElementById('warning_percent');
+    const fill = document.getElementById('warning_progress_fill');
+    const warningOther = document.getElementById('warning_other');
+    const warningSync = document.getElementById('warning_sync');
+
+    label.textContent = text;
+    percentLabel.textContent = percent + "%";
+    fill.style.width = percent + "%";
+
+    warningOther.style.display = "none";
+    warningSync.style.display = "block";
+}
 
 function getStatus() {
 
@@ -279,18 +299,21 @@ function getStatus() {
 
             sync_status = data["result"]["DLT Status"];
 
+            const warningOther = document.getElementById('warning_other');
+            const warningSync = document.getElementById('warning_sync');
+            warningOther.style.display = "block";
+            warningSync.style.display = "none";
+
             var warning_bar = document.getElementById("warning_bar");
             warning_bar.style.display = "block";
 
             if (sync_status == "Synchronizing") {
                 // Show the syncbar
-                warning_bar.firstElementChild.innerHTML = "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".";
+                showSyncProgress(data["result"]["Block Height"] / data["result"]["Network Block Height"], "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".")
 
-            } else if (sync_status == "ErrorForkedViaUpgrade")
-            {
+            } else if (sync_status == "ErrorForkedViaUpgrade") {
                 warning_bar.firstElementChild.innerHTML = "Network has been upgraded, please download a newer version of Ixian DLT.";
-            } else if (sync_status == "ErrorLongTimeNoBlock")
-            {
+            } else if (sync_status == "ErrorLongTimeNoBlock") {
                 warning_bar.firstElementChild.innerHTML = "No fully signed block received for a while, make sure that you're connected to the internet.";
             }
             else {
@@ -364,51 +387,71 @@ function getStatus() {
 
 }
 
+var html5QrCode = null;
 function readQR(addressEl) {
+    document.getElementById('reader_modal').style.display = 'block';
+    if (html5QrCode != null) {
+        return;
+    }
     console.log("Starting QR code reader");
 
-    let scanner = new Instascan.Scanner({});
-    scanner.addListener('scan', function (content) {
-        console.log("QRscanner: " + content);
-        addressEl.innerHTML = content;
-    });
-    Instascan.Camera.getCameras().then(function (cameras) {
-        if (cameras.length > 0) {
-            scanner.start(cameras[0]);
-        } else {
-            console.error('No cameras found.');
-            alert("No camera found. Please type the address to send funds to.");
-        }
-    }).catch(function (e) {
-        console.error(e);
-    });
+    html5QrCode = new Html5Qrcode(
+        "reader", { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
+    const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+        console.log("QRscanner: " + decodedText);
+        addressEl.value = decodedText;
+        closeQR();
+    };
+    const config = {
+        fps: 15,
+        qrbox: 450,
+        showTorchButtonIfSupported: true,
+        focusMode: "continuous",
+        showZoomSliderIfSupported: true,
+        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+    };
 
+    html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback);
+
+    setTimeout(function () {
+        html5QrCode.applyVideoConstraints({
+            focusMode: "continuous",
+            advanced: [{ zoom: 2.0 }],
+        });
+    }, 1000);
+}
+
+function stopQR() {
+    if (html5QrCode == null) {
+        return;
+    }
+    html5QrCode.stop();
+    html5QrCode = null;
+}
+
+function closeQR() {
+    document.getElementById('reader_modal').style.display = 'none';
+    stopQR();
 }
 
 function addRecipient() {
     var div = document.createElement("div");
-    div.className = "single_send_section";
-    div.innerHTML = document.getElementsByClassName("single_send_section")[0].innerHTML;
+    div.className = "recipient-card";
+    div.innerHTML = document.getElementsByClassName("recipient-card")[0].innerHTML;
 
     document.getElementById("sendSection").appendChild(div);
 }
 
-function initTabs()
-{
-    // Function to toggle tab's active color
-    $('a[data-toggle="tab"]').on('shown.bs.tab', function (e) {
-        var nodes = document.getElementById("bottomNav").childNodes;
-        for(var childIndex = 0; childIndex < nodes.length; childIndex++)
-        {
-            if(nodes[childIndex].nodeName.toLowerCase() != "div")
-            {
-                continue;     
-			}
-            nodes[childIndex].className = nodes[childIndex].className.replace("active", "").trim();
-        }
-        e.target.parentElement.className += " active";
-    });
+function switchTab(e, tabId) {
+    e.preventDefault();
+
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.querySelectorAll('.bottom-nav a').forEach(a => a.classList.remove('active'));
+
+    document.getElementById(tabId).classList.add('active');
+    e.target.classList.add('active');
 }
+
 
 $(function () {
     console.log("Wallet loaded");
@@ -423,7 +466,6 @@ $(function () {
         height: 300
     });
 
-    initTabs();
     setInterval(getMyWallet, 5000);
     setInterval(getActivity, 5000);
     setInterval(getStatus, 5000);
@@ -431,3 +473,89 @@ $(function () {
     getActivity();
     getStatus();
 });
+
+function signMessage() {
+    const message = $("#sign_message").val();
+    const wallet = $("#sign_address").val();
+    let params = {
+        message: message
+    };
+
+    if (wallet != null) {
+        let params = {
+            wallet: wallet,
+            message: message
+        };
+    }
+
+    if (!message) {
+        alert("Enter message");
+        return;
+    }
+
+    $.ajax({
+        url: "/sign",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({
+            method: "sign",
+            params: params,
+            id: 1
+        }),
+        success: function (res) {
+            if (res && res.result) {
+                $("#sign_public_key").val(res.result.publicKey);
+                $("#sign_output").val(res.result.signature);
+            } else {
+                alert("Signing failed");
+            }
+        },
+        error: function (err) {
+            console.error(err);
+            alert("RPC error");
+        }
+    });
+}
+
+function verifyMessage() {
+    const message = $("#verify_message").val();
+    const publicKey = $("#verify_public_key").val();
+    const signature = $("#verify_signature").val();
+
+    if (!message || !publicKey || !signature) {
+        alert("Fill all fields");
+        return;
+    }
+
+    $.ajax({
+        url: "/verify",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({
+            method: "verify",
+            params: {
+                publicKey: publicKey,
+                signature: signature,
+                message: message
+            },
+            id: 1
+        }),
+        success: function (res) {
+
+            if (res) {
+                const valid = res.result.verified === "ok";
+                $("#verify_result")
+                    .text(valid ? "✔ Valid signature (Address: " + res.result.address + ")" : "✖ Invalid signature (Address: " + res.result.address + ")")
+                    .css("color", valid ? "green" : "red");
+            } else {
+                alert("Verification failed");
+            }
+        },
+        error: function (err) {
+            console.error(err);
+            $("#verify_result")
+                .text("✖ Invalid signature")
+                .css("color", "red");
+        }
+    });
+}

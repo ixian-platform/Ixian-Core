@@ -87,7 +87,7 @@ namespace IXICore.Activity
                 .SetAllowMmapWrites(false)
                 .SetTargetFileSizeBase(256 * 1024 * 1024)
                 .SetTargetFileSizeMultiplier(2)
-                .SetCompression(Compression.Zstd)
+                .SetCompression(RocksDbSharp.Compression.Zstd)
                 .SetLevelCompactionDynamicLevelBytes(true)
                 .SetCompactionReadaheadSize(4 * 1024 * 1024);
 
@@ -163,7 +163,7 @@ namespace IXICore.Activity
             var opts = getDefaultOptions();
 
             var dbOptions = opts.dbOptions;
-            dbOptions.SetCompression(Compression.Lz4)
+            dbOptions.SetCompression(RocksDbSharp.Compression.Lz4)
                      .SetWriteBufferSize(4UL << 20)
                      .SetMaxWriteBufferNumber(2)
                      .SetTargetFileSizeBase(32UL << 20)
@@ -848,8 +848,7 @@ namespace IXICore.Activity
                         db.Value.lastUsedTime
                         );
 
-                    if (db.Value.isOpen
-                        && (DateTime.Now - db.Value.lastUsedTime).TotalSeconds >= closeAfterSeconds)
+                    if ((DateTime.Now - db.Value.lastUsedTime).TotalSeconds >= closeAfterSeconds)
                     {
                         if (db.Value.maxBlockNumber == 0)
                         {

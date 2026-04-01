@@ -1,179 +1,227 @@
 ﻿<!DOCTYPE html>
-<!-- Ixian Core | MIT License | github.com/ProjectIxian/Ixian-Core  -->
+<!-- Ixian Core | MIT License | github.com/ixian-platform/Ixian-Core  -->
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>IXIAN Wallet</title>
-        <link rel="stylesheet" type="text/css" href="resources/css/normalize.css">
-        <link rel="stylesheet" type="text/css" href="resources/css/bootstrap37.css">
-        <link rel="stylesheet" type="text/css" href="resources/css/style.css">
-        <link rel="stylesheet" type="text/css" href="resources/css/custom.css">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IXIAN Wallet</title>
 
-        <script src="resources/js/jquery.min.js"></script>
-        <script src="resources/js/bootstrap.min.js"></script>
-        <script src="resources/js/qrcode.min.js"></script>
-        <script src="resources/js/instascan.min.js"></script>
-    </head>
-    <body>
-        <div id="templates" style="display: none;">
-            <div class="payment">
-                <div class="row">
-                    <div class="col-xs-2 psign"><div>&nbsp;</div></div>
-                    <div class="col-xs-6 pdesc"></div>
-                    <div class="pdetails"></div>
-                    <div class="col-xs-4 pamount"></div>
+    <link rel="stylesheet" href="resources/css/style.css">
+    <link rel="stylesheet" href="resources/css/custom.css">
+
+</head>
+
+<body>
+    <div id="templates" style="display:none;">
+        <div class="payment">
+            <div class="pdesc"></div>
+            <div class="pamount"></div>
+            <div class="pdetails"></div>
+        </div>
+    </div>
+    <div class="app">
+
+        <!-- NAVBAR -->
+        <header class="navbar">
+            <img src="resources/img/logofull.png" alt="Ixian Logo">
+            <div id="version"></div>
+            <div id="MinerSection"></div>
+        </header>
+
+        <div id="warning_bar" class="warning-bar hidden">
+            <div id="warning_other">
+
+            </div>
+
+            <div id="warning_sync">
+                <div class="warning-content">
+                    <span id="warning_text">Syncing blockchain…</span>
+                    <span id="warning_percent">0%</span>
+                </div>
+
+                <div class="warning-progress">
+                    <div id="warning_progress_fill"></div>
                 </div>
             </div>
         </div>
 
-        <nav class="navbar navbar-default navbar-fixed-top">
-            <div class="row">
-                <div class="col-xs-10"><img src="resources/img/logofull.png" style="margin-top:11px; margin-left:15px;" /></div>
-                <div class="navbar-version" id="version"></div>
-                <div id="MinerSection"></div>
-            </div>
+        <!-- MAIN CONTENT -->
+        <main class="content">
+
+            <!-- HOME / ACTIVITY -->
+            <section id="home" class="view active">
+
+                <div class="balance-card">
+                    <div>Available Balance</div>
+                    <div class="balance-amount">
+                        <span id="activity_balance_number">0</span> IXI
+                    </div>
+                </div>
+
+                <div class="activity-header">
+                    <span>Recent Activity</span>
+                    <select id="activity_type">
+                        <option value="-1">All</option>
+                        <option value="100">Received</option>
+                        <option value="101">Sent</option>
+                        <option value="200">Mining Reward</option>
+                        <option value="201">Signing Reward</option>
+                        <option value="202">Tx Fee Reward</option>
+                        <option value="400">IXI Names</option>
+                    </select>
+                </div>
+
+                <div id="payments" class="payments"></div>
+
+            </section>
+
+            <!-- RECEIVE -->
+            <section id="receive" class="view">
+
+                <div class="balance-card">
+                    <strong>Receive Funds</strong>
+                </div>
+
+                <div class="balance-card">
+                    <p>Copy address below</p>
+                    <div class="receive-own-address-container">
+                        <div id="receive_own_address"></div>
+                    </div>
+                    <p style="margin-top: 0px;">or scan QR code to receive funds</p>
+                    <div id="qrcode"></div>
+                </div>
+
+                <div style="text-align:center;">
+                    <button class="btn-primary" onclick="generateNewAddress()">
+                        Generate New Address
+                    </button>
+                </div>
+
+            </section>
+
+            <!-- SEND -->
+            <section id="send" class="view">
+
+                <div class="balance-card">
+                    <div>Available Balance</div>
+                    <div class="balance-amount">
+                        <span id="send_balance_number">0</span> IXI
+                    </div>
+                </div>
+
+                <form id="sendForm">
+
+                    <div id="sendSection">
+
+                        <div class="recipient-card">
+
+                            <p>Recipient Address</p>
+                            <div style="display:flex; gap:0.5rem;">
+                                <input type="text" name="address" class="input" placeholder="Enter address" style="flex:1;">
+
+                                <button type="button" class="btn-camera" onclick="readQR(this.previousElementSibling)">
+                                    <img src="resources/img/camera.png">
+                                </button>
+                            </div>
+
+                            <p style="margin-top:1rem;">Amount</p>
+                            <input type="text" name="amount" class="input" onkeyup="calculateTransactionAmounts()">
+
+                        </div>
+
+                    </div>
+
+                    <div style="text-align:center;">
+                        <button type="button" class="btn-primary bottom-spacer" onclick="addRecipient()">
+                            Add another recipient
+                        </button>
+                    </div>
+
+                    <div class="balance-card">
+                        <p>Transaction Fee</p>
+                        <div><span id="transactionFee">0</span> IXI</div>
+
+                        <p>Total Amount</p>
+                        <div><span id="totalAmount">0</span> IXI</div>
+                    </div>
+
+                    <div style="text-align:center;">
+                        <button type="submit" class="btn-primary">
+                            Send
+                        </button>
+                    </div>
+
+                </form>
+
+            </section>
+
+            <!-- SIGN / VERIFY -->
+            <section id="sign" class="view">
+
+                <div class="balance-card">
+                    <strong>Sign & Verify Message</strong>
+                </div>
+
+                <!-- SIGN -->
+                <div class="recipient-card">
+                    <p style="margin-top:0px;">Message to Sign</p>
+                    <textarea id="sign_message" class="input" rows="3" placeholder="Enter message"></textarea>
+
+                    <p style="margin-top:1rem;">Address (optional)</p>
+                    <input type="text" id="sign_address" class="input" placeholder="Leave empty to use primary">
+
+                    <div style="text-align:center; margin-top:1rem;">
+                        <button class="btn-primary" onclick="signMessage()">Sign Message</button>
+                    </div>
+
+                    <p style="margin-top:1rem;">Public Key</p>
+                    <textarea id="sign_public_key" class="input" rows="3" readonly></textarea>
+
+                    <p style="margin-top:1rem;">Signature</p>
+                    <textarea id="sign_output" class="input" rows="3" readonly></textarea>
+                </div>
+
+                <!-- VERIFY -->
+                <div class="recipient-card">
+                    <p style="margin-top:0px;">Message to Verify</p>
+                    <textarea id="verify_message" class="input" rows="3"></textarea>
+
+                    <p style="margin-top:1rem;">Public Key</p>
+                    <textarea id="verify_public_key" class="input" rows="3"></textarea>
+
+                    <p style="margin-top:1rem;">Signature</p>
+                    <textarea id="verify_signature" class="input" rows="3"></textarea>
+
+                    <div style="text-align:center; margin-top:1rem;">
+                        <button class="btn-primary" onclick="verifyMessage()">Verify</button>
+                    </div>
+
+                    <p id="verify_result" style="text-align:center; margin-top:1rem;"></p>
+                </div>
+
+            </section>
+        </main>
+
+        <!-- BOTTOM NAV -->
+        <nav class="bottom-nav">
+            <a href="#receive" onclick="switchTab(event, 'receive')">Receive</a>
+            <a href="#home" class="active" onclick="switchTab(event, 'home')">Activity</a>
+            <a href="#send" onclick="switchTab(event, 'send')">Send</a>
+            <a href="#sign" onclick="switchTab(event, 'sign')">Sign</a>
         </nav>
 
-        <div id="warning_bar" class="warning_bar">
-            <p class="text-center" style="padding-top:8px"></p>
-        </div>
+    </div>
 
-        <div id="wrap" class="container-fluid">
+    <!-- QR Reader Modal -->
+    <div id="reader_modal" style="display:none;" onclick="closeQR()">
+        <div id="reader"></div>
+    </div>
 
-            <div class="tab-content">
-
-                <div id="home" class="tab-pane fade in active">
-
-                    <div id="status_balance">
-                        <p class="text-center top">Available Balance</p>
-                        <p class="text-center"><span class="status_dbalance" id="activity_balance_number">0</span> <i>IXI</i></p>
-
-                    </div>
-
-                    <div class="recent_activity_wrapper">
-                        <div class="recent_activity">
-                            RECENT ACTIVITY
-                            <select id="activity_type" onchange="javascript: getActivity();">
-                                <option value="-1">All</option>
-                                <option value="100">Received</option>
-                                <option value="101">Sent</option>
-                                <option value="200">Mining Reward</option>
-                                <option value="201">Signing Reward</option>
-                                <option value="202">Tx Fee Reward</option>
-                                <option value="400">IXI Names</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div id="payments">
-
-
-                    </div>
-
-                </div>
-
-
-
-
-                <div id="receive" class="tab-pane fade">
-
-                    <div class="screen_headerbar">
-                        <p class="text-center" style="padding-top:8px">Receive Funds</p>
-                    </div>
-
-                    <div id="qr_container">
-                        <p class="text-center top">Scan the QR code to send funds</p>
-                        <div id="qrcode" class="middle"></div>
-
-                        <p class="text-center bottom">or click on the address below to copy it to clipboard</p>
-
-                    </div>
-
-                    <div class="receive_address" id="receive_own_address">
-                        0
-                    </div>
-
-                    <div class="send_button_wrap">
-                        <div class="generate_address btn sendbtn" onclick="generateNewAddress();">
-                            Generate new address
-                        </div>
-                    </div>
-
-                </div>
-
-
-
-                <div id="send" class="tab-pane fade">
-                    <div class="screen_headerbar">
-                        <p class="text-center" style="padding-top:8px">Send Funds</p>
-                    </div>
-
-                    <div id="send_balance">
-                        <p class="text-center top">Available Balance</p>
-                        <p class="text-center"><span class="status_dbalance" id="send_balance_number">0</span> <i>IXI</i></p>
-
-                    </div>
-
-                    <form id="sendForm">
-                        <div id="sendSection">
-                            <div class="single_send_section">
-                                <div class="send_address">
-                                    enter address or scan QR code
-                                </div>
-
-                                <div class="address_edit">
-                                    <input type="text" name="address" placeholder="" class="input-sm form-control address_input">
-                                    <img class="camerabtn" onclick="javascript:readQR(this.previousElementSibling)" src="resources/img/camera.png" style="display: inline-block" />
-                                </div>
-
-                                <div class="send_amount">
-                                    enter amount
-                                </div>
-
-                                <div class="amount_edit">
-                                    <input type="text" name="amount" placeholder="" class="input-sm form-control" onkeyup="calculateTransactionAmounts();">
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="send_button_wrap">
-                            <div class="btn sendbtn" onclick="addRecipient();">Add another recipient</div>
-                        </div>
-
-                        <div id="transaction_amounts">
-                            <p class="text-center top">Transaction Fee</p>
-                            <p class="text-center"><span class="status_dbalance" id="transactionFee">0</span> <i>IXI</i></p>
-
-                            <p class="text-center top">Total Amount</p>
-                            <p class="text-center"><span class="status_dbalance" id="totalAmount">0</span> <i>IXI</i></p>
-                        </div>
-
-                        <div class="send_button_wrap">
-                            <input type="submit" class="btn sendbtn" value="Send">
-
-                        </div>
-
-                    </form>
-
-                </div>
-
-            </div>
-
-
-
-        </div>
-        <div id="footer">
-            <div class="col-xs-12 navbar-inverse navbar-fixed-bottom">
-                <div class="row" id="bottomNav">
-                    <div id="tab1" class="col-xs-4 text-center"><a data-toggle="tab" href="#receive"><img src="resources/img/receive.png" /><br>RECEIVE</a></div>
-                    <div id="tab2" class="col-xs-4 text-center active"><a data-toggle="tab" href="#home"><img src="resources/img/activity.png" /><br>ACTIVITY</a></div>
-                    <div id="tab3" class="col-xs-4 text-center"><a data-toggle="tab" href="#send"><img src="resources/img/send.png" /><br>SEND</a></div>
-                </div>
-            </div>
-        </div>
-        <script src="resources/js/ixian.js"></script>
-        <script src="resources/js/custom.js"></script>
-    </body>
+    <!-- JS -->
+    <script src="resources/js/jquery.min.js"></script>
+    <script src="resources/js/qrcode.min.js"></script>
+    <script src="resources/js/html5-qrcode.min.js"></script>
+    <script src="resources/js/ixian.js"></script>
+    <script src="resources/js/custom.js"></script>
+</body>
 </html>

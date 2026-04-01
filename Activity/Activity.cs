@@ -54,8 +54,9 @@ namespace IXICore.Activity
     {
         Pending = 1,
         Final = 2,
-        Error = 3,
-        Reverted = 4
+        Expired = 3,
+        Reverted = 4,
+        Rejected = 5
     }
 
     public class AddressConverter : JsonConverter<Address>

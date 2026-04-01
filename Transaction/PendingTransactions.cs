@@ -84,6 +84,10 @@ namespace IXICore
                     Transaction tx = entry.transaction;
                     if (IxianHandler.isMyAddress(tx.pubKey))
                     {
+                        if (IxianHandler.balances.TryGet(tx.pubKey)?.blockHeight > tx.blockHeight)
+                        {
+                            continue;
+                        }
                         amount += tx.amount + tx.fee;
                     }
                 }
