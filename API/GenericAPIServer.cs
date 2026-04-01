@@ -1721,7 +1721,7 @@ namespace IXICore
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_PARAMS, message = "Missing parameter 'message' or 'hash'." } };
             }
 
-            return new JsonResponse { result = signature, error = null };
+            return new JsonResponse { result = new Dictionary<string, string>() { { "signature", signature }, { "publicKey", Crypto.hashToString(IxianHandler.getWalletStorage(wallet).getPrimaryPublicKey()) } }, error = null };
         }
 
         // Verifies message or hash
@@ -1761,11 +1761,11 @@ namespace IXICore
 
             if (sigOk)
             {
-                return new JsonResponse { result = "OK", error = null };
+                return new JsonResponse { result = new Dictionary<string, string>() { { "verified", "ok" }, { "address", new Address(publicKey).ToString() } }, error = null };
             }
             else
             {
-                return new JsonResponse { result = "FAIL", error = null };
+                return new JsonResponse { result = new Dictionary<string, string>() { { "verified", "fail" }, { "address", new Address(publicKey).ToString() } }, error = null };
             }
         }
 
