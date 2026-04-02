@@ -274,6 +274,7 @@ function calculateTransactionAmounts() {
         });
 
 }
+
 function showSyncProgress(percent, text = "Syncing blockchain...") {
     const bar = document.getElementById('warning_bar');
     const label = document.getElementById('warning_text');
@@ -309,7 +310,8 @@ function getStatus() {
 
             if (sync_status == "Synchronizing") {
                 // Show the syncbar
-                showSyncProgress(data["result"]["Block Height"] / data["result"]["Network Block Height"], "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".")
+                const percent = Math.floor(data["result"]["Block Height"] * 100 / data["result"]["Network Block Height"]).toFixed(2);
+                showSyncProgress(percent, "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".")
 
             } else if (sync_status == "ErrorForkedViaUpgrade") {
                 warning_bar.firstElementChild.innerHTML = "Network has been upgraded, please download a newer version of Ixian DLT.";
