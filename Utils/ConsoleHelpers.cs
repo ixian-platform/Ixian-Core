@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian DLT - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -85,7 +85,7 @@ namespace IXICore.Utils
         }
 
         // Requests the user to type a new password
-        static public string requestNewPassword(string banner)
+        static public string? requestNewPassword(string banner)
         {
             Console.WriteLine();
             Console.Write(banner);
@@ -96,7 +96,7 @@ namespace IXICore.Utils
                 if (pass.Length < 10)
                 {
                     Console.WriteLine("Password needs to be at least 10 characters. Try again.");
-                    return "";
+                    return null;
                 }
 
                 Console.Write("Type it again to confirm: ");
@@ -143,8 +143,10 @@ namespace IXICore.Utils
                 ConsoleKeyInfo i = Console.ReadKey(true);
                 if (i.Key == ConsoleKey.Enter)
                 {
-                    Console.WriteLine();
-                    break;
+                    if (sb.Length > 0)
+                    {
+                        break;
+                    }
                 }
                 else if (i.Key == ConsoleKey.Backspace)
                 {
@@ -155,7 +157,6 @@ namespace IXICore.Utils
                     }
                 }else if(i.Key == ConsoleKey.Escape)
                 {
-                    IxianHandler.forceShutdown = true;
                     return "";
                 }
                 else if (i.KeyChar != '\u0000')

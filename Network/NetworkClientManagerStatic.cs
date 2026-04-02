@@ -23,7 +23,7 @@ namespace IXICore.Network
         bool usePeerStorage = true;
         public List<Peer> clientsToConnectTo { get; private set; } = new();
 
-        public NetworkClientManagerStatic(int simultaneousConnectedNeighbors, bool usePeerStorage = true, string bindAddress = null) : base(simultaneousConnectedNeighbors, bindAddress)
+        public NetworkClientManagerStatic(int simultaneousConnectedNeighbors, bool usePeerStorage = true, string? bindAddress = null) : base(simultaneousConnectedNeighbors, bindAddress)
         {
             this.usePeerStorage = usePeerStorage;
         }
@@ -65,7 +65,7 @@ namespace IXICore.Network
         }
 
         // Returns a random new potential neighbor. Returns null if no new neighbor is found.
-        private Peer scanForNeighbor()
+        private Peer? scanForNeighbor()
         {
             if (getConnectedClients(true).Count() == 0)
             {
@@ -75,7 +75,7 @@ namespace IXICore.Network
             if (usePeerStorage
                 && clientsToConnectTo.Count() < simultaneousConnectedNeighbors)
             {
-                Peer connectToPeer = null;
+                Peer? connectToPeer = null;
                 // Find only masternodes
                 while (connectToPeer == null)
                 {
@@ -85,7 +85,7 @@ namespace IXICore.Network
                     {
                         PeerStorage.resetInitialConnectionCount();
                     }
-                    Peer p = PeerStorage.getRandomMasterNodeAddress();
+                    Peer? p = PeerStorage.getRandomMasterNodeAddress();
 
                     if (p == null)
                     {
@@ -114,7 +114,6 @@ namespace IXICore.Network
                 }
             }
 
-
             return null;
         }
 
@@ -122,7 +121,7 @@ namespace IXICore.Network
         protected override void connectToRandomNeighbor()
         {
             disconnectFromOldClients();
-            Peer neighbor = scanForNeighbor();
+            Peer? neighbor = scanForNeighbor();
             if (neighbor != null)
             {
                 Logging.info("Attempting to add new neighbor: {0}", neighbor.hostname);

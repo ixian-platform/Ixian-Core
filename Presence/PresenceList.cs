@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -109,7 +109,7 @@ namespace IXICore
 
         // Update a presence entry. If the wallet address is not found, it creates a new entry in the Presence List.
         // If the wallet address is found in the presence list, it adds any new addresses from the specified presence.
-        public static Presence updateEntry(Presence presence, bool return_presence_only_if_updated = false)
+        public static Presence? updateEntry(Presence presence, bool return_presence_only_if_updated = false)
         {
             if (presence == null)
             {
@@ -387,7 +387,7 @@ namespace IXICore
         }
 
         // Update a presence from a byte array
-        public static Presence updateFromBytes(byte[] bytes, IxiNumber minDifficulty)
+        public static Presence? updateFromBytes(byte[] bytes, IxiNumber minDifficulty)
         {
             Presence presence = new Presence(bytes);
 
@@ -436,7 +436,7 @@ namespace IXICore
             }
         }
 
-        public static KeepAlive generateKeepAlive(bool force_generate)
+        public static KeepAlive? generateKeepAlive(bool force_generate)
         {
             KeepAlive ka;
             ulong networkBlockHeight = IxianHandler.getHighestKnownNetworkBlockHeight();
@@ -571,7 +571,7 @@ namespace IXICore
                         }
 
                         if (myPresenceType == 'C'
-                            && StreamClientManager.isConnectedTo(myPublicAddress, true) == null)
+                            && !StreamClientManager.isConnectedTo(myPublicAddress, true))
                         {
                             forceSendKeepAlive = true;
                             Thread.Sleep(500);

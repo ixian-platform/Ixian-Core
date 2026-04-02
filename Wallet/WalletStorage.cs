@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2022 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -111,9 +111,9 @@ namespace IXICore
             return balance;
         }
 
-        public Address generateNewAddress(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true, bool write_to_file = true)
+        public Address? generateNewAddress(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true, bool write_to_file = true)
         {
-            Address new_address = null;
+            Address? new_address = null;
             if (walletVersion < 2)
             {
                 new_address = generateNewAddress_v0(key_primary_address, last_nonce, add_to_pool);
@@ -136,7 +136,7 @@ namespace IXICore
             return new_address;
         }
 
-        private Address generateNewAddress_v0(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true)
+        private Address? generateNewAddress_v0(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true)
         {
             lock (myKeys)
             {
@@ -178,7 +178,7 @@ namespace IXICore
             }
         }
 
-        private Address generateNewAddress_v1(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true)
+        private Address? generateNewAddress_v1(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true)
         {
             lock (myKeys)
             {
@@ -220,7 +220,7 @@ namespace IXICore
             }
         }
 
-        private Address generateNewAddress_v5(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true)
+        private Address? generateNewAddress_v5(Address key_primary_address, byte[] last_nonce, bool add_to_pool = true)
         {
             lock (myKeys)
             {
@@ -262,7 +262,7 @@ namespace IXICore
             }
         }
 
-        public IxianKeyPair generateNewKeyPair(bool writeToFile = true)
+        public IxianKeyPair? generateNewKeyPair(bool writeToFile = true)
         {
             if (walletVersion != 3)
             {
@@ -331,7 +331,7 @@ namespace IXICore
             return kp;
         }
 
-        public IxianKeyPair getKeyPair(Address address)
+        public IxianKeyPair? getKeyPair(Address address)
         {
             lock (myKeys)
             {
@@ -343,7 +343,7 @@ namespace IXICore
             }
         }
 
-        public AddressData getAddress(Address address)
+        public AddressData? getAddress(Address address)
         {
             lock (myAddresses)
             {
@@ -504,7 +504,7 @@ namespace IXICore
             }
         }
 
-        public byte[] getNonceFromAddress(byte[] address)
+        public byte[]? getNonceFromAddress(byte[] address)
         {
             foreach (var addr in myAddresses)
             {
@@ -1429,7 +1429,7 @@ namespace IXICore
             return File.ReadAllBytes(filename);
         }
 
-        public byte[] getRawViewingWallet()
+        public byte[]? getRawViewingWallet()
         {
             if (walletVersion != 2 && walletVersion < 4)
             {

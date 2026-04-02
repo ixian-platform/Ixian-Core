@@ -130,21 +130,26 @@ namespace IXICore
 
     public class GenericAPIServer
     {
-        protected HttpListener listener;
-        protected Thread apiControllerThread;
-        protected bool continueRunning;
+        protected HttpListener? listener;
+        protected Thread? apiControllerThread;
+        protected bool running;
         protected List<string> listenURLs;
-        protected List<string> allowedIPs;
+        protected List<string>? allowedIPs;
         protected ThreadLiveCheck TLC;
 
-        protected Dictionary<string, string> authorizedUsers;
+        protected Dictionary<string, string>? authorizedUsers;
 
-        protected IActivityStorage activityStorage;
+        protected IActivityStorage? activityStorage;
 
         // Start the API server
-        public void start(List<string> listen_URLs, Dictionary<string, string> authorized_users = null, List<string> allowed_IPs = null, IActivityStorage activity_storage = null)
+        public void start(List<string> listen_URLs, Dictionary<string, string>? authorized_users = null, List<string>? allowed_IPs = null, IActivityStorage? activity_storage = null)
         {
-            continueRunning = true;
+            if (running)
+            {
+                Logging.warn("Cannot start API server, it is already running.");
+                return;
+            }
+            running = true;
 
             listenURLs = listen_URLs;
 
@@ -152,6 +157,27 @@ namespace IXICore
             allowedIPs = allowed_IPs;
 
             activityStorage = activity_storage;
+
+            // Start a listener on the loopback interface
+            listener = new HttpListener();
+            try
+            {
+                foreach (string url in listenURLs)
+                {
+                    listener.Prefixes.Add(url);
+                }
+
+                if (authorizedUsers != null && authorizedUsers.Count > 0)
+                {
+                    listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
+                }
+
+                listener.Start();
+            }
+            catch (Exception ex)
+            {
+                throw new Exception("Cannot initialize API server! The error was: " + ex.Message);
+            }
 
             apiControllerThread = new Thread(apiLoop);
             apiControllerThread.Name = "API_Controller_Thread";
@@ -162,11 +188,17 @@ namespace IXICore
         // Stop the API server
         public void stop()
         {
-            continueRunning = false;
+            if (!running)
+            {
+                Logging.warn("Cannot stop API server, it is not running.");
+                return;
+            }
+
+            running = false;
             try
             {
                 // Stop the listener
-                listener.Stop();
+                listener?.Stop();
 
                 if (apiControllerThread != null)
                 {
@@ -175,9 +207,9 @@ namespace IXICore
                     apiControllerThread = null;
                 }
             }
-            catch (Exception)
+            catch (Exception e)
             {
-                Logging.info("API server already stopped.");
+                Logging.error("Error while stopping API server: " + e);
             }
         }
 
@@ -554,7 +586,7 @@ namespace IXICore
         // Used as fallback in case processRequest returns false. In addition to handling the default requests, it also serves the web UI
         protected virtual bool processGenericRequest(HttpListenerContext context, string methodName, Dictionary<string, object> parameters)
         {
-            JsonResponse response = processDefaultRequest(context, methodName, parameters);
+            JsonResponse? response = processDefaultRequest(context, methodName, parameters);
 
             bool resources = false;
 
@@ -629,30 +661,7 @@ namespace IXICore
 
         protected void apiLoop()
         {
-            // Start a listener on the loopback interface
-            listener = new HttpListener();
-            try
-            {
-                foreach (string url in listenURLs)
-                {
-                    listener.Prefixes.Add(url);
-                }
-
-                if (authorizedUsers != null && authorizedUsers.Count > 0)
-                {
-                    listener.AuthenticationSchemes = AuthenticationSchemes.Basic;
-                }
-
-                listener.Start();
-            }
-            catch (Exception ex)
-            {
-                Logging.error("Cannot initialize API server! The error was: " + ex.Message);
-                IxianHandler.forceShutdown = true;
-                return;
-            }
-
-            while (continueRunning)
+            while (running)
             {
                 HttpListenerContext context;
                 try
@@ -661,7 +670,7 @@ namespace IXICore
                 }
                 catch (Exception ex)
                 {
-                    if (continueRunning)
+                    if (running)
                     {
                         Logging.error("Error in API server! " + ex.Message);
                     }
@@ -700,11 +709,6 @@ namespace IXICore
 
         }
 
-        protected void sendError(HttpListenerContext context, string errorString)
-        {
-            sendResponse(context.Response, errorString);
-        }
-
         protected void sendResponse(HttpListenerResponse responseObject, string responseString)
         {
             byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
@@ -718,7 +722,7 @@ namespace IXICore
             }
             catch (Exception e)
             {
-                if (continueRunning)
+                if (running)
                 {
                     Logging.error("APIServer: {0}", e);
                 }
@@ -758,7 +762,7 @@ namespace IXICore
             }
             catch (Exception e)
             {
-                if (continueRunning)
+                if (running)
                 {
                     Logging.error("APIServer: {0}", e);
                     responseObject.StatusCode = 500;
@@ -777,7 +781,7 @@ namespace IXICore
             }
             catch (Exception e)
             {
-                if (continueRunning)
+                if (running)
                 {
                     Logging.error("APIServer: {0}", e);
                 }

@@ -9,7 +9,8 @@
     --primary: #ab003e;
     --success: #2e8933;
     --danger: #ab003e;
-    --text-main: #000000;
+    --text-dark: #000000;
+    --text-light: #ffffff;
     --text-muted: #9aa0a6;
     --radius: 12px;
     --spacing: 1rem;
@@ -64,7 +65,7 @@ body {
     margin: 0;
     font-family: 'Roboto', system-ui, sans-serif;
     background: var(--bg-main);
-    color: var(--text-main);
+    color: var(--text-light);
 }
 
 /* LAYOUT */
@@ -166,7 +167,7 @@ body {
 /* BALANCE */
 .balance-card {
     background: var(--bg-light);
-    color: black;
+    color: var(--text-dark);
     border-radius: var(--radius);
     padding: 1rem;
     text-align: center;
@@ -181,7 +182,7 @@ body {
 /* RECIPIENT */
 .recipient-card {
     background: var(--bg-light);
-    color: black;
+    color: var(--text-dark);
     border-radius: var(--radius);
     padding: 1.5rem;
     text-align: center;
@@ -197,10 +198,6 @@ body {
     padding: 0.75rem 1rem;
     border-radius: var(--radius);
     margin-bottom: 0.5rem;
-}
-
-.activity-header span {
-    color: white;
 }
 
 /* PAYMENTS LIST */
@@ -490,6 +487,17 @@ body {
     background: #fff;
 }
 
+.input[readonly] {
+    background: #f0f0f0;
+    color: #666;
+    border-color: #ddd;
+}
+
+.input[readonly]:focus {
+    border-color: #ddd;
+    outline: none;
+}
+
 textarea.input {
     resize: vertical;
     min-height: 80px;
@@ -542,12 +550,12 @@ textarea.input {
 }
 
 .bottom-nav a:hover {
-    background: var(--primary);
+    background: linear-gradient(180deg, #d1004f, #8a0032);
     color: white;
 }
 
 .bottom-nav a.active {
-    background: var(--primary);
+    background: linear-gradient(180deg, #d1004f, #8a0032);
     color: white;
 }
 

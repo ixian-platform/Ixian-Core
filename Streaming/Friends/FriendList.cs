@@ -348,15 +348,15 @@ namespace IXICore.Streaming
         }
 
         // Finds a presence entry's pubkey
-        public static byte[] findContactPubkey(Address wallet_address)
+        public static byte[]? findContactPubkey(Address wallet_address)
         {
-            Friend f = getFriend(wallet_address);
+            Friend? f = getFriend(wallet_address);
             if(f != null && f.publicKey != null)
             {
                 return f.publicKey;
             }
 
-            Presence p = PresenceList.getPresenceByAddress(wallet_address);
+            Presence? p = PresenceList.getPresenceByAddress(wallet_address);
             if(p != null && p.addresses.Find(x => x.type == 'C') != null)
             {
                 return p.pubkey;

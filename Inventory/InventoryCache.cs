@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2025 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -56,7 +56,7 @@ namespace IXICore.Inventory
             return true;
         }
 
-        public override bool Equals(object obj) => obj is ByteArrayKey other && Equals(other);
+        public override bool Equals(object? obj) => obj is ByteArrayKey other && Equals(other);
         public override int GetHashCode() => hash;
     }
 
@@ -76,19 +76,19 @@ namespace IXICore.Inventory
             lastRequested = 0;
         }
 
-        public void AddEndpoint(RemoteEndpoint ep)
+        public void AddEndpoint(RemoteEndpoint? ep)
         {
             if (ep != null)
                 endpoints.TryAdd(ep, 0);
         }
 
-        public void RemoveEndpoint(RemoteEndpoint ep)
+        public void RemoveEndpoint(RemoteEndpoint? ep)
         {
             if (ep != null)
                 endpoints.TryRemove(ep, out _);
         }
 
-        public RemoteEndpoint GetRandomConnectedEndpoint(Random rnd)
+        public RemoteEndpoint? GetRandomConnectedEndpoint(Random rnd)
         {
             var keys = endpoints.Keys;
             if (keys.Count == 0) return null;
@@ -173,7 +173,7 @@ namespace IXICore.Inventory
             }
         }
 
-        private PendingInventoryItem get(InventoryItemTypes type, byte[] hash)
+        private PendingInventoryItem? get(InventoryItemTypes type, byte[] hash)
         {
             if (hash == null) return null;
             var key = new ByteArrayKey(hash);
@@ -181,7 +181,7 @@ namespace IXICore.Inventory
             return pii;
         }
 
-        public PendingInventoryItem add(InventoryItem item, RemoteEndpoint endpoint, bool forceAddToPending)
+        public PendingInventoryItem? add(InventoryItem item, RemoteEndpoint endpoint, bool forceAddToPending)
         {
             if (item?.hash == null)
             {
@@ -230,7 +230,7 @@ namespace IXICore.Inventory
             return processInventoryItem(get(type, hash));
         }
 
-        public bool processInventoryItem(PendingInventoryItem pii)
+        public bool processInventoryItem(PendingInventoryItem? pii)
         {
             if (pii == null)
             {
@@ -340,7 +340,7 @@ namespace IXICore.Inventory
             }
         }
 
-        public static InventoryItem decodeInventoryItem(byte[] bytes)
+        public static InventoryItem? decodeInventoryItem(byte[] bytes)
         {
             InventoryItemTypes type = (InventoryItemTypes)bytes.GetIxiVarInt(0).num;
             switch (type)

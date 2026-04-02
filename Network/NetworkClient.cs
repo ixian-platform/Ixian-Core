@@ -36,7 +36,7 @@ namespace IXICore.Network
 
         private IPEndPoint? bindEndpoint = null;
 
-        public NetworkClient(string bindAddress, Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null) : base(handler)
+        public NetworkClient(string? bindAddress, Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null) : base(handler)
         {
             if (!string.IsNullOrEmpty(bindAddress))
             {

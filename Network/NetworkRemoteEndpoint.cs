@@ -1012,7 +1012,7 @@ namespace IXICore.Network
             return fullAddress;
         }
 
-        private MessageHeader parseHeader(byte[] header_bytes)
+        private MessageHeader? parseHeader(byte[] header_bytes)
         {
             MessageHeader header = new MessageHeader();
             // we should have the full header, save the data length

@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2025 Ixian
-// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian DLT - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -95,7 +95,7 @@ namespace IXICore.Network
 
         // Send data to all connected nodes
         // Returns true if the data was sent to at least one client
-        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint skipEndpoint = null)
+        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
         {
             return clientManagerBase.broadcastData(types, code, data, helper_data, skipEndpoint);
         }
@@ -149,7 +149,7 @@ namespace IXICore.Network
             return clientManagerBase.getBlockHeights();
         }
 
-        public static RemoteEndpoint getClient(Address clientAddress)
+        public static RemoteEndpoint? getClient(Address clientAddress)
         {
             return clientManagerBase.getClient(clientAddress);
         }

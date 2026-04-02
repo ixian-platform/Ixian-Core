@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -29,7 +29,7 @@ namespace IXICore
         public byte[] signature = null;
         public char nodeType;
         public byte[] checksum = null; // Checksum is not transmitted over network
-        public SignerPowSolution powSolution;
+        public SignerPowSolution? powSolution;
 
         public KeepAlive()
         {

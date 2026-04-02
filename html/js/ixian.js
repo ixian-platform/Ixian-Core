@@ -6,16 +6,37 @@ var qrcode = null;
 
 var selectedReceiveAddress = null;
 
-function copyToClipboard(addr) {
-    navigator.clipboard.writeText(addr)
-        .then(() => {
-            const el = document.getElementById("selectedReceiveAddress");
-            el.classList.add("copied");
+// copyToClipboard function copied from https://hackernoon.com/copying-text-to-clipboard-with-javascript-df4d4988697f
+const copyToClipboard = str => {
+    const el = document.createElement('textarea');  // Create a <textarea> element
+    el.value = str;                                 // Set its value to the string that you want copied
+    el.setAttribute('readonly', '');                // Make it readonly to be tamper-proof
+    el.style.position = 'absolute';
+    el.style.left = '-9999px';                      // Move outside the screen to make it invisible
+    document.body.appendChild(el);                  // Append the <textarea> element to the HTML document
+    const selected =
+        document.getSelection().rangeCount > 0        // Check if there is any content selected previously
+            ? document.getSelection().getRangeAt(0)     // Store selection if found
+            : false;                                    // Mark as false to know no selection existed before
+    el.select();                                    // Select the <textarea> content
+    document.execCommand('copy');                   // Copy - only works as a result of a user action (e.g. click events)
+    document.body.removeChild(el);                  // Remove the <textarea> element
+    if (selected) {                                 // If a selection existed before copying
+        document.getSelection().removeAllRanges();    // Unselect everything on the HTML document
+        document.getSelection().addRange(selected);   // Restore the original selection
+    }
 
-            // Remove the class after animation
-            setTimeout(() => el.classList.remove("copied"), 800);
-        })
-        .catch(err => console.error("Copy failed", err));
+    // Add a class to trigger the animation
+    const selectedEl = document.getElementById("selectedReceiveAddress");
+    selectedEl.classList.add("copied");
+
+    // Remove the class after animation
+    setTimeout(() => selectedEl.classList.remove("copied"), 800);
+};
+
+function amountWithCommas(n) {
+    var parts = n.split(".");
+    return parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",") + (parts[1] ? "." + parts[1] : "");
 }
 
 function setReceiveAddress(address) {
@@ -37,8 +58,8 @@ function getMyWallet() {
             data = data["result"];
 
             // Assign relevant wallet information
-            document.getElementById("activity_balance_number").innerHTML = data;
-            document.getElementById("send_balance_number").innerHTML = data;
+            document.getElementById("activity_balance_number").innerHTML = amountWithCommas(data);
+            document.getElementById("send_balance_number").innerHTML = amountWithCommas(data);
 
         });
 
@@ -65,7 +86,7 @@ function getMyWallet() {
                         primaryDesignator = " - Primary Address";
                         first = false;
                     }
-                    html += "<span onclick=\"setReceiveAddress('" + i + "');\" class=\"" + (primaryDesignator != "" ? "primary" : "") + "\">" + i + " (" + data[i] + ")" + primaryDesignator + "</span><br/>";
+                    html += "<span onclick=\"setReceiveAddress('" + i + "');\" class=\"" + (primaryDesignator != "" ? "primary" : "") + "\">" + i + " (" + amountWithCommas(data[i]) + " IXI)" + primaryDesignator + "</span><br/>";
                 }
 
                 html += "</div>";
@@ -266,8 +287,8 @@ function calculateTransactionAmounts() {
     $.getJSON(dltAPI, { format: "json" })
         .done(function (data) {
             if (data["result"] != null) {
-                document.getElementById("transactionFee").innerHTML = (parseFloat(data["result"]["totalAmount"]) - totalAmount).toFixed(8);
-                document.getElementById("totalAmount").innerHTML = data["result"]["totalAmount"];
+                document.getElementById("transactionFee").innerHTML = amountWithCommas((parseFloat(data["result"]["totalAmount"]) - totalAmount).toFixed(8));
+                document.getElementById("totalAmount").innerHTML = amountWithCommas(data["result"]["totalAmount"]);
             } else {
                 // fail
             }
@@ -310,7 +331,7 @@ function getStatus() {
 
             if (sync_status == "Synchronizing") {
                 // Show the syncbar
-                const percent = Math.floor(data["result"]["Block Height"] * 100 / data["result"]["Network Block Height"]).toFixed(2);
+                const percent = (data["result"]["Block Height"] * 100 / data["result"]["Network Block Height"]).toFixed(2);
                 showSyncProgress(percent, "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".")
 
             } else if (sync_status == "ErrorForkedViaUpgrade") {
@@ -355,7 +376,7 @@ function getStatus() {
                 warning_bar.firstElementChild.innerHTML += "An updated version of Ixian node (" + data["result"]["Update"] + ") is available, please visit https://www.ixian.io";
             }
         });
-
+/*
     var dltAPI = "minerstats";
     $.getJSON(dltAPI, { format: "json" })
         .done(function (data) {
@@ -385,55 +406,59 @@ function getStatus() {
         })
         .fail(function (jqXHR, status, error) {
             document.getElementById("MinerSection").style.display = "none";
-        });
+        });*/
 
 }
 
 var html5QrCode = null;
 function readQR(addressEl) {
-    document.getElementById('reader_modal').style.display = 'block';
-    if (html5QrCode != null) {
-        return;
-    }
-    console.log("Starting QR code reader");
+    try {
 
-    html5QrCode = new Html5Qrcode(
-        "reader", { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
-    const qrCodeSuccessCallback = (decodedText, decodedResult) => {
-        console.log("QRscanner: " + decodedText);
-        addressEl.value = decodedText;
-        closeQR();
-    };
-    const config = {
-        fps: 15,
-        qrbox: 450,
-        showTorchButtonIfSupported: true,
-        focusMode: "continuous",
-        showZoomSliderIfSupported: true,
-        supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
-    };
+        document.getElementById('reader_modal').style.display = 'block';
+        if (html5QrCode != null) {
+            // already running
+            return;
+        }
+        console.log("Starting QR code reader");
 
-    html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback);
-
-    setTimeout(function () {
-        html5QrCode.applyVideoConstraints({
+        html5QrCode = new Html5Qrcode(
+            "reader", { formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE] });
+        const qrCodeSuccessCallback = (decodedText, decodedResult) => {
+            console.log("QRscanner: " + decodedText);
+            addressEl.value = decodedText;
+            closeQR();
+        };
+        const config = {
+            fps: 15,
+            qrbox: 450,
+            showTorchButtonIfSupported: true,
             focusMode: "continuous",
-            advanced: [{ zoom: 2.0 }],
-        });
-    }, 1000);
-}
+            showZoomSliderIfSupported: true,
+            supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+        };
 
-function stopQR() {
-    if (html5QrCode == null) {
-        return;
+        html5QrCode.start({ facingMode: "environment" }, config, qrCodeSuccessCallback);
+
+        setTimeout(function () {
+            html5QrCode.applyVideoConstraints({
+                focusMode: "continuous",
+                advanced: [{ zoom: 2.0 }],
+            });
+        }, 1000);
+    } catch (err) {
+        closeQR();
+        alert("Unable to start QR code reader, make sure that you have a webcam and have granted camera permissions.");
     }
-    html5QrCode.stop();
-    html5QrCode = null;
 }
 
 function closeQR() {
     document.getElementById('reader_modal').style.display = 'none';
-    stopQR();
+    if (html5QrCode == null) {
+        // already stopped
+        return;
+    }
+    html5QrCode.stop();
+    html5QrCode = null;
 }
 
 function addRecipient() {
