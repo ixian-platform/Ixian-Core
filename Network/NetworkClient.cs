@@ -96,7 +96,7 @@ namespace IXICore.Network
                 if (!tcpClient.ConnectAsync(hostname, port).Wait(5000))
                 {
                     Logging.info("Network client connection to {0}:{1} has failed.", hostname, port);
-                    await stopAsync().ConfigureAwait(false);
+                    tcpClient.Close();
                     return false;
                 }
 
@@ -106,9 +106,16 @@ namespace IXICore.Network
             }
             catch (Exception e)
             {
-                Logging.info("Network client connection to {0}:{1} has failed: {2}", hostname, port, e);
+                Logging.info("Network client connection to {0}:{1} has failed: {2}", hostname, port, e.Message);
 
-                await stopAsync().ConfigureAwait(false);
+                if (running)
+                {
+                    await stopAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    tcpClient?.Close();
+                }
                 return false;
             }
 

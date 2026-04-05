@@ -220,22 +220,22 @@ namespace IXICore.Network
                 }
 
                 autoReconnect = false;
-                isolate();
-
                 ctsLoop.Cancel();
                 wakeSignal.TrySetResult();
-                try
-                {
-                    // Wait for reconnect loop to finish
-                    reconnectTask?.GetAwaiter().GetResult();
-                }
-                catch (OperationCanceledException) { }
-                finally
-                {
-                    ctsLoop.Dispose();
-                    ctsLoop = null;
-                    reconnectTask = null;
-                }
+            }
+            isolate();
+
+            try
+            {
+                // Wait for reconnect loop to finish
+                reconnectTask?.GetAwaiter().GetResult();
+            }
+            catch (OperationCanceledException) { }
+            finally
+            {
+                ctsLoop.Dispose();
+                ctsLoop = null;
+                reconnectTask = null;
             }
         }
 
@@ -265,6 +265,7 @@ namespace IXICore.Network
 
                 // Empty the client list
                 networkClients.Clear();
+                connectingClients.Clear();
             }
             lock (connectingClients)
             {

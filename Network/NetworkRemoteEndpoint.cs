@@ -517,6 +517,19 @@ namespace IXICore.Network
                     }
                 }
             }
+            catch (SocketException se)
+            {
+                if (isConnected())
+                {
+                    if (se.SocketErrorCode != SocketError.ConnectionAborted
+                        && se.SocketErrorCode != SocketError.NotConnected
+                        && se.SocketErrorCode != SocketError.ConnectionReset
+                        && se.SocketErrorCode != SocketError.Interrupted)
+                    {
+                        Logging.warn("recvRE: Disconnected client {0} with socket exception {1} {2} {3}", getFullAddress(), se.SocketErrorCode, se.ErrorCode, se);
+                    }
+                }
+            }
             catch (OperationCanceledException)
             {
                 // Normal shutdown

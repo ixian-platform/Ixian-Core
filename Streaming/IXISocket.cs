@@ -229,7 +229,7 @@ namespace IXICore.Streaming
                     try
                     {
                         CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "", "", false);
-                        client.stopAsync();
+                        client.stopAsync().Wait();
                     }
                     catch (Exception e)
                     {
@@ -517,7 +517,7 @@ namespace IXICore.Streaming
                 keyExchangeCompleteTcs.TrySetCanceled();
                 keyExchangeCompleteTcs = null;
                 CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "", "", false);
-                client.stopAsync();
+                client.stopAsync().Wait();
                 return false;
             }
             catch (Exception e)
@@ -590,7 +590,7 @@ namespace IXICore.Streaming
                     {
                         CoreStreamProcessor.sendCloseSecureConnection(_relayConnection, _friend);
                         CoreProtocolMessage.sendBye(_relayConnection, ProtocolByeCode.bye, "", "", false);
-                        _relayConnection.stopAsync();
+                        _relayConnection.stopAsync().Wait();
                     }
                     catch (Exception e)
                     {
