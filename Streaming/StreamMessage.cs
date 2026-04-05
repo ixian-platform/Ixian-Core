@@ -77,7 +77,7 @@ namespace IXICore
 
         public StreamMessageCode type;          // Stream Message type
         [JsonConverter(typeof(AddressConverter))]
-        public Address realSender = null;        // Used by group chat bots, isn't transmitted to the network
+        public Address? realSender = null;        // Used by group chat bots
         [JsonConverter(typeof(AddressConverter))]
         public Address sender = null;            // Sender wallet
 
@@ -100,7 +100,7 @@ namespace IXICore
         public byte[] originalChecksum = null;  // Checksum as it was before decryption
 
         [JsonIgnore]
-        public byte[] signature = null;         // Sender's signature
+        public byte[]? signature = null;         // Sender's signature
 
         public StreamMessageEncryptionCode encryptionType;
 
@@ -477,14 +477,14 @@ namespace IXICore
         }
 
         // Encrypts a provided message with aes, then chacha based on the keys provided
-        public bool encrypt(byte[] public_key, byte[] aes_password, byte[] chacha_key)
+        public bool encrypt(byte[] public_key, byte[]? aes_key, byte[]? chacha_key)
         {
             if (encrypted)
             {
                 return true;
             }
 
-            byte[] encrypted_data = MessageCrypto.encrypt(encryptionType, data, public_key, aes_password, chacha_key, getAdditionalData());
+            byte[]? encrypted_data = MessageCrypto.encrypt(encryptionType, data, public_key, aes_key, chacha_key, getAdditionalData());
             if (encrypted_data != null)
             {
                 data = encrypted_data;
@@ -494,13 +494,13 @@ namespace IXICore
             return false;
         }
 
-        public bool decrypt(byte[] private_key, byte[] aes_key, byte[] chacha_key)
+        public bool decrypt(byte[] private_key, byte[]? aes_key, byte[]? chacha_key)
         {
             if (originalData != null)
             {
                 return true;
             }
-            byte[] decrypted_data = MessageCrypto.decrypt(encryptionType, data, private_key, aes_key, chacha_key, getAdditionalData());
+            byte[]? decrypted_data = MessageCrypto.decrypt(encryptionType, data, private_key, aes_key, chacha_key, getAdditionalData());
             if (decrypted_data != null)
             {
                 originalData = data;

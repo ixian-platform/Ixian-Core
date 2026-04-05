@@ -909,15 +909,12 @@ namespace IXICore.Streaming
         {
             try
             {
-                if (channels != null && !channels.hasChannel(channel))
+                var tmp_messages = getMessages(channel);
+                if (tmp_messages == null)
                 {
-                    Logging.error("Error getting messages for {0}, channel {1} does not exist", walletAddress.ToString(), channel.ToString());
                     return null;
                 }
-                lock (messages)
-                {
-                    return messages[channel].Find(x => x.id.SequenceEqual(msg_id));
-                }
+                return tmp_messages.Find(x => x.id.SequenceEqual(msg_id));
             }
             catch (Exception e)
             {
@@ -1006,7 +1003,6 @@ namespace IXICore.Streaming
         {
             lock(messages)
             {
-                IxianHandler.localStorage?.flush();
                 messages.Clear();
             }
         }

@@ -28,7 +28,7 @@ namespace IXICore
 
     public static class MessageCrypto
     {
-        public static byte[] encryptRSA1(byte[] data_to_encrypt, byte[] public_key)
+        public static byte[]? encryptRSA1(byte[] data_to_encrypt, byte[] public_key)
         {
             if (public_key == null)
             {
@@ -38,7 +38,7 @@ namespace IXICore
 
             return CryptoManager.lib.encryptWithRSA(data_to_encrypt, public_key);
         }
-        public static byte[] encryptRSA2(byte[] data_to_encrypt, byte[] public_key, byte[] aad)
+        public static byte[]? encryptRSA2(byte[] data_to_encrypt, byte[] public_key, byte[] aad)
         {
             if (public_key == null)
             {
@@ -69,7 +69,7 @@ namespace IXICore
             return key_with_enc_data;
         }
 
-        public static byte[] encryptSpixi1(byte[] data_to_encrypt, byte[] aes_key, byte[] chacha_key)
+        public static byte[]? encryptSpixi1(byte[] data_to_encrypt, byte[] aes_key, byte[] chacha_key)
         {
             if (aes_key == null
                 || chacha_key == null)
@@ -87,7 +87,7 @@ namespace IXICore
             return null;
         }
 
-        public static byte[] encryptSpixi2(byte[] data_to_encrypt, byte[] aes_key, byte[] chacha_key, byte[] aad)
+        public static byte[]? encryptSpixi2(byte[] data_to_encrypt, byte[] aes_key, byte[] chacha_key, byte[] aad)
         {
             if (aes_key == null
                 || chacha_key == null)
@@ -113,29 +113,24 @@ namespace IXICore
             return null;
         }
 
-        public static byte[] encrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_encrypt, byte[] public_key, byte[] aes_key, byte[] chacha_key, byte[] aad)
+        public static byte[]? encrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_encrypt, byte[] public_key, byte[]? aes_key, byte[]? chacha_key, byte[] aad)
         {
             switch (encryption_type)
             {
                 case StreamMessageEncryptionCode.none:
                     return data_to_encrypt;
-                    break;
 
                 case StreamMessageEncryptionCode.rsa:
                     return encryptRSA1(data_to_encrypt, public_key);
-                    break;
 
                 case StreamMessageEncryptionCode.rsa2:
                     return encryptRSA2(data_to_encrypt, public_key, aad);
-                    break;
 
                 case StreamMessageEncryptionCode.spixi1:
                     return encryptSpixi1(data_to_encrypt, aes_key, chacha_key);
-                    break;
 
                 case StreamMessageEncryptionCode.spixi2:
                     return encryptSpixi2(data_to_encrypt, aes_key, chacha_key, aad);
-                    break;
 
                 default:
                     Logging.error("Cannot encrypt message, invalid encryption type {0} was specified.", encryption_type);
@@ -144,7 +139,7 @@ namespace IXICore
             return null;
         }
 
-        public static byte[] decryptSpixi1(byte[] data_to_decrypt, byte[] aes_key, byte[] chacha_key)
+        public static byte[]? decryptSpixi1(byte[] data_to_decrypt, byte[] aes_key, byte[] chacha_key)
         {
             if (aes_key == null
                 || chacha_key == null)
@@ -180,7 +175,7 @@ namespace IXICore
             return (derived_key, iv);
         }
 
-        public static byte[] decryptSpixi2(byte[] data_to_decrypt, byte[] aes_key, byte[] chacha_key, byte[] aad, int offset = 0)
+        public static byte[]? decryptSpixi2(byte[] data_to_decrypt, byte[] aes_key, byte[] chacha_key, byte[] aad, int offset = 0)
         {
             if (aes_key == null
                 || chacha_key == null)
@@ -205,7 +200,7 @@ namespace IXICore
             return null;
         }
 
-        public static byte[] decryptRSA1(byte[] data_to_decrypt, byte[] private_key)
+        public static byte[]? decryptRSA1(byte[] data_to_decrypt, byte[] private_key)
         {
             if (private_key == null)
             {
@@ -216,7 +211,7 @@ namespace IXICore
             return CryptoManager.lib.decryptWithRSA(data_to_decrypt, private_key);
         }
 
-        public static byte[] decryptRSA2(byte[] data_to_decrypt, byte[] private_key, byte[] aad)
+        public static byte[]? decryptRSA2(byte[] data_to_decrypt, byte[] private_key, byte[] aad)
         {
             if (private_key == null)
             {
@@ -241,29 +236,24 @@ namespace IXICore
             return decryptSpixi2(data_to_decrypt, aes_key, chacha_key, aad, offset);
         }
 
-        public static byte[] decrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_decrypt, byte[] private_key, byte[] aes_key, byte[] chacha_key, byte[] aad)
+        public static byte[]? decrypt(StreamMessageEncryptionCode encryption_type, byte[] data_to_decrypt, byte[] private_key, byte[]? aes_key, byte[]? chacha_key, byte[] aad)
         {
             switch (encryption_type)
             {
                 case StreamMessageEncryptionCode.none:
                     return data_to_decrypt;
-                    break;
 
                 case StreamMessageEncryptionCode.rsa:
                     return decryptRSA1(data_to_decrypt, private_key);
-                    break;
 
                 case StreamMessageEncryptionCode.rsa2:
                     return decryptRSA2(data_to_decrypt, private_key, aad);
-                    break;
 
                 case StreamMessageEncryptionCode.spixi1:
                     return decryptSpixi1(data_to_decrypt, aes_key, chacha_key);
-                    break;
 
                 case StreamMessageEncryptionCode.spixi2:
                     return decryptSpixi2(data_to_decrypt, aes_key, chacha_key, aad);
-                    break;
 
                 default:
                     Logging.error("Cannot decrypt message, invalid decryption type {0} was specified.", encryption_type);

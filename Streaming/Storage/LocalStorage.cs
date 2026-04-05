@@ -58,13 +58,13 @@ namespace IXICore.Storage
 
         private bool running = false;
 
-        private Thread storageThread = null;
+        private Thread? storageThread = null;
 
         Dictionary<Address, Dictionary<int, WriteRequest>> writeMessagesRequests = new Dictionary<Address, Dictionary<int, WriteRequest>>(new AddressComparer());
 
         private object flushLock = new object();
 
-        private LocalStorageCallbacks localStorageCallbacks = null;
+        private LocalStorageCallbacks localStorageCallbacks;
 
         public LocalStorage(string path, LocalStorageCallbacks localStorageCallbacks, int messages_per_file = 1000)
         {
@@ -144,6 +144,8 @@ namespace IXICore.Storage
             }
             running = false;
 
+            flush();
+
             if (storageThread != null)
             {
                 storageThread.Interrupt();
@@ -159,35 +161,21 @@ namespace IXICore.Storage
                 while (running)
                 {
                     Thread.Sleep(1000);
-                    lock (flushLock)
-                    {
-                        try
-                        {
-                            writePendingMessages();
-                        }
-                        catch (Exception e)
-                        {
-                            Logging.error("Exception occured writing pending messages from storage loop: " + e);
-                        }
-                    }
+                    flush(false);
                 }
             } catch (ThreadInterruptedException)
             {
                 // Thread interrupted, exit gracefully
             }
-
-            flush();
-            writeMessagesRequests = new Dictionary<Address, Dictionary<int, WriteRequest>>(new AddressComparer());
-            storageThread = null;
         }
 
-        public void flush()
+        public void flush(bool force = true)
         {
             lock (flushLock)
             {
                 try
                 {
-                    writePendingMessages(true);
+                    writePendingMessages(force);
                 }
                 catch (Exception e)
                 {
@@ -196,7 +184,7 @@ namespace IXICore.Storage
             }
         }
 
-        public void writePendingMessages(bool flush = false)
+        private void writePendingMessages(bool force = false)
         {
             // TODO TODO TODO message received should probably be sent when the message is written to storage instead of when received
             Dictionary<Address, Dictionary<int, WriteRequest>> tmp_requests;
@@ -207,7 +195,7 @@ namespace IXICore.Storage
             long cur_time = Clock.getTimestampMillis();
             foreach (var request in tmp_requests)
             {
-                Friend friend = FriendList.getFriend(request.Key);
+                Friend? friend = FriendList.getFriend(request.Key);
                 if (friend == null)
                 {
                     lock (writeMessagesRequests)
@@ -223,7 +211,7 @@ namespace IXICore.Storage
                 }
                 foreach (var request_channel in tmp_channels)
                 {
-                    if (!flush)
+                    if (!force)
                     {
                         if (cur_time - request_channel.Value.startTime < 1000)
                         {
@@ -284,7 +272,7 @@ namespace IXICore.Storage
             return true;
         }
 
-        public byte[] getOwnAvatarBytes()
+        public byte[]? getOwnAvatarBytes()
         {
             string path = getOwnAvatarPath(false);
             if (File.Exists(path))
@@ -343,7 +331,7 @@ namespace IXICore.Storage
                             int friend_len = reader.ReadInt32();
                             byte[] friend_bytes = reader.ReadBytes(friend_len);
 
-                            Friend friend = null;
+                            Friend? friend = null;
                             try
                             {
                                 friend = new Friend(friend_bytes, version);
@@ -622,7 +610,7 @@ namespace IXICore.Storage
             }
         }
 
-        private string getMessagesFullPath(string wallet_address, int channel, long min_timestamp)
+        private string? getMessagesFullPath(string wallet_address, int channel, long min_timestamp)
         {
             string messages_path = Path.Combine(documentsPath, "Chats", wallet_address, channel.ToString());
             var files = Directory.GetFiles(messages_path, "*.ixi").OrderBy(x => x).ToArray();
@@ -669,9 +657,14 @@ namespace IXICore.Storage
         }
 
         // Writes the message archive for a given wallet
-        private bool writeMessages(Address address, int channel, List<FriendMessage> messages)
+        private bool writeMessages(Address address, int channel, List<FriendMessage>? messages)
         {
-            List<FriendMessage> local_messages = null;
+            if (messages == null)
+            {
+                Logging.error("Cannot write messages, messages list is null.");
+                return false;
+            }
+            List<FriendMessage> local_messages;
             lock (messages)
             {
                 local_messages = messages.OrderBy(x => x.receivedTimestamp).ToList();
@@ -686,7 +679,7 @@ namespace IXICore.Storage
                     Directory.CreateDirectory(messages_path);
                 }
 
-                string messages_full_path = getMessagesFullPath(wallet, channel, local_messages.First().receivedTimestamp);
+                string? messages_full_path = getMessagesFullPath(wallet, channel, local_messages.First().receivedTimestamp);
                 if (messages_full_path == null)
                 {
                     messages_full_path = Path.Combine(messages_path, local_messages.First().receivedTimestamp + ".ixi");
@@ -856,7 +849,7 @@ namespace IXICore.Storage
             Directory.CreateDirectory(avatarsPath);
         }
 
-        public string getAvatarPath(string friend_address, bool thumb = true)
+        public string? getAvatarPath(string friend_address, bool thumb = true)
         {
             string size_str = "";
             if (thumb)

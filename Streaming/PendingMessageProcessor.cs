@@ -27,11 +27,10 @@ namespace IXICore.Streaming
         public bool removeAfterSending;
     }
 
-
     abstract class PendingMessageProcessor
     {
-        Thread pendingMessagesThread; // Thread that checks the offline messages list for outstanding messages
-        Task offloadedMessagesTask;
+        Thread? pendingMessagesThread = null; // Thread that checks the offline messages list for outstanding messages
+        Task? offloadedMessagesTask = null;
         bool running = false;
 
         List<PendingRecipient> pendingRecipients = new List<PendingRecipient>();
@@ -56,7 +55,7 @@ namespace IXICore.Streaming
                 {
                     try
                     {
-                        Friend friend = FriendList.getFriend(new Address(Path.GetFileName(dir_path)));
+                        Friend? friend = FriendList.getFriend(new Address(Path.GetFileName(dir_path)));
                         if (friend == null)
                         {
                             Directory.Delete(dir_path, true);
@@ -160,7 +159,7 @@ namespace IXICore.Streaming
             }
             foreach (PendingRecipient recipient in tmp_pending_recipients)
             {
-                Friend friend = FriendList.getFriend(recipient.address);
+                Friend? friend = FriendList.getFriend(recipient.address);
                 if (friend == null)
                 {
                     Directory.Delete(Path.Combine(storagePath, recipient.address.ToString()), true);
@@ -212,6 +211,12 @@ namespace IXICore.Streaming
 
         public void sendMessage(Friend friend, StreamMessage msg, int channel, bool add_to_pending_messages, bool send_to_server, bool send_push_notification, bool remove_after_sending = false)
         {
+            if (!running)
+            {
+                Logging.warn("Cannot send message, Pending Message Processor is not running.");
+                return;
+            }
+
             OffloadedMessage om = new OffloadedMessage
             {
                 friend = friend,
@@ -229,7 +234,7 @@ namespace IXICore.Streaming
         {
             PendingMessage pm = new PendingMessage(om.msg, om.sendToServer, om.sendPushNotification, om.removeAfterSending, om.channel);
             StreamMessage msg = pm.streamMessage;
-            PendingMessageHeader tmp_msg_header = tmp_msg_header = getPendingMessageHeader(om.friend, msg.id);
+            PendingMessageHeader? tmp_msg_header = tmp_msg_header = getPendingMessageHeader(om.friend, msg.id);
             if (tmp_msg_header != null)
             {
                 pm.filePath = tmp_msg_header.filePath;
@@ -390,19 +395,19 @@ namespace IXICore.Streaming
                     }
                     if (connected_client != null)
                     {
-                        connected_client.sendData(ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                        connected_client.sendData(ProtocolMessageCode.s2data, msg.getBytes());
                         sent = true;
                     }
                     else
                     {
                         if (friend.relayNode != null)
                         {
-                            StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
-                            sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                            StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).Wait();
+                            sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes());
                         }
                         else
                         {
-                            sent = StreamClientManager.sendToClient(new List<Peer>() { new Peer(null, friend.walletAddress, 0, 0, 0, 0) }, ProtocolMessageCode.s2data, msg.getBytes(), msg.id);
+                            sent = StreamClientManager.sendToClient(new List<Peer>() { new Peer(null, friend.walletAddress, 0, 0, 0, 0) }, ProtocolMessageCode.s2data, msg.getBytes());
                         }
                     }
                     if (sent && pending_message.removeAfterSending)
@@ -448,7 +453,7 @@ namespace IXICore.Streaming
                         {
                             pending_message.save(storagePath);
                         }
-                        PendingMessageHeader tmp_msg_header = getPendingMessageHeader(friend, pending_message.streamMessage.id);
+                        PendingMessageHeader? tmp_msg_header = getPendingMessageHeader(friend, pending_message.streamMessage.id);
                         if (tmp_msg_header != null)
                         {
                             tmp_msg_header.sendToServer = false;
@@ -493,11 +498,11 @@ namespace IXICore.Streaming
                      }*/
         }
 
-        private PendingMessageHeader getPendingMessageHeader(Friend friend, byte[] msg_id)
+        private PendingMessageHeader? getPendingMessageHeader(Friend friend, byte[] msg_id)
         {
             lock (pendingRecipients)
             {
-                PendingRecipient pending_recipient = pendingRecipients.Find(x => x.address.SequenceEqual(friend.walletAddress));
+                PendingRecipient? pending_recipient = pendingRecipients.Find(x => x.address.SequenceEqual(friend.walletAddress));
                 if (pending_recipient != null)
                 {
                     return pending_recipient.messageQueue.Find(x => x.id.SequenceEqual(msg_id));
