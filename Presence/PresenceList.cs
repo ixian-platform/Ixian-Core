@@ -600,18 +600,18 @@ namespace IXICore
                         if (node_type == 'C')
                         {
                             // Send this keepalive to all relay nodes
-                            CoreProtocolMessage.broadcastProtocolMessage(['R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            CoreProtocolMessage.broadcastProtocolMessage(['R'], ProtocolMessageCode.keepAlivePresence, ka_bytes);
                             // Send to all stream client types
-                            StreamClientManager.broadcastData(ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            StreamClientManager.broadcastData(ProtocolMessageCode.keepAlivePresence, ka_bytes);
                         }
                         else
                         {
                             // Send this keepalive to all connected clients
-                            CoreProtocolMessage.broadcastProtocolMessage(['M', 'H', 'W', 'R'], ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                            CoreProtocolMessage.broadcastProtocolMessage(['M', 'H', 'W', 'R'], ProtocolMessageCode.keepAlivePresence, ka_bytes);
                         }
 
                         // Send this keepalive message to all connected clients
-                        CoreProtocolMessage.broadcastEventDataMessage(NetworkEvents.Type.keepAlive, address.addressNoChecksum, ProtocolMessageCode.keepAlivePresence, ka_bytes, address.addressNoChecksum);
+                        CoreProtocolMessage.broadcastEventDataMessage(NetworkEvents.Type.keepAlive, address.addressNoChecksum, ProtocolMessageCode.keepAlivePresence, ka_bytes);
                     }
                     catch (ThreadInterruptedException)
                     {
@@ -636,7 +636,7 @@ namespace IXICore
         // Called when receiving a keepalive network message. The PresenceList will update the appropriate entry based on the timestamp.
         // Returns TRUE if it updated an entry in the PL
         // Sets the out address parameter to be the KA wallet's address or null if an error occurred
-        public static bool receiveKeepAlive(byte[] bytes, out Address wallet, out long last_seen, out byte[] device_id, out char node_type, RemoteEndpoint endpoint)
+        public static bool receiveKeepAlive(byte[] bytes, out Address wallet, out long last_seen, out byte[] device_id, out char node_type, RemoteEndpoint? endpoint)
         {
             wallet = null;
             last_seen = 0;

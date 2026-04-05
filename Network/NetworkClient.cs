@@ -24,13 +24,11 @@ namespace IXICore.Network
         /// <summary>
         ///  Underlying framework connection, if an operation must be performed directly on it.
         /// </summary>
-        public TcpClient tcpClient;
+        public TcpClient? tcpClient;
 
         private string tcpHostname = "";
         private int tcpPort = 0;
         private int totalReconnects = 0;
-
-        private object reconnectLock = new object();
 
         public string myAddress = ""; // My address as reported by the node
 
@@ -75,14 +73,8 @@ namespace IXICore.Network
         /// <param name="port">Port on which to connect</param>
         /// <param name="wallet_address">Expected wallet address of the remote server we are connecting to.</param>
         /// <returns>True, if the connection was successful.</returns>
-        public bool connectToServer(string hostname, int port, Address wallet_address)
+        public async Task<bool> connectToServer(string hostname, int port, Address wallet_address)
         {
-            if (fullyStopped)
-            {
-                Logging.error("Can't start a fully stopped RemoteEndpoint");
-                return false;
-            }
-
             enableSendTimeSyncMessages = false;
 
             helloReceived = false;
@@ -104,8 +96,7 @@ namespace IXICore.Network
                 if (!tcpClient.ConnectAsync(hostname, port).Wait(5000))
                 {
                     Logging.info("Network client connection to {0}:{1} has failed.", hostname, port);
-
-                    stop(false);
+                    await stopAsync().ConfigureAwait(false);
                     return false;
                 }
 
@@ -113,34 +104,11 @@ namespace IXICore.Network
 
                 start(tcpClient.Client);
             }
-            catch (SocketException se)
+            catch (Exception e)
             {
-                SocketError errorCode = (SocketError)se.ErrorCode;
+                Logging.info("Network client connection to {0}:{1} has failed: {2}", hostname, port, e);
 
-                switch (errorCode)
-                {
-                    case SocketError.IsConnected:
-                        break;
-
-                    case SocketError.AddressAlreadyInUse:
-                        Logging.warn(string.Format("Socket exception for {0}:{1} has failed. Address already in use.", hostname, port));
-                        break;
-
-                    default:
-                        {
-                            Logging.warn(string.Format("Socket connection for {0}:{1} has failed.", hostname, port));
-                        }
-                        break;
-                }
-
-                stop(false);
-                return false;
-            }
-            catch (Exception)
-            {
-                Logging.info("Network client connection to {0}:{1} has failed.", hostname, port);
-
-                stop(false);
+                await stopAsync().ConfigureAwait(false);
                 return false;
             }
 
@@ -151,56 +119,38 @@ namespace IXICore.Network
         ///  Disconnects (optionally) and reconnects to the same remote host as was given in `connectToServer()`.
         /// </summary>
         /// <returns>True, if the connection attempt was successful.</returns>
-        public bool reconnect()
+        public async Task<bool> reconnect()
         {
-            lock (reconnectLock)
+            if (tcpHostname.Length < 1)
             {
-                if (tcpHostname.Length < 1)
-                {
-                    Logging.warn("Network client reconnect failed due to invalid hostname.");
-                    return false;
-                }
-
-                // Safely close the threads
-                stop(false);
-
-                Logging.info("--> Reconnecting to {0}, total reconnects: {1}", getFullAddress(true), totalReconnects);
-                return connectToServer(tcpHostname, tcpPort, serverWalletAddress);
+                Logging.warn("Network client reconnect failed due to invalid hostname.");
+                return false;
             }
+
+            // Safely close the threads
+            await stopAsync().ConfigureAwait(false);
+
+            Logging.info("--> Reconnecting to {0}, total reconnects: {1}", getFullAddress(true), totalReconnects);
+            return await connectToServer(tcpHostname, tcpPort, serverWalletAddress).ConfigureAwait(false);
         }
 
         // Receive thread
         protected override void onInitialized()
         {
             base.onInitialized();
-            try
-            {
-                CoreProtocolMessage.sendHelloMessageV6(this, false, Random.Shared.Next(), ephemeralKeyPair);
-            }catch(Exception e)
-            {
-                if (running)
-                {
-                    Logging.warn("onInitialized: Disconnected client {0} with exception {1}", getFullAddress(), e.ToString());
-                }
-                state = RemoteEndpointState.Closed;
-                running = false;
-            }
+            CoreProtocolMessage.sendHelloMessageV6(this, false, Random.Shared.Next(), ephemeralKeyPair);
         }
 
         /// <summary>
         ///  Breaks the connection to the remote server.
         /// </summary>
-        protected override void disconnect()
+        public override async Task stopAsync()
         {
-            base.disconnect();
-            if (tcpClient == null)
-            {
-                return;
-            }
+            await base.stopAsync().ConfigureAwait(false);
 
             try
             {
-                tcpClient.Close();
+                tcpClient?.Close();
             }
             catch (Exception e)
             {

@@ -20,8 +20,8 @@ namespace IXICore.Network
         public List<NetworkClient> networkClients { get; private set; } = new List<NetworkClient>();
         protected List<string> connectingClients = new List<string>(); // A list of clients that we're currently connecting
 
-        private CancellationTokenSource ctsLoop;
-        private Task reconnectTask;
+        private CancellationTokenSource? ctsLoop = null;
+        private Task? reconnectTask = null;
         private TaskCompletionSource wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TimeSpan reconnectInterval = TimeSpan.FromMilliseconds(CoreConfig.networkClientReconnectInterval);
         protected bool autoReconnect = true;
@@ -39,18 +39,20 @@ namespace IXICore.Network
         /// </remarks>
         public int simultaneousConnectedNeighbors;
 
-        private string bindAddress = null;
+        private string? bindAddress = null;
 
-        public NetworkClientManagerBase(int simultaneousConnectedNeighbors, string bindAddress = null)
+        private HashSet<string> pinnedNodes = new();
+
+        public NetworkClientManagerBase(int simultaneousConnectedNeighbors, string? bindAddress = null)
         {
             if (simultaneousConnectedNeighbors < 3)
             {
-                Logging.error("Setting simultanousConnectedNeighbors should be at least 3.");
-                IxianHandler.shutdown();
                 throw new Exception("Setting simultanousConnectedNeighbors should be at least 3.");
             }
             this.simultaneousConnectedNeighbors = simultaneousConnectedNeighbors;
             this.bindAddress = bindAddress;
+
+            TLC = new ThreadLiveCheck();
         }
 
         // Starts the Network Client Manager.
@@ -106,8 +108,6 @@ namespace IXICore.Network
             }
 
             // Start the reconnect thread
-            TLC = new ThreadLiveCheck();
-
             autoReconnect = true;
             reconnectTask = Task.Run(() => reconnectLoop(ctsLoop.Token));
         }
@@ -134,7 +134,7 @@ namespace IXICore.Network
                     }
 
                     // wait either interval or wake signal
-                    await Task.WhenAny(Task.Delay(reconnectInterval, token), wakeSignal.Task);
+                    await Task.WhenAny(Task.Delay(reconnectInterval, token), wakeSignal.Task).ConfigureAwait(false);
 
                     // setup fresh wake signal
                     wakeSignal = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -162,14 +162,23 @@ namespace IXICore.Network
             }
             else if (getConnectedClients(true).Count() > simultaneousConnectedNeighbors)
             {
-                NetworkClient client;
+                NetworkClient? client = null;
                 lock (networkClients)
                 {
-                    client = networkClients[0];
-                    networkClients.RemoveAt(0);
+                    foreach (var tmpClient in networkClients)
+                    {
+                        if (pinnedNodes.Contains(tmpClient.getFullAddress(true)))
+                        {
+                            continue;
+                        }
+                        client = tmpClient;
+                        break;
+                    }
                 }
-                CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
-                client.stop();
+                if (client != null)
+                {
+                    CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
+                }
             }
 
             // Connect randomly to a new node. Currently a 1% chance to reconnect during this iteration
@@ -197,9 +206,7 @@ namespace IXICore.Network
                 networkClients.Clear();
                 connectingClients.Clear();
 
-                bool result = connectTo(address, null);
-
-                return result;
+                return connectTo(address, null).Result != null;
             }
         }
 
@@ -253,7 +260,7 @@ namespace IXICore.Network
                 // Disconnect each client
                 foreach (NetworkClient client in networkClients)
                 {
-                    client.stop();
+                    client.stopAsync();
                 }
 
                 // Empty the client list
@@ -276,19 +283,19 @@ namespace IXICore.Network
         }
 
         // Connects to a specified node, with the syntax host:port
-        public bool connectTo(string host, Address wallet_address)
+        public async Task<NetworkClient?> connectTo(string host, Address wallet_address)
         {
-            if (host == null || host.Length < 3)
+            if (host.Length < 3)
             {
                 Logging.error("Invalid host address {0}", host);
-                return false;
+                return null;
             }
 
             string[] server = host.Split(':');
             if (server.Count() < 2)
             {
                 Logging.warn("Cannot connect to invalid hostname: {0}", host);
-                return false;
+                return null;
             }
 
             // Resolve the hostname first
@@ -298,7 +305,7 @@ namespace IXICore.Network
             if (resolved_server_name.Length < 1)
             {
                 Logging.warn("Cannot resolve IP for {0}, skipping connection.", server[0]);
-                return false;
+                return null;
             }
 
             string resolved_host = string.Format("{0}:{1}", resolved_server_name, server[1]);
@@ -312,7 +319,7 @@ namespace IXICore.Network
                     if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
                     {
                         Logging.info("Skipping connection to public self seed node {0}", host);
-                        return false;
+                        return null;
                     }
                 }
 
@@ -326,7 +333,7 @@ namespace IXICore.Network
                         if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
                         {
                             Logging.info("Skipping connection to self seed node {0}", host);
-                            return false;
+                            return null;
                         }
                     }
                 }
@@ -339,11 +346,11 @@ namespace IXICore.Network
                     if (resolved_host.Equals(client, StringComparison.Ordinal))
                     {
                         // We're already connecting to this client
-                        return false;
+                        return null;
                     }
                 }
 
-                // The the client to the connecting clients list
+                // Add the client to the connecting clients list
                 connectingClients.Add(resolved_host);
             }
 
@@ -355,7 +362,7 @@ namespace IXICore.Network
                     if (client.getFullAddress(true).Equals(resolved_host, StringComparison.Ordinal))
                     {
                         // Address is already in the client list
-                        return false;
+                        return null;
                     }
                 }
             }
@@ -367,14 +374,14 @@ namespace IXICore.Network
                 if (connectedClients[i].Equals(resolved_host, StringComparison.Ordinal))
                 {
                     // Address is already in the client list
-                    return false;
+                    return null;
                 }
             }
 
             // Connect to the specified node
-            NetworkClient new_client = new NetworkClient(bindAddress);
+            NetworkClient? new_client = new NetworkClient(bindAddress);
             // Recompose the connection address from the resolved IP and the original port
-            bool result = new_client.connectToServer(resolved_server_name, Convert.ToInt32(server[1]), wallet_address);
+            bool result = await new_client.connectToServer(resolved_server_name, Convert.ToInt32(server[1]), wallet_address).ConfigureAwait(false);
 
             // Add this node to the client list if connection was successfull
             if (result == true)
@@ -384,11 +391,10 @@ namespace IXICore.Network
                 {
                     networkClients.Add(new_client);
                 }
-
             }
             else
             {
-                new_client.stop();
+                new_client = null;
             }
 
             // Remove this node from the connecting clients list
@@ -397,15 +403,15 @@ namespace IXICore.Network
                 connectingClients.Remove(resolved_host);
             }
 
-            return result;
+            return new_client;
         }
 
         // Send data to all connected nodes
         // Returns true if the data was sent to at least one client
-        public bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint skipEndpoint = null)
+        public bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, RemoteEndpoint? skipEndpoint = null)
         {
             bool result = false;
-            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data, helper_data);
+            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data);
             lock (networkClients)
             {
                 foreach (NetworkClient client in networkClients)
@@ -442,7 +448,7 @@ namespace IXICore.Network
             return result;
         }
 
-        public NetworkClient getClient(Address clientAddress, bool fullyConnected = true)
+        public NetworkClient? getClient(Address clientAddress, bool fullyConnected = true)
         {
             lock (networkClients)
             {
@@ -471,22 +477,22 @@ namespace IXICore.Network
             return null;
         }
 
-        public bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
+        public bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data)
         {
-            NetworkClient client = getClient(neighbor, true);
+            NetworkClient? client = getClient(neighbor, true);
 
             if (client != null)
             {
-                client.sendData(code, data, helper_data);
+                client.sendData(code, data);
                 return true;
             }
 
             return false;
         }
 
-        public bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
+        public bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data)
         {
-            NetworkClient client = null;
+            NetworkClient? client = null;
             lock (networkClients)
             {
                 foreach (NetworkClient c in networkClients)
@@ -501,7 +507,7 @@ namespace IXICore.Network
 
             if (client != null)
             {
-                client.sendData(code, data, helper_data);
+                client.sendData(code, data);
                 return true;
             }
 
@@ -575,8 +581,6 @@ namespace IXICore.Network
 
             return addresses;
         }
-        
-
 
         /// <summary>
         ///  Recalculates local time difference depending on 2/3rd of connected servers time differences.
@@ -657,7 +661,7 @@ namespace IXICore.Network
 
         protected void handleDisconnectedClients()
         {
-            List<NetworkClient> netClients = null;
+            List<NetworkClient> netClients;
             lock (networkClients)
             {
                 netClients = new List<NetworkClient>(networkClients);
@@ -667,7 +671,7 @@ namespace IXICore.Network
             List<NetworkClient> failed_clients = new List<NetworkClient>();
 
             List<NetworkClient> dup_clients = new List<NetworkClient>();
-
+            List<Task> client_tasks = new();
             foreach (NetworkClient client in netClients)
             {
                 if (dup_clients.Find(x => x.getFullAddress(true) == client.getFullAddress(true)) != null)
@@ -685,8 +689,7 @@ namespace IXICore.Network
                 {
                     failed_clients.Add(client);
                 }
-                else if (client.getTotalReconnectsCount() >= CoreConfig.maximumNeighborReconnectCount
-                         || client.fullyStopped)
+                else if (client.getTotalReconnectsCount() >= CoreConfig.maximumNeighborReconnectCount)
                 {
                     // Remove this client so we can search for a new neighbor
                     failed_clients.Add(client);
@@ -695,14 +698,16 @@ namespace IXICore.Network
                 else
                 {
                     // Reconnect
-                    client.reconnect();
+                    client_tasks.Add(client.reconnect());
                 }
             }
+
+            Task.WhenAll(client_tasks).Wait();
 
             // Go through the list of failed clients and remove them
             foreach (NetworkClient client in failed_clients)
             {
-                client.stop();
+                client.stopAsync().Wait();
                 lock (networkClients)
                 {
                     networkClients.Remove(client);
@@ -729,7 +734,7 @@ namespace IXICore.Network
             return messageCount;
         }
 
-        public string getMyAddress()
+        public string? getMyAddress()
         {
             lock (networkClients)
             {
@@ -897,6 +902,90 @@ namespace IXICore.Network
         public void wakeReconnectLoop()
         {
             wakeSignal.TrySetResult();
+        }
+
+
+        public void setPinnedNodes(List<string> pinnedNodes)
+        {
+            lock (networkClients)
+            {
+                if (this.pinnedNodes == null)
+                {
+                    this.pinnedNodes = new();
+                    return;
+                }
+
+                this.pinnedNodes = pinnedNodes.ToHashSet();
+            }
+        }
+
+        public bool isConnectedTo(string address, bool only_fully_connected = true)
+        {
+            lock (networkClients)
+            {
+                foreach (NetworkClient client in networkClients)
+                {
+                    if (client.getFullAddress(true).Equals(address, StringComparison.Ordinal))
+                    {
+                        if (only_fully_connected && (!client.isConnected() || !client.helloReceived))
+                        {
+                            break;
+                        }
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+
+        public bool isConnectedTo(RemoteEndpoint endpoint)
+        {
+            lock (networkClients)
+            {
+                foreach (NetworkClient client in networkClients)
+                {
+                    if (client == endpoint)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        public bool sendToClient(List<Peer> relayNodes, ProtocolMessageCode code, byte[] data, int client_count = 1)
+        {
+            List<NetworkClient> clients = new();
+            lock (networkClients)
+            {
+                foreach (NetworkClient c in networkClients)
+                {
+                    if (c.isConnected()
+                        && c.helloReceived
+                        && relayNodes.Find(x => (x.hostname != null && x.hostname == c.getFullAddress()) || (x.walletAddress != null && x.walletAddress.SequenceEqual(c.serverWalletAddress))) != null)
+                    {
+                        clients.Add(c);
+                        if (clients.Count == client_count)
+                        {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (clients.Count > 0)
+            {
+                foreach (var c in clients)
+                {
+                    c.sendData(code, data);
+                }
+                return true;
+            }
+
+            return false;
         }
     }
 }

@@ -162,16 +162,6 @@ namespace IXICore.Network
     }
 
     /// <summary>
-    ///  Current stateus of the remote endpoint (server or client).
-    /// </summary>
-    public enum RemoteEndpointState
-    {
-        Initial,
-        Established,
-        Closed
-    }
-
-    /// <summary>
     ///  Helper class to help filter and classify IPv4 addresses
     /// </summary>
     public class IPv4Subnet

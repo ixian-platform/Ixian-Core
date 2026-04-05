@@ -128,7 +128,7 @@ namespace IXICore.Streaming
                 }
             }
 
-            Task.Run(() =>
+            Task.Run(async() =>
             {
                 if (NetworkServer.getClient(friend.walletAddress) == null
                     && (friend.relayNode == null || NetworkServer.getClient(friend.relayNode) == null))
@@ -137,7 +137,7 @@ namespace IXICore.Streaming
                         && friend.relayNode != null
                         && friend.online)
                     {
-                        StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress);
+                        await StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).ConfigureAwait(false);
                     }
                     else
                     {
@@ -249,7 +249,7 @@ namespace IXICore.Streaming
                 }
             }
 
-            return await endpoint.SendDataAsync(msg.getBytes());
+            return await endpoint.SendDataAsync(msg.getBytes()).ConfigureAwait(false);
         }
 
         public static void sendSpixiMessage(Friend friend, SpixiMessage spixi_message, byte[] id = null, bool add_to_pending_messages = true, bool send_to_server = true, bool send_push_notification = true, bool remove_after_sending = false)
@@ -466,7 +466,8 @@ namespace IXICore.Streaming
         // Called when receiving S2 data from clients
         public virtual ReceiveDataResponse? receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true, bool alert = true)
         {
-            if (running == false)
+            if (!running
+                || IxianHandler.status == NodeStatus.stopping)
             {
                 return null;
             }
@@ -2711,7 +2712,7 @@ namespace IXICore.Streaming
                     }
 
                     Logging.trace("Fetching presence for " + friend.walletAddress.ToString());
-                    if (!StreamClientManager.sendToClient(friend.sectorNodes, ProtocolMessageCode.getPresence2, mw.ToArray(), null, 2))
+                    if (!StreamClientManager.sendToClient(friend.sectorNodes, ProtocolMessageCode.getPresence2, mw.ToArray(), 2))
                     {
                         // Not connected to contact's sector node
 
@@ -2944,7 +2945,7 @@ namespace IXICore.Streaming
         public static async Task<TransactionSendResponse?> transactionSendRequest(IXISocket socket, Friend friend, IxiNumber amount, byte[]? tag, byte[]? message)
         {
             StreamMessage msg = prepareTransactionSendRequest(friend, amount, tag, message);
-            var response = await sendMessage(socket, friend, msg);
+            var response = await sendMessage(socket, friend, msg).ConfigureAwait(false);
             if (response == null)
             {
                 return null;
@@ -3068,13 +3069,13 @@ namespace IXICore.Streaming
             }
             using (IXISocket ixiSocket = new IXISocket(connection, selSectorProvider, new PresenceProvider(connection)))
             {
-                if (!await ixiSocket.ConnectAsync())
+                if (!await ixiSocket.ConnectAsync().ConfigureAwait(false))
                 {
                     IXISocketConnections.RemovePendingSectorRequest(connection);
                     return null;
                 }
 
-                TransactionSendResponse? resp = await transactionSendRequest(ixiSocket, connection, amount, extendedAddress.Tag, UTF8Encoding.UTF8.GetBytes("test"));
+                TransactionSendResponse? resp = await transactionSendRequest(ixiSocket, connection, amount, extendedAddress.Tag, null).ConfigureAwait(false);
                 if (resp != null)
                 {
                     IXISocketConnections.RemovePendingSectorRequest(connection);

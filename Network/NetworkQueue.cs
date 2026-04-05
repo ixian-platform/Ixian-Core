@@ -409,8 +409,8 @@ namespace IXICore.Network
                     }
                     else
                     {
-                        // Sleep for 10ms to prevent cpu waste
-                        Thread.Sleep(10);
+                        // Sleep for 50ms to prevent cpu waste
+                        Thread.Sleep(50);
                     }
                 }
             } catch (ThreadInterruptedException)

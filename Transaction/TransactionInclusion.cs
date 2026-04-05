@@ -1118,7 +1118,7 @@ namespace IXICore
                         {
                             foreach (var address in entry.relayNodeAddresses)
                             {
-                                NetworkClientManager.sendToClient(address, ProtocolMessageCode.transactionData2, t.getBytes(true, true), null);
+                                NetworkClientManager.sendToClient(address, ProtocolMessageCode.transactionData2, t.getBytes(true, true));
                             }
                         }
                         else

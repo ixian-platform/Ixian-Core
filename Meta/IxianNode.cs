@@ -53,7 +53,6 @@ namespace IXICore.Meta
     public abstract class IxianNode
     {
         // Required
-        public abstract ulong getHighestKnownNetworkBlockHeight();
         public abstract Block? getBlockHeader(ulong blockNum);
         public abstract byte[]? getBlockHash(ulong blockNum);
         public abstract Block? getLastBlock();
@@ -95,6 +94,18 @@ namespace IXICore.Meta
 
             return 0;
         }
+
+        public virtual ulong getHighestKnownNetworkBlockHeight()
+        {
+            ulong bh = getLastBlockHeight();
+            ulong netBlockNum = CoreProtocolMessage.determineHighestNetworkBlockNum();
+            if (bh < netBlockNum)
+            {
+                bh = netBlockNum;
+            }
+
+            return bh;
+        }
     }
 
     public static class IxianHandler
@@ -109,7 +120,7 @@ namespace IXICore.Meta
         private static string _publicIP = "";
         private static int _publicPort = 0;
 
-        public static bool forceShutdown = false;
+        public static bool forceShutdown { get; private set; } = false;
 
         /// <summary>
         /// Current node status.
@@ -221,7 +232,6 @@ namespace IXICore.Meta
             return handlerClass.getLastBlockVersion();
         }
 
-
         public static bool addIncomingTransaction(Transaction tx)
         {
             verifyHandler();
@@ -272,9 +282,18 @@ namespace IXICore.Meta
 
         public static void shutdown()
         {
-            forceShutdown = true;
-            verifyHandler();
-            handlerClass.shutdown();
+            status = NodeStatus.stopping;
+            try
+            {
+                forceShutdown = true;
+                verifyHandler();
+                handlerClass.shutdown();
+            }
+            catch (Exception ex)
+            {
+                Logging.error("Error during shutdown: " + ex.Message);
+            }
+            status = NodeStatus.stopped;
         }
 
         public static IxiNumber getMinSignerPowDifficulty(ulong blockNum, int curBlockVersion, long curBlockTimestamp)

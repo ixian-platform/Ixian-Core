@@ -16,6 +16,7 @@ using IXICore.Meta;
 using IXICore.Utils;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 
 namespace IXICore.Network
@@ -35,7 +36,7 @@ namespace IXICore.Network
         public long processedTime = 0;
     }
 
-    public class RemoteEndpoint
+    public class RemoteEndpoint : IAsyncDisposable
     {
         class MessageHeader
         {
@@ -60,11 +61,12 @@ namespace IXICore.Network
         protected long lastDataReceivedTime = 0;
         protected long lastDataSentTime = 0;
 
-        public bool fullyStopped = false;
-
         public IPEndPoint? remoteIP;
-        public Socket clientSocket;
-        public RemoteEndpointState state;
+        public Socket? clientSocket;
+
+        private object startLock = new();
+
+        private CancellationTokenSource? cts;
 
         // Maintain tasks for handling data receiving and sending
         protected Task? recvTask = null;
@@ -74,18 +76,28 @@ namespace IXICore.Network
         public Presence? presence = null;
         public PresenceAddress? presenceAddress = null;
 
-        protected bool running = false;
+        public bool running { get; protected set; } = false;
 
         // Maintain a list of subscribed event addresses with event type
         private Dictionary<NetworkEvents.Type, Cuckoo> subscribedFilters = new Dictionary<NetworkEvents.Type, Cuckoo>();
 
+        private readonly int capacity;
+
         // Maintain a queue of messages to send
-        private List<QueueMessage> sendQueueMessagesHighPriority = new List<QueueMessage>();
-        private List<QueueMessage> sendQueueMessagesNormalPriority = new List<QueueMessage>();
-        private List<QueueMessage> sendQueueMessagesLowPriority = new List<QueueMessage>();
+        private Channel<QueueMessage>? sendQueueMessagesHighPriority;
+        private Channel<QueueMessage>? sendQueueMessagesNormalPriority;
+        private Channel<QueueMessage>? sendQueueMessagesLowPriority;
+
+        private const int dedupSize = 10;
+        private readonly Queue<long> recentIds = new();
+        private readonly HashSet<long> recentIdsSet = new();
+
+        private long requestedIdsSize = CoreConfig.maximumRequestedMessageIds;
+        private readonly Queue<long> requestedIds = new();
+        private readonly HashSet<long> requestedIdsSet = new();
 
         // Maintain a queue of raw received data
-        private Channel<QueueMessageRaw?> recvRawQueueMessages = Channel.CreateUnbounded<QueueMessageRaw?>();
+        private Channel<QueueMessageRaw?>? recvRawQueueMessages;
 
         private byte[]? socketReadBuffer = null;
 
@@ -95,8 +107,6 @@ namespace IXICore.Network
 
         private List<InventoryItem> inventory = new List<InventoryItem>();
         private long inventoryLastSent = 0;
-
-        private List<long> requestedMessageIds = new List<long>();
 
         public Address? serverWalletAddress = null;
         public byte[]? serverPubKey = null;
@@ -111,11 +121,11 @@ namespace IXICore.Network
 
         public IxianKeyPair? ephemeralKeyPair = null;
 
-        private object startLock = new object();
-
-        public RemoteEndpoint(Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null)
+        public RemoteEndpoint(Action<QueueMessageRaw, MessagePriority, RemoteEndpoint>? handler = null,
+                              int capacityPerQueue = 10000)
         {
             messageHandler = handler;
+            capacity = capacityPerQueue;
         }
 
         protected void prepareSocket(Socket socket)
@@ -135,33 +145,23 @@ namespace IXICore.Network
             socket.Blocking = true;
         }
 
-        public void start(Socket? socket = null)
+        public void start(Socket socket)
         {
             lock (startLock)
             {
-                if (fullyStopped)
-                {
-                    Logging.error("Can't start a fully stopped RemoteEndpoint");
-                    return;
-                }
-
                 if (running)
                 {
-                    Logging.error("Can't start already running RemoteEndpoint");
-                    return;
+                    throw new InvalidOperationException("Can't start already running RemoteEndpoint");
                 }
 
-                running = true;
+                clientSocket = socket ?? throw new ArgumentNullException("Could not start NetworkRemoteEndpoint, socket is null");
 
-                if (socket != null)
-                {
-                    clientSocket = socket;
-                }
-                if (clientSocket == null)
-                {
-                    Logging.error("Could not start NetworkRemoteEndpoint, socket is null");
-                    return;
-                }
+                cts = new CancellationTokenSource();
+
+                recvRawQueueMessages = CreateBoundedChannel<QueueMessageRaw?>(capacity);
+                sendQueueMessagesHighPriority = CreateBoundedChannel<QueueMessage>(capacity);
+                sendQueueMessagesNormalPriority = CreateBoundedChannel<QueueMessage>(capacity);
+                sendQueueMessagesLowPriority = CreateBoundedChannel<QueueMessage>(capacity);
 
                 prepareSocket(clientSocket);
 
@@ -185,105 +185,79 @@ namespace IXICore.Network
                 lastDataReceivedTime = Clock.getTimestamp();
                 lastDataSentTime = Clock.getTimestamp();
 
-                state = RemoteEndpointState.Established;
-
                 timeDifference = 0;
                 timeSyncComplete = false;
                 timeSyncs.Clear();
 
-                try
-                {
-                    // Start parse thread
-                    parseTask = Task.Run(() => parseLoop());
+                running = true;
 
-                    // Start send thread
-                    sendTask = Task.Run(() => sendLoop());
+                // Start parse thread
+                parseTask = Task.Run(() => parseLoop(cts.Token));
 
-                    // Start receive thread
-                    recvTask = Task.Run(() => recvLoop());
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Error starting remote endpoint: {0}", e.Message);
-                    stop();
-                }
+                // Start send thread
+                sendTask = Task.Run(() => sendLoop(cts.Token));
+
+                // Start receive thread
+                recvTask = Task.Run(() => recvLoop(cts.Token));
             }
         }
 
         // Aborts all related endpoint threads and data
-        public void stop(bool fully_stopped = true)
+        public virtual async Task stopAsync()
         {
+            List<Task> tasks = new();
+
             lock (startLock)
             {
-                fullyStopped = fully_stopped;
+                if (!running)
+                {
+                    Logging.warn("Attempting to stop a RemoteEndpoint that is not running.");
+                    return;
+                }
 
-                state = RemoteEndpointState.Closed;
                 running = false;
 
-                try
-                {
-                    recvRawQueueMessages.Writer.TryWrite(null);
-                }
-                catch (Exception e)
-                {
-                    Logging.error("Error while stopping " + e);
-                }
+                cts?.Cancel();
+
+                recvRawQueueMessages?.Writer.TryComplete();
+                sendQueueMessagesHighPriority?.Writer.TryComplete();
+                sendQueueMessagesNormalPriority?.Writer.TryComplete();
+                sendQueueMessagesLowPriority?.Writer.TryComplete();
 
                 if (sendTask != null)
                 {
-                    try
-                    {
-                        sendTask.GetAwaiter().GetResult();
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Error while stopping " + e);
-                    }
-                    sendTask = null;
+                    tasks.Add(sendTask);
                 }
-
                 if (parseTask != null)
                 {
-                    try
-                    {
-                        parseTask.GetAwaiter().GetResult();
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Error while stopping " + e);
-                    }
-                    parseTask = null;
+                    tasks.Add(parseTask);
                 }
-
-                disconnect();
-
                 if (recvTask != null)
                 {
-                    try
-                    {
-                        recvTask.GetAwaiter().GetResult();
-                    }
-                    catch (Exception e)
-                    {
-                        Logging.error("Error while stopping " + e);
-                    }
-                    recvTask = null;
+                    tasks.Add(recvTask);
                 }
+            }
 
-                lock (sendQueueMessagesHighPriority)
-                {
-                    sendQueueMessagesHighPriority.Clear();
-                }
+            try
+            {
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected
+            }
+            finally
+            {
+                cts?.Dispose();
+                cts = null;
 
-                lock (sendQueueMessagesNormalPriority)
-                {
-                    sendQueueMessagesNormalPriority.Clear();
-                }
-
-                lock (sendQueueMessagesLowPriority)
-                {
-                    sendQueueMessagesLowPriority.Clear();
-                }
+                recvRawQueueMessages = null;
+                sendQueueMessagesHighPriority = null;
+                sendQueueMessagesNormalPriority = null;
+                sendQueueMessagesLowPriority = null;
+                recvTask = null;
+                sendTask = null;
+                parseTask = null;
 
                 lock (subscribedFilters)
                 {
@@ -295,110 +269,12 @@ namespace IXICore.Network
                     inventory.Clear();
                 }
             }
-        }
 
-        // Receive thread
-        protected async Task recvLoop()
-        {
-            try
-            {
-                socketReadBuffer = new byte[8192];
-                long lastReceivedMessageStatTime = Clock.getTimestampMillis();
-                int messageCount = 0;
-                while (running)
-                {
-                    // Let the protocol handler receive and handle messages
-                    bool message_received = false;
-                    try
-                    {
-                        QueueMessageRaw? raw_msg = await readSocketData().ConfigureAwait(false);
-                        if (raw_msg != null)
-                        {
-                            message_received = true;
-                            parseDataInternal((QueueMessageRaw)raw_msg);
-                            messageCount++;
-                        }
-                    }
-                    catch (SocketException se)
-                    {
-                        if (running)
-                        {
-                            if (se.SocketErrorCode != SocketError.ConnectionAborted
-                                && se.SocketErrorCode != SocketError.NotConnected
-                                && se.SocketErrorCode != SocketError.ConnectionReset
-                                && se.SocketErrorCode != SocketError.Interrupted)
-                            {
-                                Logging.warn("recvRE: Disconnected client {0} with socket exception {1} {2} {3}", getFullAddress(), se.SocketErrorCode, se.ErrorCode, se);
-                            }
-                        }
-                        state = RemoteEndpointState.Closed;
-                    }
-                    catch (Exception e)
-                    {
-                        if (running)
-                        {
-                            Logging.warn("recvRE: Disconnected client {0} with exception {1}", getFullAddress(), e);
-                        }
-                        state = RemoteEndpointState.Closed;
-                    }
-
-                    // Check if the client disconnected
-                    if (state == RemoteEndpointState.Closed)
-                    {
-                        running = false;
-                        break;
-                    }
-
-                    // Sleep a while to throttle the client
-                    // Check if there are too many messages
-                    // TODO TODO TODO this can be handled way better
-                    int total_message_count = NetworkQueue.getQueuedMessageCount();
-                    if (total_message_count > 10000)
-                    {
-                        await Task.Delay(1000);
-                    }
-                    else if (total_message_count > 5000)
-                    {
-                        await Task.Delay(500);
-                    }
-                    else if (messageCount > 100)
-                    {
-                        long cur_time = Clock.getTimestampMillis();
-                        long time_diff = cur_time - lastReceivedMessageStatTime;
-                        if (time_diff < 100)
-                        {
-                            // sleep to throttle the client to 1000 messages/second
-                            await Task.Delay(100 - (int)time_diff);
-                            cur_time = Clock.getTimestampMillis();
-                        }
-                        lastReceivedMessageStatTime = cur_time;
-                        messageCount = 0;
-                    }
-                    else if (!message_received)
-                    {
-                        await Task.Delay(10);
-                    }
-                }
-            }
-            catch (Exception e)
-            {
-                Logging.error("RecvLoop exception: {0}", e);
-            }
-            state = RemoteEndpointState.Closed;
-            running = false;
-        }
-
-        protected virtual void disconnect()
-        {
             // Close the client socket
-            if (clientSocket == null)
-            {
-                return;
-            }
-
             try
             {
-                if (clientSocket.Connected)
+                if (clientSocket != null
+                    && clientSocket.Connected)
                 {
                     clientSocket.Shutdown(SocketShutdown.Both);
                 }
@@ -414,7 +290,7 @@ namespace IXICore.Network
 
             try
             {
-                clientSocket.Close();
+                clientSocket?.Close();
             }
             catch (Exception e)
             {
@@ -426,29 +302,81 @@ namespace IXICore.Network
             }
         }
 
-        protected void sendTimeSyncMessages()
+        protected void requestStop()
         {
-            // send 5 messages with current network timestamp
-            List<byte> time_sync_data = new List<byte>();
-            for (int i = 0; i < 5 && running; i++)
+            lock (startLock)
             {
-                time_sync_data.Clear();
-                time_sync_data.Add(2);
-                time_sync_data.AddRange(BitConverter.GetBytes(Clock.getNetworkTimestampMillis()));
-                try
+                cts?.Cancel();
+                recvRawQueueMessages?.Writer.TryComplete();
+            }
+        }
+
+        // Receive thread
+        protected async Task recvLoop(CancellationToken ct)
+        {
+            var socket = clientSocket!;
+            var recvWriter = recvRawQueueMessages!.Writer;
+            try
+            {
+                socketReadBuffer = new byte[64 * 1024];
+                long lastReceivedMessageStatTime = Clock.getTimestampMillis();
+                while (!ct.IsCancellationRequested)
                 {
-                    int time_sync_data_len = time_sync_data.ToArray().Length;
-                    for (int sent = 0; sent < time_sync_data_len && running;)
+                    // Let the protocol handler receive and handle messages
+                    bool message_received = false;
+                    QueueMessageRaw? raw_msg = await readSocketData(ct).ConfigureAwait(false);
+                    if (raw_msg != null)
                     {
-                        sent += clientSocket.Send(time_sync_data.ToArray(), sent, time_sync_data_len, SocketFlags.None);
+                        message_received = true;
+                        recvWriter.TryWrite(raw_msg);
+                    }
+
+                    // Check if the client disconnected
+                    if (ct.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    // Sleep a while to throttle the client
+                    // Check if there are too many messages
+                    // TODO TODO TODO this can be handled way better
+                    int total_message_count = NetworkQueue.getQueuedMessageCount();
+                    if (total_message_count > 10000)
+                    {
+                        await Task.Delay(1000).ConfigureAwait(false);
+                    }
+                    else if (total_message_count > 5000)
+                    {
+                        await Task.Delay(500).ConfigureAwait(false);
+                    }
+                    else if (!message_received)
+                    {
+                        await Task.Delay(10).ConfigureAwait(false);
                     }
                 }
-                catch (Exception)
+            }
+            catch (SocketException se)
+            {
+                if (isConnected())
                 {
-                    state = RemoteEndpointState.Closed;
-                    running = false;
+                    if (se.SocketErrorCode != SocketError.ConnectionAborted
+                        && se.SocketErrorCode != SocketError.NotConnected
+                        && se.SocketErrorCode != SocketError.ConnectionReset
+                        && se.SocketErrorCode != SocketError.Interrupted)
+                    {
+                        Logging.warn("recvRE: Disconnected client {0} with socket exception {1} {2} {3}", getFullAddress(), se.SocketErrorCode, se.ErrorCode, se);
+                    }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown
+            }
+            catch (Exception e)
+            {
+                Logging.warn("recvRE: Disconnected client {0} with exception {1}", getFullAddress(), e);
+            }
+            requestStop();
         }
 
         protected virtual void onInitialized()
@@ -456,20 +384,51 @@ namespace IXICore.Network
 
         }
 
-        // Send thread
-        protected async Task sendLoop()
+        protected async Task sendTimeSyncMessages(Socket socket, CancellationToken ct)
         {
+            byte[] buffer = new byte[1 + 8]; // 0x02 + timestamp
+
+            buffer[0] = 0x02;
+
+            for (int i = 0; i < 5 && !ct.IsCancellationRequested; i++)
+            {
+                long ts = Clock.getNetworkTimestampMillis();
+
+                // write timestamp (little endian)
+                buffer[1] = (byte)ts;
+                buffer[2] = (byte)(ts >> 8);
+                buffer[3] = (byte)(ts >> 16);
+                buffer[4] = (byte)(ts >> 24);
+                buffer[5] = (byte)(ts >> 32);
+                buffer[6] = (byte)(ts >> 40);
+                buffer[7] = (byte)(ts >> 48);
+                buffer[8] = (byte)(ts >> 56);
+
+                int sent = 0;
+
+                while (sent < buffer.Length)
+                {
+                    sent += await socket.SendAsync(
+                        new ArraySegment<byte>(buffer, sent, buffer.Length - sent),
+                        SocketFlags.None,
+                        ct).ConfigureAwait(false);
+                }
+            }
+        }
+
+        // Send thread
+        protected async Task sendLoop(CancellationToken ct)
+        {
+            var socket = clientSocket!;
+            var highReader = sendQueueMessagesHighPriority!.Reader;
+            var mediumReader = sendQueueMessagesNormalPriority!.Reader;
+            var lowReader = sendQueueMessagesLowPriority!.Reader;
             try
             {
-                // Prepare an special message object to use while sending, without locking up the queue messages
-                QueueMessage active_message = new QueueMessage();
-
                 if (enableSendTimeSyncMessages)
                 {
-                    sendTimeSyncMessages();
+                    await sendTimeSyncMessages(socket, ct).ConfigureAwait(false);
                 }
-
-                long lastSentMessageStatTime = Clock.getTimestampMillis();
 
                 int messageCount = 0;
 
@@ -478,195 +437,182 @@ namespace IXICore.Network
 
                 onInitialized();
 
-                while (running)
+                bool moreInventoryItemsPending = false;
+
+                while (!ct.IsCancellationRequested)
                 {
                     long curTime = Clock.getTimestamp();
                     if (helloReceived == false && curTime - connectionStartTime > 10)
                     {
                         // haven't received hello message for 10 seconds, stop running
                         Logging.info("Node {0} hasn't received hello data from remote endpoint for over 10 seconds, disconnecting.", getFullAddress());
-                        state = RemoteEndpointState.Closed;
-                        running = false;
                         break;
                     }
                     if (curTime - lastDataReceivedTime > CoreConfig.pingTimeout)
                     {
                         // haven't received any data for 10 seconds, stop running
                         Logging.warn("Node {0} hasn't received any data from remote endpoint for over {1} seconds, disconnecting.", getFullAddress(), CoreConfig.pingTimeout);
-                        state = RemoteEndpointState.Closed;
-                        running = false;
                         break;
                     }
                     if (curTime - lastDataSentTime > CoreConfig.pongInterval)
                     {
-                        try
+                        await socket.SendAsync(new byte[1] { 1 }, SocketFlags.None, ct).ConfigureAwait(false);
+                        lastDataSentTime = curTime;
+                        continue;
+                    }
+
+                    bool messageFound = false;
+                    QueueMessage msg;
+
+                    if ((messageCount % 5 == 0) &&
+                        lowReader.TryRead(out msg))
+                    {
+                        messageFound = true;
+                    }
+                    else if ((messageCount % 3 == 0) &&
+                             mediumReader.TryRead(out msg))
+                    {
+                        messageFound = true;
+
+                    }
+                    else if (highReader.TryRead(out msg) ||
+                             mediumReader.TryRead(out msg) ||
+                             lowReader.TryRead(out msg))
+                    {
+                        messageFound = true;
+
+                    }
+
+                    if (messageFound)
+                    {
+                        messageCount++;
+
+                        await sendDataInternal(socket, msg.code, msg.data, msg.checksum, ct).ConfigureAwait(false);
+
+                        if (msg.code == ProtocolMessageCode.bye)
                         {
-                            clientSocket.Send(new byte[1] { 1 }, SocketFlags.None);
-                            lastDataSentTime = curTime;
-                            continue;
-                        }
-                        catch (Exception)
-                        {
-                            state = RemoteEndpointState.Closed;
-                            running = false;
+                            reconnectOnFailure = false;
+                            requestStop();
                             break;
                         }
                     }
-
-                    bool message_found = false;
-                    lock (sendQueueMessagesHighPriority)
+                    else if (!moreInventoryItemsPending)
                     {
-                        lock (sendQueueMessagesNormalPriority)
-                        {
-                            if ((messageCount > 0 && messageCount % 5 == 0) || (sendQueueMessagesNormalPriority.Count == 0 && sendQueueMessagesHighPriority.Count == 0))
-                            {
-                                lock (sendQueueMessagesLowPriority)
-                                {
-                                    if (sendQueueMessagesLowPriority.Count > 0)
-                                    {
-                                        // Pick the oldest message
-                                        active_message = sendQueueMessagesLowPriority[0];
-                                        // Remove it from the queue
-                                        sendQueueMessagesLowPriority.RemoveAt(0);
-                                        message_found = true;
-                                    }
-                                }
-                            }
+                        // wait until ANY channel has data OR timeout for housekeeping
+                        var waitTask = Task.WhenAny(
+                            highReader.WaitToReadAsync(ct).AsTask(),
+                            mediumReader.WaitToReadAsync(ct).AsTask(),
+                            lowReader.WaitToReadAsync(ct).AsTask(),
+                            Task.Delay(1000, ct)
+                        );
 
-                            if (message_found == false && ((messageCount > 0 && messageCount % 3 == 0) || sendQueueMessagesHighPriority.Count == 0))
-                            {
-                                if (sendQueueMessagesNormalPriority.Count > 0)
-                                {
-                                    // Pick the oldest message
-                                    active_message = sendQueueMessagesNormalPriority[0];
-                                    // Remove it from the queue
-                                    sendQueueMessagesNormalPriority.RemoveAt(0);
-                                    message_found = true;
-                                }
-                            }
-
-                            if (message_found == false && sendQueueMessagesHighPriority.Count > 0)
-                            {
-                                // Pick the oldest message
-                                active_message = sendQueueMessagesHighPriority[0];
-                                // Remove it from the queue
-                                sendQueueMessagesHighPriority.RemoveAt(0);
-                                message_found = true;
-                            }
-                        }
+                        await waitTask.ConfigureAwait(false);
                     }
 
-                    if (message_found)
-                    {
-                        messageCount++;
-                        // Active message set, attempt to send it
-                        await sendDataInternal(active_message.code, active_message.data, active_message.checksum).ConfigureAwait(false);
-                        if (active_message.code == ProtocolMessageCode.bye)
-                        {
-                            await Task.Delay(500); // grace sleep to get the message through
-                            state = RemoteEndpointState.Closed;
-                            running = false;
-                            fullyStopped = true;
-                        }
-                    }
-                    await sendInventory().ConfigureAwait(false);
+                    moreInventoryItemsPending = await sendInventory(socket, ct).ConfigureAwait(false);
 
                     if (messageCount > 100)
                     {
-                        long cur_time = Clock.getTimestampMillis();
-                        long time_diff = cur_time - lastSentMessageStatTime;
-                        if (time_diff < 100)
-                        {
-                            // sleep to throttle the client to 1000 messages/second
-                            await Task.Delay(100 - (int)time_diff);
-                            cur_time = Clock.getTimestampMillis();
-                        }
-                        lastSentMessageStatTime = cur_time;
                         messageCount = 0;
                     }
-                    else if (!message_found)
-                    {
-                        await Task.Delay(10);
-                    }
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown
             }
             catch (Exception e)
             {
                 Logging.error("SendLoop exception: {0}", e);
             }
-            state = RemoteEndpointState.Closed;
-            running = false;
+            requestStop();
         }
 
         public void addInventoryItem(InventoryItem item)
         {
-            lock(inventory)
+            lock (inventory)
             {
                 inventory.Add(item);
             }
         }
 
-        protected async Task sendInventory()
+        protected async Task<bool> sendInventory(Socket socket, CancellationToken ct)
         {
-            try
+            List<InventoryItem> itemsToSend;
+            bool morePending = false;
+            lock (inventory)
             {
-                IEnumerable<InventoryItem> items_to_send = null;
-                lock (inventory)
+                int count = inventory.Count;
+                if (count == 0)
+                    return false;
+
+                long curTime = Clock.getTimestamp();
+
+                if (count < CoreConfig.maxInventoryItems &&
+                    inventoryLastSent > curTime - CoreConfig.inventoryInterval)
+                    return false;
+
+                inventoryLastSent = curTime;
+
+                int takeCount = Math.Min(count, CoreConfig.maxInventoryItems);
+
+                itemsToSend = inventory.GetRange(0, takeCount);
+                inventory.RemoveRange(0, takeCount);
+
+                if (inventory.Count > CoreConfig.maxInventoryItems)
                 {
-                    if (inventory.Count == 0)
-                    {
-                        return;
-                    }
-                    long cur_time = Clock.getTimestamp();
-                    if (inventory.Count < CoreConfig.maxInventoryItems && inventoryLastSent > cur_time - CoreConfig.inventoryInterval)
-                    {
-                        return;
-                    }
-                    inventoryLastSent = cur_time;
-                    items_to_send = inventory.Take(CoreConfig.maxInventoryItems);
-                    inventory = inventory.Skip(CoreConfig.maxInventoryItems).ToList();
-                }
-                using (MemoryStream m = new MemoryStream())
-                {
-                    using (BinaryWriter writer = new BinaryWriter(m))
-                    {
-                        writer.WriteIxiVarInt(items_to_send.Count());
-                        foreach (var item in items_to_send)
-                        {
-                            byte[] item_bytes = item.getBytes();
-                            writer.WriteIxiVarInt(item_bytes.Length);
-                            writer.Write(item_bytes);
-                        }
-                    }
-                    await sendDataInternal(ProtocolMessageCode.inventory2, m.ToArray(), 0);
+                    morePending = true;
                 }
             }
-            catch(Exception e)
+
+            // Rough size estimate to reduce reallocations
+            int estimatedSize = 5 + itemsToSend.Count * 64;
+            byte[] buffer = new byte[estimatedSize];
+            int offset = 0;
+
+            // Write item count (varint)
+            offset += IxiVarInt.WriteIxiVarInt(buffer.AsSpan(offset), itemsToSend.Count);
+
+            foreach (var item in itemsToSend)
             {
-                Logging.error("Exception occurred in sendInventory: " + e);
+                byte[] itemBytes = item.getBytes();
+
+                offset += IxiVarInt.WriteIxiVarInt(buffer.AsSpan(offset), itemBytes.Length);
+
+                // Ensure capacity
+                if (offset + itemBytes.Length > buffer.Length)
+                {
+                    Array.Resize(ref buffer, Math.Max(buffer.Length * 2, offset + itemBytes.Length));
+                }
+
+                itemBytes.CopyTo(buffer, offset);
+                offset += itemBytes.Length;
             }
+
+            await sendDataInternal(socket, ProtocolMessageCode.inventory2, buffer.AsMemory(0, offset), 0, ct).ConfigureAwait(false);
+
+            return morePending;
         }
 
         // Parse thread
-        protected async Task parseLoop()
+        protected async Task parseLoop(CancellationToken ct)
         {
-            while (running)
+            var reader = recvRawQueueMessages!.Reader;
+            try
             {
-                try
+                while (await reader.WaitToReadAsync(ct))
                 {
-                    QueueMessageRaw? active_message_task = await recvRawQueueMessages.Reader.ReadAsync().ConfigureAwait(false);
-
-                    if (!active_message_task.HasValue)
+                    while (reader.TryRead(out QueueMessageRaw? active_message_task))
                     {
-                        continue;
-                    }
+                        if (!active_message_task.HasValue)
+                        {
+                            continue;
+                        }
 
-                    QueueMessageRaw active_message = active_message_task.Value;
+                        QueueMessageRaw active_message = active_message_task.Value;
 
-                    // Active message set, add it to Network Queue
-                    MessagePriority priority = MessagePriority.auto;
-                    lock (requestedMessageIds)
-                    {
+                        // Active message set, add it to Network Queue
+                        MessagePriority priority = MessagePriority.auto;
                         long msg_id = 0;
                         ulong last_bh = IxianHandler.getLastBlockHeight();
                         switch (active_message.code)
@@ -692,11 +638,16 @@ namespace IXICore.Network
                                     priority = MessagePriority.medium;
                                 }
                                 break;
+
+                            case ProtocolMessageCode.bye:
+                                reconnectOnFailure = false;
+                                requestStop();
+                                break;
                         }
 
                         if (msg_id != 0)
                         {
-                            if (!requestedMessageIds.Contains(msg_id > 0 ? msg_id : -msg_id))
+                            if (!requestedIdsSet.Contains(msg_id > 0 ? msg_id : -msg_id))
                             {
                                 Logging.warn("Received message with code {0}, message id {1} which was not requested.", active_message.code, msg_id);
                             }
@@ -705,24 +656,23 @@ namespace IXICore.Network
                                 priority = MessagePriority.medium;
                                 if (msg_id > 0)
                                 {
-                                    requestedMessageIds.Remove(msg_id);
+                                    requestedIdsSet.Remove(msg_id);
                                 }
                             }
                         }
+                        handleMessage(active_message, priority);
                     }
-                    handleMessage(active_message, priority);
-                }
-                catch (OperationCanceledException)
-                {
-                    // normal shutdown
-                }
-                catch (Exception e)
-                {
-                    state = RemoteEndpointState.Closed;
-                    running = false;
-                    Logging.error("Exception occurred for client {0} in parseLoopRE: {1} ", getFullAddress(), e);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown
+            }
+            catch (Exception e)
+            {
+                Logging.error("Exception occurred for client {0} in parseLoopRE: {1} ", getFullAddress(), e);
+            }
+            requestStop();
         }
 
         protected virtual void handleMessage(QueueMessageRaw message, MessagePriority priority)
@@ -736,112 +686,41 @@ namespace IXICore.Network
             CoreProtocolMessage.readProtocolMessage(message, priority, this);
         }
 
-        protected void parseDataInternal(QueueMessageRaw message)
-        {
-            recvRawQueueMessages.Writer.TryWrite(message);
-        }
-
         // Internal function that sends data through the socket
-        protected async Task sendDataInternal(ProtocolMessageCode code, byte[] data, uint checksum)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        protected async ValueTask sendDataInternal(Socket socket,
+                                                   ProtocolMessageCode code,
+                                                   ReadOnlyMemory<byte> data,
+                                                   uint checksum,
+                                                   CancellationToken ct)
         {
-            try
+            ArraySegment<byte> buffer = prepareProtocolMessage(code, data, version, checksum);
+
+            int totalSent = 0;
+
+            while (totalSent < buffer.Count)
             {
-                byte[]? ba = prepareProtocolMessage(code, data, version, checksum);
-                NetDump.Instance.appendSent(clientSocket, ba, ba.Length);
-                for (int sentBytes = 0; sentBytes < ba.Length && running;)
-                {
-                    int bytesToSendCount = ba.Length - sentBytes;
-                    if (bytesToSendCount > 8000)
-                    {
-                        bytesToSendCount = 8000;
-                    }
+                ValueTask<int> sendTask = socket.SendAsync(
+                    buffer.Slice(totalSent),
+                    SocketFlags.None,
+                    ct
+                );
 
+                int sent = sendTask.IsCompletedSuccessfully
+                    ? sendTask.Result
+                    : await sendTask.ConfigureAwait(false);
 
-                    int curSentBytes = clientSocket.Send(ba, sentBytes, bytesToSendCount, SocketFlags.None);
+                if (sent == 0)
+                    throw new SocketException((int)SocketError.ConnectionReset);
 
-                    if(curSentBytes > 0)
-                    {
-                        lastDataSentTime = Clock.getTimestamp();
-                    }
+                totalSent += sent;
 
-                    // Sleep a bit to allow other threads to do their thing
-                    if (curSentBytes < bytesToSendCount)
-                    {
-                        await Task.Delay(1);
-                    }
-
-                    sentBytes += curSentBytes;
-                    // TODO TODO TODO timeout
-                }
-                if (clientSocket.Connected == false)
-                {
-                    if (running)
-                    {
-                        Logging.warn(String.Format("sendRE: Failed senddata to remote endpoint {0}, Closing.", getFullAddress()));
-                    }
-                    state = RemoteEndpointState.Closed;
-                    running = false;
-                }
-            }
-            catch (SocketException se)
-            {
-                if (running)
-                {
-                    if (se.SocketErrorCode != SocketError.ConnectionAborted
-                        && se.SocketErrorCode != SocketError.NotConnected
-                        && se.SocketErrorCode != SocketError.ConnectionReset
-                        && se.SocketErrorCode != SocketError.Interrupted)
-                    {
-                        Logging.warn("sendRE: Disconnected client {0} with socket exception {1} {2} {3}", getFullAddress(), se.SocketErrorCode, se.ErrorCode, se);
-                    }
-                }
-                state = RemoteEndpointState.Closed;
-                running = false;
-            }
-            catch (Exception e)
-            {
-                if (running)
-                {
-                    Logging.warn("sendRE: Socket exception for {0}, closing. {1}", getFullAddress(), e);
-                }
-                state = RemoteEndpointState.Closed;
-                running = false;
+                lastDataSentTime = Clock.getTimestamp();
             }
         }
-
-        private void addMessageToSendQueue(List<QueueMessage> message_queue, QueueMessage message)
-        {
-            if (message.helperData != null)
-            {
-                if (message_queue.Exists(x => x.code == message.code && x.helperData != null && message.helperData.SequenceEqual(x.helperData)))
-                {
-                    int msg_index = message_queue.FindIndex(x => x.code == message.code && x.helperData != null && message.helperData.SequenceEqual(x.helperData));
-                    message_queue[msg_index] = message;
-                    return;
-                }
-            }
-            else
-            {
-                bool duplicate = message_queue.Exists(x => x.code == message.code && message.checksum == x.checksum);
-                if (duplicate)
-                {
-                    Logging.warn("Attempting to add a duplicate message (code: {0}) to the send queue for {1}", message.code, getFullAddress());
-                    return;
-                }
-            }
-            // Check if there are too many messages
-            if (message_queue.Count > CoreConfig.maxSendQueue)
-            {
-                Logging.warn("Send queue for {0} has too many messages, dropping message with code {1}", getFullAddress(), message.code);
-                return;
-            }
-
-            message_queue.Add(message);
-        }
-
 
         // Sends data over the network
-        public void sendData(ProtocolMessageCode code, byte[] data, byte[]? helper_data = null, long msg_id = 0, MessagePriority priority = MessagePriority.auto)
+        public void sendData(ProtocolMessageCode code, byte[] data, long msgId = 0, MessagePriority priority = MessagePriority.auto)
         {
             if (data == null)
             {
@@ -849,135 +728,138 @@ namespace IXICore.Network
                 return;
             }
 
-            QueueMessage message = getQueueMessage(code, data, helper_data);
-            sendData(message, msg_id, priority);
+            QueueMessage message = getQueueMessage(code, data);
+            sendData(message, msgId, priority);
         }
 
-        public void sendData(QueueMessage message, long msg_id = 0,  MessagePriority priority = MessagePriority.auto)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ChannelWriter<QueueMessage> GetAutoWriter(ProtocolMessageCode code)
         {
-            //Logging.trace("Sending {0} id: {1}", message.code, msg_id);
+            return code switch
+            {
+                ProtocolMessageCode.bye or
+                ProtocolMessageCode.keepAlivePresence or
+                ProtocolMessageCode.getPresence2 or
+                ProtocolMessageCode.getKeepAlives or
+                ProtocolMessageCode.keepAlivesChunk or
+                ProtocolMessageCode.updatePresence or
+                ProtocolMessageCode.rejected or
+                ProtocolMessageCode.getNameRecord or
+                ProtocolMessageCode.nameRecord or
+                ProtocolMessageCode.getSectorNodes or
+                ProtocolMessageCode.sectorNodes or
+                ProtocolMessageCode.s2data
+                    => sendQueueMessagesHighPriority.Writer,
+
+                ProtocolMessageCode.blockData2 or
+                ProtocolMessageCode.blockHeaders4 or
+                ProtocolMessageCode.transactionsChunk3 or
+                ProtocolMessageCode.transactionData2 or
+                ProtocolMessageCode.pitData2
+                    => sendQueueMessagesLowPriority.Writer,
+
+                _ => sendQueueMessagesNormalPriority.Writer
+            };
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryCheckDuplicateMessage(long id)
+        {
+            if (id == 0) return true;
+
+            if (recentIdsSet.Contains(id))
+                return false;
+
+            recentIds.Enqueue(id);
+            recentIdsSet.Add(id);
+
+            if (recentIds.Count > dedupSize)
+            {
+                var old = recentIds.Dequeue();
+                recentIdsSet.Remove(old);
+            }
+
+            return true;
+        }
+
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryAddRequestedMessageId(long id)
+        {
+            if (id == 0) return false;
+
+            if (requestedIdsSet.Contains(id))
+                return false;
+
+            requestedIds.Enqueue(id);
+            requestedIdsSet.Add(id);
+
+            if (requestedIds.Count > requestedIdsSize)
+            {
+                var old = requestedIds.Dequeue();
+                requestedIdsSet.Remove(old);
+            }
+
+            return true;
+        }
+
+        public void sendData(QueueMessage message, long msgId = 0, MessagePriority priority = MessagePriority.auto)
+        {
+            if (!isConnected())
+            {
+                return;
+            }
 
             if (message.code == ProtocolMessageCode.getBlock3)
             {
-                msg_id = message.data.GetIxiVarInt(0).num;
+                msgId = message.data.GetIxiVarInt(0).num;
                 priority = MessagePriority.high;
             }
 
-            if (msg_id != 0)
+            if (!TryCheckDuplicateMessage((long)message.code * message.checksum))
             {
-                lock (requestedMessageIds)
-                {
-                    if (!requestedMessageIds.Contains(msg_id))
-                    {
-                        requestedMessageIds.Add(msg_id);
-                        if (requestedMessageIds.Count > CoreConfig.maximumRequestedMessageIds)
-                        {
-                            requestedMessageIds.RemoveAt(0);
-                        }
-                    }
-                }
+                // Just check for now to catch any bugs with sending duplicate messages, we might want to remove this check later
+                Logging.warn("Attempting to add a duplicate message (code: {0}) to the send queue for {1}", message.code, getFullAddress());
             }
 
-            switch(priority)
+            TryAddRequestedMessageId(msgId);
+
+            var writer = priority switch
             {
-                case MessagePriority.low:
-                    lock (sendQueueMessagesLowPriority)
-                    {
-                        addMessageToSendQueue(sendQueueMessagesLowPriority, message);
-                    }
-                    return;
+                MessagePriority.high => sendQueueMessagesHighPriority.Writer,
+                MessagePriority.medium => sendQueueMessagesNormalPriority.Writer,
+                MessagePriority.low => sendQueueMessagesLowPriority.Writer,
+                _ => GetAutoWriter(message.code)
+            };
 
-                case MessagePriority.medium:
-                    lock (sendQueueMessagesNormalPriority)
-                    {
-                        addMessageToSendQueue(sendQueueMessagesNormalPriority, message);
-                    }
-                    return;
-
-                case MessagePriority.high:
-                    lock (sendQueueMessagesHighPriority)
-                    {
-                        addMessageToSendQueue(sendQueueMessagesHighPriority, message);
-                    }
-                    return;
-            }
-
-            ProtocolMessageCode code = message.code;
-            switch (code)
-            {
-                case ProtocolMessageCode.bye:
-                case ProtocolMessageCode.keepAlivePresence:
-                case ProtocolMessageCode.getPresence2:
-                case ProtocolMessageCode.getKeepAlives:
-                case ProtocolMessageCode.keepAlivesChunk:
-                case ProtocolMessageCode.updatePresence:
-                case ProtocolMessageCode.rejected:
-                case ProtocolMessageCode.getNameRecord:
-                case ProtocolMessageCode.nameRecord:
-                case ProtocolMessageCode.getSectorNodes:
-                case ProtocolMessageCode.sectorNodes:
-                case ProtocolMessageCode.s2data:
-                    lock (sendQueueMessagesHighPriority)
-                    {
-                        addMessageToSendQueue(sendQueueMessagesHighPriority, message);
-                    }
-
-                    break;
-
-                case ProtocolMessageCode.blockData2:
-                case ProtocolMessageCode.blockHeaders4:
-                case ProtocolMessageCode.transactionsChunk3:
-                case ProtocolMessageCode.transactionData2:
-                case ProtocolMessageCode.pitData2:
-                    lock (sendQueueMessagesLowPriority)
-                    {
-                        addMessageToSendQueue(sendQueueMessagesLowPriority, message);
-                    }
-                    break;
-
-                default:
-                    lock (sendQueueMessagesNormalPriority)
-                    {
-                        addMessageToSendQueue(sendQueueMessagesNormalPriority, message);
-                    }
-                    break;
-            }
+            writer.TryWrite(message);
         }
 
-        static public QueueMessage getQueueMessage(ProtocolMessageCode code, byte[] data, byte[]? helper_data)
+        static public QueueMessage getQueueMessage(ProtocolMessageCode code, byte[] data)
         {
             QueueMessage message = new QueueMessage();
             message.code = code;
             message.data = data;
             message.checksum = Crc32CAlgorithm.Compute(data);
             message.skipEndpoint = null;
-            message.helperData = helper_data;
 
             return message;
         }
 
         public int getHighPriorityMessageCount()
         {
-            lock (sendQueueMessagesHighPriority)
-            {
-                return sendQueueMessagesHighPriority.Count;
-            }
+            return sendQueueMessagesHighPriority!.Reader.Count;
         }
 
         public int getMediumPriorityMessageCount()
         {
-            lock (sendQueueMessagesNormalPriority)
-            {
-                return sendQueueMessagesNormalPriority.Count;
-            }
+            return sendQueueMessagesNormalPriority!.Reader.Count;
         }
 
         public int getLowPriorityMessageCount()
         {
-            lock (sendQueueMessagesLowPriority)
-            {
-                return sendQueueMessagesLowPriority.Count;
-            }
+            return sendQueueMessagesLowPriority!.Reader.Count;
         }
 
         public int getQueuedMessageCount()
@@ -994,7 +876,7 @@ namespace IXICore.Network
                     return false;
                 }
 
-                return clientSocket.Connected && running;
+                return clientSocket.Connected && running && cts != null && !cts.IsCancellationRequested;
             }
             catch (Exception)
             {
@@ -1005,99 +887,115 @@ namespace IXICore.Network
         // Get the ip/hostname and port
         public string getFullAddress(bool useIncomingPorts = false)
         {
-            if(useIncomingPorts)
+            if (useIncomingPorts)
             {
                 return address + ":" + incomingPort;
             }
             return fullAddress;
         }
 
-        private MessageHeader? parseHeader(byte[] header_bytes)
+        private MessageHeader? parseHeader(byte[] buffer, int offset, int length)
         {
-            MessageHeader header = new MessageHeader();
-            // we should have the full header, save the data length
-            using (MemoryStream m = new MemoryStream(header_bytes))
+            if (buffer == null)
+                return null;
+
+            int startOffset = offset;
+
+            byte start = buffer[offset++];
+
+            var header = new MessageHeader();
+
+            if (start == 0xEA)
             {
-                using (BinaryReader reader = new BinaryReader(m))
+                // v6 header (12 bytes)
+                if (length < 12)
+                    return null;
+
+                header.code = (ProtocolMessageCode)ReadUInt16(buffer, ref offset);
+                uint dataLength = ReadUInt32(buffer, ref offset);
+                header.dataLen = dataLength;
+
+                header.dataChecksum = ReadUInt32(buffer, ref offset);
+
+                byte checksum = buffer[offset++];
+
+                // checksum over first 11 bytes
+                if (getHeaderChecksum(buffer, startOffset, 11) != checksum)
                 {
-                    byte start = reader.ReadByte(); // skip start byte
-                    if(start == 0xEA)
-                    {
-                        ProtocolMessageCode code = (ProtocolMessageCode)reader.ReadUInt16(); // skip message code
-                        header.code = code;
-                        uint data_length = reader.ReadUInt32(); // read data length
-                        header.dataLen = data_length;
-                        header.dataChecksum = reader.ReadUInt32(); // checksum crc32
-                        
-                        byte checksum = reader.ReadByte(); // header checksum byte
+                    Logging.warn("Header checksum mismatch");
+                    return null;
+                }
 
-                        byte[] header_for_crc = new byte[11];
-                        Array.Copy(header_bytes, header_for_crc, 11);
-
-                        if (getHeaderChecksum(header_for_crc) != checksum)
-                        {
-                            Logging.warn("Header checksum mismatch");
-                            return null;
-                        }
-
-                        if (data_length <= 0)
-                        {
-                            Logging.warn("Data length was {0}, code {1}", data_length, code);
-                            return null;
-                        }
-                    }
-                    else // 'X'
-                    {
-                        ProtocolMessageCode code = (ProtocolMessageCode)reader.ReadInt32(); // read message code
-                        header.code = code;
-                        int data_length = reader.ReadInt32(); // read data length
-                        header.dataLen = (uint)data_length;
-                        header.legacyDataChecksum = reader.ReadBytes(32); // read checksum sha512qu/sha512sq, 32 bytes
-
-                        byte checksum = reader.ReadByte(); // header checksum byte
-                        byte endByte = reader.ReadByte(); // end byte
-
-                        if (endByte != 'I')
-                        {
-                            Logging.warn("Header end byte was not 'I'");
-                            return null;
-                        }
-
-                        if (getHeaderChecksum(header_bytes.Take(41).ToArray()) != checksum)
-                        {
-                            Logging.warn("Header checksum mismatch");
-                            return null;
-                        }
-
-                        if (data_length <= 0)
-                        {
-                            Logging.warn("Data length was {0}, code {1}", data_length, code);
-                            return null;
-                        }
-                    }
-
+                if (dataLength == 0 || dataLength > CoreConfig.maxMessageSize)
+                {
+                    Logging.warn("Invalid data length {0}, code {1}", dataLength, header.code);
+                    return null;
                 }
             }
+            else if (start == (byte)'X')
+            {
+                // v5 header (43 bytes) - deprecated
+                if (length < 43)
+                    return null;
+
+                header.code = (ProtocolMessageCode)ReadInt32(buffer, ref offset);
+
+                int dataLength = ReadInt32(buffer, ref offset);
+                if (dataLength <= 0 || dataLength > CoreConfig.maxMessageSize)
+                {
+                    Logging.warn("Invalid data length {0}, code {1}", dataLength, header.code);
+                    return null;
+                }
+
+                header.dataLen = (uint)dataLength;
+                header.legacyDataChecksum = new byte[32];
+                Buffer.BlockCopy(buffer, offset, header.legacyDataChecksum, 0, 32);
+
+                offset += 32;
+
+                byte checksum = buffer[offset++];
+                byte endByte = buffer[offset++];
+
+                if (endByte != (byte)'I')
+                {
+                    Logging.warn("Header end byte was not 'I'");
+                    return null;
+                }
+
+                // checksum over first 41 bytes
+                if (getHeaderChecksum(buffer, startOffset, 41) != checksum)
+                {
+                    Logging.warn("Header checksum mismatch");
+                    return null;
+                }
+            }
+            else
+            {
+                // unknown start byte
+                Logging.warn("Unknown start byte {0}", (int)start);
+                return null;
+            }
+
             return header;
         }
 
-        protected async Task readTimeSyncData()
+        protected async Task readTimeSyncData(CancellationToken ct)
         {
-            if(timeSyncComplete)
+            if (timeSyncComplete)
             {
                 return;
             }
 
-            Socket socket = clientSocket;
+            Socket socket = clientSocket!;
 
             int rcv_count = 8;
-            for (int i = 0; i < rcv_count && running;)
+            for (int i = 0; i < rcv_count && !ct.IsCancellationRequested;)
             {
                 int rcvd_count = socket.Receive(socketReadBuffer, i, rcv_count - i, SocketFlags.None);
                 i += rcvd_count;
                 if (rcvd_count <= 0)
                 {
-                    await Task.Delay(1);
+                    await Task.Delay(1).ConfigureAwait(false);
                 }
             }
             lock (timeSyncs)
@@ -1112,7 +1010,7 @@ namespace IXICore.Network
                 }
                 TimeSyncData tsd = new TimeSyncData() { timeDifference = time_difference, remoteTime = cur_remote_time, processedTime = my_cur_time };
                 timeSyncs.Add(tsd);
-                if(timeSyncs.Count() >= 5)
+                if (timeSyncs.Count() >= 5)
                 {
                     timeSyncComplete = true;
                 }
@@ -1120,9 +1018,9 @@ namespace IXICore.Network
         }
 
         // Reads data from a socket and returns a byte array
-        protected async Task<QueueMessageRaw?> readSocketData()
+        protected async Task<QueueMessageRaw?> readSocketData(CancellationToken ct)
         {
-            Socket socket = clientSocket;
+            Socket socket = clientSocket!;
 
             // Check for socket availability
             if (socket.Connected == false)
@@ -1130,150 +1028,126 @@ namespace IXICore.Network
                 throw new SocketException((int)SocketError.NotConnected);
             }
 
-            if (socket.Available < 1)
-            {
-                return null;
-            }
-
             // Read multi-packet messages
             int old_header_len = 43; // old - start byte + message code (int32 4 bytes) + payload length (int32 4 bytes) + checksum (32 bytes) + header checksum (1 byte) + end byte = 43 bytes
             int new_header_len = 12; // new - start byte + message code (uint16 2 bytes) + payload length (uint32 4 bytes) + crc32 (uint32 4 bytes) + header checksum (1 byte) = 12 bytes
             byte[] header = new byte[old_header_len];
             int cur_header_len = 0;
-            MessageHeader last_message_header = null;
+            MessageHeader? last_message_header = null;
 
-            byte[] data = null;
+            byte[]? data = null;
             int cur_data_len = 0;
 
-            try
+            int expected_data_len = 0;
+            int expected_header_len = 0;
+            int bytes_to_read = 1;
+            while (socket.Connected && !ct.IsCancellationRequested)
             {
-                int expected_data_len = 0;
-                int expected_header_len = 0;
-                int bytes_to_read = 1;
-                while (socket.Connected && running)
+                int bytes_received = socket.Receive(socketReadBuffer, bytes_to_read, SocketFlags.None);
+                if (bytes_received <= 0)
                 {
-                    int bytes_received = socket.Receive(socketReadBuffer, bytes_to_read, SocketFlags.None);
-                    NetDump.Instance.appendReceived(socket, socketReadBuffer, bytes_received);
-                    if (bytes_received <= 0)
-                    {
-                        // sleep a litte while waiting for bytes
-                        await Task.Delay(1);
-                        // TODO should return null if a timeout occurs
-                        continue;
-                    }
+                    continue;
+                }
 
-                    lastDataReceivedTime = Clock.getTimestamp();
-                    if (cur_header_len == 0)
+                lastDataReceivedTime = Clock.getTimestamp();
+                if (cur_header_len == 0)
+                {
+                    switch (socketReadBuffer[0])
                     {
-                        switch(socketReadBuffer[0])
-                        {
-                            case 0xEA: // 0xEA is the message start byte of v6 base protocol
-                                header[0] = socketReadBuffer[0];
-                                cur_header_len = 1;
-                                bytes_to_read = new_header_len - 1; // header length - start byte
-                                expected_header_len = new_header_len;
-                                version = 6;
-                                break;
+                        case 0xEA: // 0xEA is the message start byte of v6 base protocol
+                            header[0] = socketReadBuffer[0];
+                            cur_header_len = 1;
+                            bytes_to_read = new_header_len - 1; // header length - start byte
+                            expected_header_len = new_header_len;
+                            version = 6;
+                            break;
 
-                            case 0x02: // 0x02 is the timesync
-                                if (timeSyncComplete == false)
-                                {
-                                    await readTimeSyncData();
-                                }
-                                break;
+                        case 0x02: // 0x02 is the timesync
+                            if (timeSyncComplete == false)
+                            {
+                                await readTimeSyncData(ct).ConfigureAwait(false);
+                            }
+                            break;
 
                             /*case 0x01: // 0x01 is ping; doesn't need any special handling
                                 break;*/
-                        }
-                        continue;
                     }
+                    continue;
+                }
 
-                    if(cur_header_len < expected_header_len)
+                if (cur_header_len < expected_header_len)
+                {
+                    Buffer.BlockCopy(socketReadBuffer, 0, header, cur_header_len, bytes_received);
+                    cur_header_len += bytes_received;
+                    if (cur_header_len == expected_header_len)
                     {
-                        Array.Copy(socketReadBuffer, 0, header, cur_header_len, bytes_received);
-                        cur_header_len += bytes_received;
-                        if (cur_header_len == expected_header_len)
+                        last_message_header = parseHeader(header, 0, header.Length);
+                        if (last_message_header != null)
                         {
-                            last_message_header = parseHeader(header);
-                            if(last_message_header != null)
+                            cur_data_len = 0;
+                            expected_data_len = (int)last_message_header.dataLen;
+                            if (expected_data_len > CoreConfig.maxMessageSize)
                             {
-                                cur_data_len = 0;
-                                expected_data_len = (int)last_message_header.dataLen;
-                                if(expected_data_len > CoreConfig.maxMessageSize)
-                                {
-                                    throw new Exception(string.Format("Message size ({0}B) received from the client is higher than the maximum message size allowed ({1}B) - protocol code: {2}.", expected_data_len, CoreConfig.maxMessageSize, last_message_header.code));
-                                }
-                                data = new byte[expected_data_len];
-                                bytes_to_read = expected_data_len;
-                                if (bytes_to_read > 8000)
-                                {
-                                    bytes_to_read = 8000;
-                                }
+                                throw new Exception(string.Format("Message size ({0}B) received from the client is higher than the maximum message size allowed ({1}B) - protocol code: {2}.", expected_data_len, CoreConfig.maxMessageSize, last_message_header.code));
                             }
-                            else
+                            data = new byte[expected_data_len];
+                            bytes_to_read = expected_data_len;
+                            if (bytes_to_read > 64000)
                             {
-                                cur_header_len = 0;
-                                expected_data_len = 0;
-                                data = null;
-                                bytes_to_read = 1;
-                                // Find next start byte if available
-                                for (int i = cur_header_len - 1; i > 1; i--)
-                                {
-                                    if (header[i] == 0xEA)
-                                    {
-                                        cur_header_len = cur_header_len - i;
-                                        Array.Copy(header, i, header, 0, cur_header_len);
-                                        expected_header_len = new_header_len;
-                                        bytes_to_read = expected_header_len - cur_header_len;
-                                        version = 6;
-                                        break;
-                                    }
-                                }
+                                bytes_to_read = 64000;
                             }
                         }
-                        else if (cur_header_len < expected_header_len)
+                        else
                         {
-                            bytes_to_read = expected_header_len - cur_header_len;
-                        }
-                    }else
-                    {
-                        Array.Copy(socketReadBuffer, 0, data, cur_data_len, bytes_received);
-                        cur_data_len += bytes_received;
-                        if (cur_data_len == expected_data_len)
-                        {
-                            QueueMessageRaw raw_message = new QueueMessageRaw() { 
-                                checksum = last_message_header.dataChecksum,
-                                code = last_message_header.code,
-                                data = data,
-                                legacyChecksum = last_message_header.legacyDataChecksum,
-                                endpoint = this
-                            };
-                            return raw_message;
-                        }
-                        else if (cur_data_len > expected_data_len)
-                        {
-                            throw new Exception(string.Format("Unhandled edge case occurred in RemoteEndPoint:readSocketData for node {0}", getFullAddress()));
-                        }
-                        bytes_to_read = expected_data_len - cur_data_len;
-                        if (bytes_to_read > 8000)
-                        {
-                            bytes_to_read = 8000;
+                            cur_header_len = 0;
+                            expected_data_len = 0;
+                            data = null;
+                            bytes_to_read = 1;
+                            // Find next start byte if available
+                            for (int i = cur_header_len - 1; i > 1; i--)
+                            {
+                                if (header[i] == 0xEA)
+                                {
+                                    cur_header_len = cur_header_len - i;
+                                    Buffer.BlockCopy(header, i, header, 0, cur_header_len);
+                                    expected_header_len = new_header_len;
+                                    bytes_to_read = expected_header_len - cur_header_len;
+                                    version = 6;
+                                    break;
+                                }
+                            }
                         }
                     }
+                    else if (cur_header_len < expected_header_len)
+                    {
+                        bytes_to_read = expected_header_len - cur_header_len;
+                    }
                 }
-            }
-            catch (SocketException)
-            {
-                if (running)
+                else
                 {
-                    throw;
-                }
-            }
-            catch (Exception)
-            {
-                if (running)
-                {
-                    throw;
+                    Buffer.BlockCopy(socketReadBuffer, 0, data, cur_data_len, bytes_received);
+                    cur_data_len += bytes_received;
+                    if (cur_data_len == expected_data_len)
+                    {
+                        QueueMessageRaw raw_message = new QueueMessageRaw()
+                        {
+                            checksum = last_message_header.dataChecksum,
+                            code = last_message_header.code,
+                            data = data,
+                            legacyChecksum = last_message_header.legacyDataChecksum,
+                            endpoint = this
+                        };
+                        return raw_message;
+                    }
+                    else if (cur_data_len > expected_data_len)
+                    {
+                        throw new Exception(string.Format("Unhandled edge case occurred in RemoteEndPoint:readSocketData for node {0}", getFullAddress()));
+                    }
+                    bytes_to_read = expected_data_len - cur_data_len;
+                    if (bytes_to_read > 64000)
+                    {
+                        bytes_to_read = 64000;
+                    }
                 }
             }
             return null;
@@ -1294,30 +1168,23 @@ namespace IXICore.Network
                     return false;
                 }
             }
-            Cuckoo cuckoo_filter = null;
+            Cuckoo cuckoo_filter;
             try
             {
                 cuckoo_filter = new Cuckoo(filter);
-            } catch(Exception)
+            }
+            catch (Exception e)
             {
-                Logging.warn("Error while attempting to replace {0} filter for endpoint {1}",
+                Logging.warn("Cannot attach event {0} to Remote Endpoint {1}: {2}",
                     type.ToString(),
-                    getFullAddress()
+                    getFullAddress(),
+                    e
                     );
                 return false;
             }
 
-            if (cuckoo_filter == null)
+            lock (subscribedFilters)
             {
-                Logging.warn("Cannot attach event {0} to Remote Endpoint {1}, cuckoo filter is null.",
-                    type.ToString(),
-                    getFullAddress()
-                    );
-                return false;
-            }
-
-
-            lock (subscribedFilters) {
                 // Subscribing a new cuckoo for a particular event type will replace the old one
                 subscribedFilters.AddOrReplace(type, cuckoo_filter);
             }
@@ -1343,13 +1210,13 @@ namespace IXICore.Network
 
         public bool detachEventAddress(NetworkEvents.Type type, byte[] address)
         {
-            if(address == null)
+            if (address == null)
             {
                 return true;
             }
-            lock(subscribedFilters)
+            lock (subscribedFilters)
             {
-                if(subscribedFilters.ContainsKey(type) == true)
+                if (subscribedFilters.ContainsKey(type) == true)
                 {
                     subscribedFilters[type].Delete(address);
                 }
@@ -1366,7 +1233,7 @@ namespace IXICore.Network
 
             lock (subscribedFilters)
             {
-                if(subscribedFilters.ContainsKey(type) == true)
+                if (subscribedFilters.ContainsKey(type) == true)
                 {
                     return subscribedFilters[type].Contains(address);
                 }
@@ -1379,7 +1246,7 @@ namespace IXICore.Network
         {
             lock (timeSyncs)
             {
-                if(timeSyncs.Count == 0)
+                if (timeSyncs.Count == 0)
                 {
                     return 0;
                 }
@@ -1399,68 +1266,70 @@ namespace IXICore.Network
         /// </remarks>
         /// <param name="code">Message code.</param>
         /// <param name="data">Payload for the message.</param>
+        /// <param name="version">Protocol version to use for message preparation. If not supplied, the current version of the endpoint will be used.</param>
         /// <param name="checksum">Optional checksum. If not supplied, or if null, this function will calculate it with the default method.</param>
         /// <returns>Serialized message as a byte-field</returns>
-        public static byte[]? prepareProtocolMessage(ProtocolMessageCode code, byte[] data,int version, uint checksum)
+        public static ArraySegment<byte> prepareProtocolMessage(
+            ProtocolMessageCode code,
+            ReadOnlyMemory<byte> data,
+            int version,
+            uint checksum)
         {
-            byte[]? result = null;
+            int dataLength = data.Length;
 
-            // Prepare the protocol sections
-            int data_length = data.Length;
-
-            if (data_length > CoreConfig.maxMessageSize)
+            if (dataLength > CoreConfig.maxMessageSize)
             {
-                Logging.error("Tried to send data bigger than max allowed message size - {0} with code {1}.", data_length, code);
-                return null;
+                throw new Exception($"Tried to send data bigger than max allowed message size - {dataLength} with code {code}.");
             }
 
-            using (MemoryStream m = new MemoryStream(12))
+            bool isV5 = version == 5;
+
+            // Header sizes:
+            // v5: 1 + 4 + 4 + 32 + 1 + 1 = 43 bytes
+            // vX: 1 + 2 + 4 + 4 + 1 = 12 bytes
+            int headerSize = isV5 ? 43 : 12;
+
+            int totalSize = headerSize + dataLength;
+
+            byte[] buffer = new byte[totalSize];
+            int offset = 0;
+
+            if (isV5)
             {
-                using (BinaryWriter writer = new BinaryWriter(m))
-                {
-                    // Protocol sections are code, length, checksum, data
-                    // Write each section in binary, in that specific order
-                    bool add_end_byte = false;
-                    if(version == 5)
-                    {
-                        writer.Write((byte)'X');
-                        writer.Write((int)code);
-                        writer.Write(data_length);
-                        writer.Write(Crypto.sha512sqTrunc(data, 0, 0, 32));
-                        add_end_byte = true;
-                    }else
-                    {
-                        writer.Write((byte)0xEA);
-                        writer.Write((ushort)code);
-                        writer.Write((uint)data_length);
-                        if(checksum == 0)
-                        {
-                            writer.Write(Crc32CAlgorithm.Compute(data));
-                        }else
-                        {
-                            writer.Write(checksum);
-                        }
-                    }
+                // deprecated v5 header, kept for compatibility with older nodes
+                buffer[offset++] = (byte)'X';
 
-                    writer.Flush();
-                    m.Flush();
+                WriteInt32(buffer, ref offset, (int)code);
+                WriteInt32(buffer, ref offset, dataLength);
 
-                    byte header_checksum = getHeaderChecksum(m.ToArray());
-                    writer.Write(header_checksum);
+                // SHA512 truncated (32 bytes)
+                var hash = Crypto.sha512sqTrunc(data.ToArray(), 0, 0, 32);
+                Buffer.BlockCopy(hash, 0, buffer, offset, 32);
+                offset += 32;
+            }
+            else
+            {
+                buffer[offset++] = 0xEA;
 
-                    if(add_end_byte)
-                    {
-                        writer.Write((byte)'I');
-                    }
-                    writer.Write(data);
-#if TRACE_MEMSTREAM_SIZES
-                    Logging.info(String.Format("CoreProtocolMessage::prepareProtocolMessage: {0}", m.Length));
-#endif
-                }
-                result = m.ToArray();
+                WriteUInt16(buffer, ref offset, (ushort)code);
+                WriteUInt32(buffer, ref offset, (uint)dataLength);
+
+                uint crc = checksum != 0 ? checksum : Crc32CAlgorithm.Compute(data.ToArray());
+                WriteUInt32(buffer, ref offset, crc);
             }
 
-            return result;
+            byte headerChecksum = getHeaderChecksum(buffer, 0, offset);
+            buffer[offset++] = headerChecksum;
+
+            // Optional end byte
+            if (isV5)
+            {
+                buffer[offset++] = (byte)'I';
+            }
+
+            Buffer.BlockCopy(data.ToArray(), 0, buffer, offset, dataLength);
+
+            return new ArraySegment<byte>(buffer, 0, totalSize);
         }
 
         /// <summary>
@@ -1471,14 +1340,86 @@ namespace IXICore.Network
         /// </remarks>
         /// <param name="header">Message header.</param>
         /// <returns>Checksum byte.</returns>
-        private static byte getHeaderChecksum(byte[] header)
+        private static byte getHeaderChecksum(byte[] header, int offset, int length)
         {
             byte sum = 0x7F;
-            for (int i = 0; i < header.Length; i++)
+            for (int i = 0; i < length; i++)
             {
-                sum ^= header[i];
+                sum ^= header[offset + i];
             }
             return sum;
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            await stopAsync().ConfigureAwait(false);
+        }
+
+        private Channel<T> CreateBoundedChannel<T>(int capacity)
+        {
+            return Channel.CreateBounded<T>(new BoundedChannelOptions(capacity)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.Wait
+            });
+        }
+
+
+        private static void WriteInt32(byte[] buffer, ref int offset, int value)
+        {
+            buffer[offset++] = (byte)value;
+            buffer[offset++] = (byte)(value >> 8);
+            buffer[offset++] = (byte)(value >> 16);
+            buffer[offset++] = (byte)(value >> 24);
+        }
+
+        private static void WriteUInt32(byte[] buffer, ref int offset, uint value)
+        {
+            buffer[offset++] = (byte)value;
+            buffer[offset++] = (byte)(value >> 8);
+            buffer[offset++] = (byte)(value >> 16);
+            buffer[offset++] = (byte)(value >> 24);
+        }
+
+        private static void WriteUInt16(byte[] buffer, ref int offset, ushort value)
+        {
+            buffer[offset++] = (byte)value;
+            buffer[offset++] = (byte)(value >> 8);
+        }
+
+        private static ushort ReadUInt16(byte[] buffer, ref int offset)
+        {
+            ushort value =
+                (ushort)(buffer[offset] |
+                        (buffer[offset + 1] << 8));
+
+            offset += 2;
+            return value;
+        }
+
+        private static uint ReadUInt32(byte[] buffer, ref int offset)
+        {
+            uint value =
+                (uint)(buffer[offset] |
+                      (buffer[offset + 1] << 8) |
+                      (buffer[offset + 2] << 16) |
+                      (buffer[offset + 3] << 24));
+
+            offset += 4;
+            return value;
+        }
+
+        private static int ReadInt32(byte[] buffer, ref int offset)
+        {
+            int value =
+                buffer[offset] |
+                (buffer[offset + 1] << 8) |
+                (buffer[offset + 2] << 16) |
+                (buffer[offset + 3] << 24);
+
+            offset += 4;
+            return value;
         }
     }
 }

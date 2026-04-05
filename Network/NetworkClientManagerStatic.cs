@@ -45,7 +45,7 @@ namespace IXICore.Network
                         || nc.helloReceived == false)
                     {
                         continue;
-                    
+
                     }
 
                     if (nc.serverWalletAddress == null)
@@ -58,7 +58,6 @@ namespace IXICore.Network
                     {
                         networkClients.Remove(nc);
                         CoreProtocolMessage.sendBye(nc, ProtocolByeCode.bye, "Disconnected for shuffling purposes.", "", false);
-                        nc.stop();
                     }
                 }
             }
@@ -98,7 +97,8 @@ namespace IXICore.Network
                         return p;
                     }
                 }
-            } else
+            }
+            else
             {
                 var tmpClients = clientsToConnectTo.ToArray();
                 Random.Shared.Shuffle(tmpClients);
@@ -125,7 +125,7 @@ namespace IXICore.Network
             if (neighbor != null)
             {
                 Logging.info("Attempting to add new neighbor: {0}", neighbor.hostname);
-                connectTo(neighbor.hostname, neighbor.walletAddress);
+                connectTo(neighbor.hostname, neighbor.walletAddress).Wait();
             }
         }
     }

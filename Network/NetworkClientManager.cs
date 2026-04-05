@@ -88,26 +88,26 @@ namespace IXICore.Network
         }
 
         // Connects to a specified node, with the syntax host:port
-        public static bool connectTo(string host, Address wallet_address)
+        public static async Task<NetworkClient?> connectTo(string host, Address wallet_address)
         {
-            return clientManagerBase.connectTo(host, wallet_address);
+            return await clientManagerBase.connectTo(host, wallet_address).ConfigureAwait(false);
         }
 
         // Send data to all connected nodes
         // Returns true if the data was sent to at least one client
-        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
+        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, RemoteEndpoint? skipEndpoint = null)
         {
-            return clientManagerBase.broadcastData(types, code, data, helper_data, skipEndpoint);
+            return clientManagerBase.broadcastData(types, code, data, skipEndpoint);
         }
 
-        public static bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
+        public static bool sendToClient(Address neighbor, ProtocolMessageCode code, byte[] data)
         {
-            return clientManagerBase.sendToClient(neighbor, code, data, helper_data);
+            return clientManagerBase.sendToClient(neighbor, code, data);
         }
 
-        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[]? helper_data)
+        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data)
         {
-            return clientManagerBase.sendToClient(neighbor, code, data, helper_data);
+            return clientManagerBase.sendToClient(neighbor, code, data);
         }
 
         // Returns all the connected clients

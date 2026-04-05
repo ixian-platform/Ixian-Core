@@ -57,7 +57,7 @@ namespace IXICore.Network
             if (neighbor != null)
             {
                 Logging.info("Attempting to add new neighbor: {0}", neighbor.hostname);
-                connectTo(neighbor.hostname, neighbor.walletAddress);
+                connectTo(neighbor.hostname, neighbor.walletAddress).Wait();
             }
         }
     }

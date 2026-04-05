@@ -50,7 +50,7 @@ namespace IXICore.Streaming
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             while (friend.sectorNodes.Count == 0 && stopwatch.ElapsedMilliseconds < _timeoutMs)
             {
-                await Task.Delay(100);
+                await Task.Delay(100).ConfigureAwait(false);
             }
             stopwatch.Stop();
 
@@ -94,7 +94,7 @@ namespace IXICore.Streaming
                 // Try each sector node
                 foreach (var sectorNode in _friend.sectorNodes)
                 {
-                    if (await TryFetchPresenceFromNodeAsync(sectorNode))
+                    if (await TryFetchPresenceFromNodeAsync(sectorNode).ConfigureAwait(false))
                     {
                         return true;
                     }
@@ -103,7 +103,7 @@ namespace IXICore.Streaming
                 // If all nodes failed and we have retries left, wait before retrying
                 if (attempt < _maxRetries - 1)
                 {
-                    await Task.Delay(200);
+                    await Task.Delay(200).ConfigureAwait(false);
                 }
             }
 
@@ -116,7 +116,7 @@ namespace IXICore.Streaming
         /// </summary>
         private async Task<bool> TryFetchPresenceFromNodeAsync(Peer sectorNode)
         {
-            NetworkClient client = null;
+            NetworkClient? client = null;
 
             Channel<QueueMessageRaw> presenceQueue = Channel.CreateUnbounded<QueueMessageRaw>();
 
@@ -125,7 +125,7 @@ namespace IXICore.Streaming
                 // Create a custom handler to capture presence response
                 Action<QueueMessageRaw, MessagePriority, RemoteEndpoint> handler = (message, priority, endpoint) =>
                 {
-                    if (endpoint.state == RemoteEndpointState.Closed)
+                    if (!endpoint.isConnected())
                     {
                         return;
                     }
@@ -134,7 +134,7 @@ namespace IXICore.Streaming
                     {
                         Logging.trace("Received presence response from sector node {0}", sectorNode.hostname);
 
-                        Presence p = PresenceList.updateFromBytes(message.data, IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight(), IxianHandler.getLastBlockVersion(), 0));
+                        Presence? p = PresenceList.updateFromBytes(message.data, IxianHandler.getMinSignerPowDifficulty(IxianHandler.getLastBlockHeight(), IxianHandler.getLastBlockVersion(), 0));
                         if (p == null)
                         {
                             p = PresenceList.getPresenceByAddress(_friend.walletAddress);
@@ -175,7 +175,7 @@ namespace IXICore.Streaming
                 // Connect to the sector node
                 Logging.trace("Connecting to sector node {0}", sectorNode.hostname);
                 string[] server = sectorNode.hostname.Split(':');
-                if (!client.connectToServer(server[0], int.Parse(server[1]), sectorNode.walletAddress))
+                if (!await client.connectToServer(server[0], int.Parse(server[1]), sectorNode.walletAddress).ConfigureAwait(false))
                 {
                     Logging.trace("Failed to establish connection to sector node {0}", sectorNode.hostname);
                     return false;
@@ -185,7 +185,7 @@ namespace IXICore.Streaming
                 var helloStopwatch = System.Diagnostics.Stopwatch.StartNew();
                 while (!client.helloReceived && helloStopwatch.ElapsedMilliseconds < _helloTimeoutMs)
                 {
-                    await Task.Delay(50);
+                    await Task.Delay(50).ConfigureAwait(false);
                 }
                 helloStopwatch.Stop();
 
@@ -202,7 +202,7 @@ namespace IXICore.Streaming
 
                 // Wait for presence response or timeout
                 Task presenceTask = presenceQueue.Reader.ReadAsync().AsTask();
-                var completed = await Task.WhenAny(presenceTask, Task.Delay(_timeoutPerNodeMs));
+                var completed = await Task.WhenAny(presenceTask, Task.Delay(_timeoutPerNodeMs)).ConfigureAwait(false);
 
                 if (completed == presenceTask && presenceTask.IsCompletedSuccessfully)
                 {
@@ -228,7 +228,8 @@ namespace IXICore.Streaming
                 {
                     try
                     {
-                        client.stop();
+                        CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "", "", false);
+                        client.stopAsync();
                     }
                     catch (Exception e)
                     {
@@ -253,7 +254,7 @@ namespace IXICore.Streaming
                     }
 
                     Logging.trace("Requesting presence for {0} from sector node", _friend.walletAddress.ToString());
-                    client.sendData(ProtocolMessageCode.getPresence2, mw.ToArray(), null);
+                    client.sendData(ProtocolMessageCode.getPresence2, mw.ToArray());
                 }
             }
             catch (Exception e)
@@ -326,7 +327,7 @@ namespace IXICore.Streaming
 
                 // Step 1: Fetch sector nodes
                 Logging.trace("Fetching sector nodes for {0}", _friend.walletAddress.ToString());
-                var sectorNodes = await _sectorProvider.FetchSectorNodesAsync(_friend);
+                var sectorNodes = await _sectorProvider.FetchSectorNodesAsync(_friend).ConfigureAwait(false);
                 if (sectorNodes.Count == 0)
                 {
                     Logging.warn("Failed to fetch sector nodes for {0}", _friend.walletAddress.ToString());
@@ -338,7 +339,7 @@ namespace IXICore.Streaming
 
                 // Step 2: Fetch presence information from sector nodes
                 Logging.trace("Fetching presence information");
-                bool presenceFetched = await _presenceProvider.FetchPresenceAsync();
+                bool presenceFetched = await _presenceProvider.FetchPresenceAsync().ConfigureAwait(false);
                 if (!presenceFetched || _friend.relayNode == null)
                 {
                     Logging.warn("Failed to fetch presence information for {0}", _friend.walletAddress.ToString());
@@ -350,7 +351,7 @@ namespace IXICore.Streaming
 
                 // Step 3: Connect to the relay node and exchange keys
                 Logging.trace("Connecting to relay node {0}:{1}", _friend.relayNode.hostname, _friend.relayNode.walletAddress);
-                if (!await ConnectToRelayNodeAsync())
+                if (!await ConnectToRelayNodeAsync().ConfigureAwait(false))
                 {
                     Logging.warn("Failed to connect to relay node for {0}", _friend.walletAddress.ToString());
                     OnConnectionStateChanged(false, "Failed to connect to relay node");
@@ -393,7 +394,7 @@ namespace IXICore.Streaming
                 // Create a custom handler to capture key exchange and data responses
                 Action<QueueMessageRaw, MessagePriority, RemoteEndpoint> handler = (message, priority, endpoint) =>
                 {
-                    if (endpoint.state == RemoteEndpointState.Closed)
+                    if (!endpoint.isConnected())
                     {
                         return;
                     }
@@ -472,7 +473,7 @@ namespace IXICore.Streaming
                 client.ephemeralKeyPair = _keyPair;
 
                 string[] server = _friend.relayNode.hostname.Split(':');
-                if (!client.connectToServer(server[0], int.Parse(server[1]), _friend.relayNode.walletAddress))
+                if (!await client.connectToServer(server[0], int.Parse(server[1]), _friend.relayNode.walletAddress).ConfigureAwait(false))
                 {
                     Logging.warn("Failed to establish connection to relay node {0}", _friend.relayNode.hostname);
                     return false;
@@ -482,7 +483,7 @@ namespace IXICore.Streaming
                 var helloStopwatch = System.Diagnostics.Stopwatch.StartNew();
                 while (!client.helloReceived && helloStopwatch.ElapsedMilliseconds < 2000)
                 {
-                    await Task.Delay(50);
+                    await Task.Delay(50).ConfigureAwait(false);
                 }
                 helloStopwatch.Stop();
 
@@ -499,7 +500,7 @@ namespace IXICore.Streaming
 
                 // Wait for key exchange to complete with timeout
                 var keyExchangeTask = keyExchangeCompleteTcs.Task;
-                var completed = await Task.WhenAny(keyExchangeTask, Task.Delay(5000));
+                var completed = await Task.WhenAny(keyExchangeTask, Task.Delay(5000)).ConfigureAwait(false);
 
                 if (completed == keyExchangeTask && keyExchangeTask.IsCompletedSuccessfully)
                 {
@@ -515,7 +516,8 @@ namespace IXICore.Streaming
                 Logging.warn("Key exchange timeout with target node {0}", _friend.relayNode.hostname);
                 keyExchangeCompleteTcs.TrySetCanceled();
                 keyExchangeCompleteTcs = null;
-                client.stop();
+                CoreProtocolMessage.sendBye(client, ProtocolByeCode.bye, "", "", false);
+                client.stopAsync();
                 return false;
             }
             catch (Exception e)
@@ -544,7 +546,7 @@ namespace IXICore.Streaming
                 try
                 {
                     Logging.trace("Sending S2 data to {0}", _friend.walletAddress.ToString());
-                    _relayConnection.sendData(ProtocolMessageCode.s2data, data, null);
+                    _relayConnection.sendData(ProtocolMessageCode.s2data, data);
                 }
                 catch (Exception e)
                 {
@@ -557,7 +559,7 @@ namespace IXICore.Streaming
             {
                 // Wait for response with timeout
                 var responseTask = _responseQueue.Reader.ReadAsync().AsTask();
-                var completed = await Task.WhenAny(responseTask, Task.Delay(timeoutMs));
+                var completed = await Task.WhenAny(responseTask, Task.Delay(timeoutMs)).ConfigureAwait(false);
 
                 if (completed == responseTask && responseTask.IsCompletedSuccessfully)
                 {
@@ -587,7 +589,8 @@ namespace IXICore.Streaming
                     try
                     {
                         CoreStreamProcessor.sendCloseSecureConnection(_relayConnection, _friend);
-                        _relayConnection.stop();
+                        CoreProtocolMessage.sendBye(_relayConnection, ProtocolByeCode.bye, "", "", false);
+                        _relayConnection.stopAsync();
                     }
                     catch (Exception e)
                     {

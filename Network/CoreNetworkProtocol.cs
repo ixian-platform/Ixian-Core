@@ -36,7 +36,7 @@ namespace IXICore
         /// <param name="message">Optional text message for the user of the remote client.</param>
         /// <param name="data">Optional payload to further explain the disconnection reason.</param>
         /// <param name="removeAddressEntry">If true, the remote address will be removed from the `PresenceList`.</param>
-        public static void sendBye(RemoteEndpoint endpoint, ProtocolByeCode code, string message, string data, bool removeAddressEntry = true)
+        public static void sendBye(RemoteEndpoint endpoint, ProtocolByeCode code, string message, string data, bool removeAddressEntry = false)
         {
             using (MemoryStream m2 = new MemoryStream())
             {
@@ -48,10 +48,6 @@ namespace IXICore
 #if TRACE_MEMSTREAM_SIZES
                     Logging.info(String.Format("CoreProtocolMessage::sendBye: {0}", m2.Length));
 #endif
-                    if (code == ProtocolByeCode.bye)
-                    {
-                        endpoint.reconnectOnFailure = false;
-                    }
                     endpoint.sendData(ProtocolMessageCode.bye, m2.ToArray());
                     Logging.info("Sending bye to {0} with message '{1}' and data '{2}'", endpoint.getFullAddress(), message, data);
                 }
@@ -86,7 +82,7 @@ namespace IXICore
                     Logging.info(String.Format("CoreProtocolMessage::sendBye: {0}", m2.Length));
 #endif
 
-                    socket.Send(RemoteEndpoint.prepareProtocolMessage(ProtocolMessageCode.bye, m2.ToArray(), CoreConfig.protocolVersion, 0));
+                    socket.Send(RemoteEndpoint.prepareProtocolMessage(ProtocolMessageCode.bye, m2.ToArray(), CoreConfig.protocolVersion, 0).ToArray());
 
                     IPEndPoint remoteIP = (IPEndPoint)socket.RemoteEndPoint;
                     string address = remoteIP.Address.ToString() + ":" + remoteIP.Port;
@@ -102,13 +98,14 @@ namespace IXICore
         ///  This function checks all applicable checksums and validates that the message is complete before calling one of the specialized
         ///  methods to handle actual decoding and processing.
         /// </remarks>
-        /// <param name="recv_buffer">Byte-field with an Ixian protocol message.</param>
-        /// <param name="endpoint">Remote endpoint from where the message was received.</param>
+        /// <param name="raw_message">Raw message data, including the protocol code, payload data, and checksums.</param>
+        /// <param name="priority">Message priority, which can be used to prioritize processing of certain messages over others.</param>
+        /// <param name="endpoint">Remote endpoint from which the message was received.</param>
         public static void readProtocolMessage(QueueMessageRaw raw_message, MessagePriority priority, RemoteEndpoint endpoint)
         {
-            if (endpoint == null)
+            if (IxianHandler.status == NodeStatus.stopping
+                || IxianHandler.status == NodeStatus.stopped)
             {
-                Logging.error("Endpoint was null. readProtocolMessage");
                 return;
             }
 
@@ -311,7 +308,7 @@ namespace IXICore
                         }
                         if (!CryptoManager.lib.verifySignature(mSig.ToArray(), pubkey, signature))
                         {
-                            sendBye(endpoint, ProtocolByeCode.incorrectIp, "Verify signature failed in hello message, likely an incorrect IP was specified. Detected IP:", endpoint.address);
+                            sendBye(endpoint, ProtocolByeCode.incorrectIp, "Verify signature failed in hello message, likely an incorrect IP was specified. Detected IP:", endpoint.address, true);
                             Logging.warn("Hello: Connected node used an incorrect signature in hello message, likely an incorrect IP was specified. Detected IP: {0}", endpoint.address);
                             return false;
                         }
@@ -593,10 +590,9 @@ namespace IXICore
         /// <param name="types">Types of nodes to send this message to.</param>
         /// <param name="code">Protocol code.</param>
         /// <param name="data">Message payload</param>
-        /// <param name="helper_data">Additional information, as required by the protocol message</param>
         /// <param name="skipEndpoint">Remote endpoint which should be skipped (data should not be sent to it).</param>
         /// <returns>True, if at least one message was sent to at least one other node. False if no messages were sent.</returns>
-        public static bool broadcastProtocolMessage(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
+        public static bool broadcastProtocolMessage(char[] types, ProtocolMessageCode code, byte[] data, RemoteEndpoint? skipEndpoint = null)
         {
             if (data == null)
             {
@@ -604,8 +600,8 @@ namespace IXICore
                 return false;
             }
 
-            bool c_result = NetworkClientManager.broadcastData(types, code, data, helper_data, skipEndpoint);
-            bool s_result = NetworkServer.broadcastData(types, code, data, helper_data, skipEndpoint);
+            bool c_result = NetworkClientManager.broadcastData(types, code, data, skipEndpoint);
+            bool s_result = NetworkServer.broadcastData(types, code, data, skipEndpoint);
             
             if (!c_result
                 && !s_result)
@@ -630,13 +626,12 @@ namespace IXICore
         /// <param name="address">Address, which triggered the event.</param>
         /// <param name="code">Ixian protocol code.</param>
         /// <param name="data">Payload data.</param>
-        /// <param name="helper_data">Optional additional data, as required by `code`.</param>
         /// <param name="skipEndpoint">Endpoint to skip when broadcasting.</param>
         /// <returns>True, if at least one message was sent to at least one remote endpoint. False if no messages were sent.</returns>
-        public static bool broadcastEventDataMessage(NetworkEvents.Type type, byte[] address, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
+        public static bool broadcastEventDataMessage(NetworkEvents.Type type, byte[] address, ProtocolMessageCode code, byte[] data, RemoteEndpoint? skipEndpoint = null)
         {
             // Send it to subscribed C nodes
-            bool f_result = NetworkServer.broadcastEventData(type, code, data, address, helper_data, skipEndpoint);
+            bool f_result = NetworkServer.broadcastEventData(type, code, data, address, skipEndpoint);
             return f_result;
         }
 
@@ -657,10 +652,9 @@ namespace IXICore
         /// <param name="data">Payload data.</param>
         /// <param name="block_num">Minimum block height for endpoints which should receive this message.</param>
         /// <param name="skipEndpoint">Skip sending message to this endpoint.</param>
-        /// <param name="helper_data">Additional information, to prevent sending duplicate messages. In case of duplicate message will be replaced with latest message.</param>
         /// <param name="msg_id">Message id, usually related to block height, which prioritizes relevant incoming messages.</param>
         /// <returns>True, if at least one message was sent to at least one remote endpoint. False if no messages were sent.</returns>
-        public static bool broadcastProtocolMessageToSingleRandomNode(char[] types, ProtocolMessageCode code, byte[] data, ulong block_num, RemoteEndpoint? skipEndpoint = null, byte[]? helper_data = null, long msg_id = 0)
+        public static bool broadcastProtocolMessageToSingleRandomNode(char[] types, ProtocolMessageCode code, byte[] data, ulong block_num, RemoteEndpoint? skipEndpoint = null, long msg_id = 0)
         {
             if (data == null)
             {
@@ -749,7 +743,7 @@ namespace IXICore
 
                     if (re != null && re.isConnected())
                     {
-                        re.sendData(code, data, helper_data, msg_id);
+                        re.sendData(code, data, msg_id);
                         return true;
                     }
                     return false;
@@ -842,7 +836,7 @@ namespace IXICore
 
                     if (endpoint != null && endpoint.isConnected())
                     {
-                        endpoint.sendData(ProtocolMessageCode.getPresence2, mw.ToArray(), address);
+                        endpoint.sendData(ProtocolMessageCode.getPresence2, mw.ToArray());
                     }
                     else
                     {
@@ -851,7 +845,7 @@ namespace IXICore
                         {
                             node_types = new char[] { 'M', 'H', 'R' };
                         }
-                        broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getPresence2, mw.ToArray(), 0, null, address);
+                        broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getPresence2, mw.ToArray(), 0, null);
                     }
                 }
             }
@@ -870,8 +864,6 @@ namespace IXICore
             {
                 using (BinaryReader reader = new BinaryReader(m))
                 {
-                    endpoint.stop();
-
                     try
                     {
                         ProtocolByeCode byeCode = (ProtocolByeCode)reader.ReadInt32();
@@ -881,7 +873,6 @@ namespace IXICore
                         switch (byeCode)
                         {
                             case ProtocolByeCode.bye: // all good
-                                endpoint.reconnectOnFailure = false;
                                 break;
 
                             case ProtocolByeCode.incorrectIp: // incorrect IP
@@ -946,7 +937,7 @@ namespace IXICore
 
                 if (endpoint != null && endpoint.isConnected())
                 {
-                    endpoint.sendData(ProtocolMessageCode.getNameRecord, mw.ToArray(), name);
+                    endpoint.sendData(ProtocolMessageCode.getNameRecord, mw.ToArray());
                 }
                 else
                 {
@@ -955,7 +946,7 @@ namespace IXICore
                     {
                         node_types = new char[] { 'M', 'H', 'R' };
                     }
-                    broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getNameRecord, mw.ToArray(), 0, null, name);
+                    broadcastProtocolMessageToSingleRandomNode(node_types, ProtocolMessageCode.getNameRecord, mw.ToArray(), 0, null);
                 }
             }
         }
@@ -1005,7 +996,7 @@ namespace IXICore
                     }
                 }
 
-                endpoint.sendData(ProtocolMessageCode.sectorNodes, m.ToArray(), null, 0, MessagePriority.high);
+                endpoint.sendData(ProtocolMessageCode.sectorNodes, m.ToArray(), 0, MessagePriority.high);
             }
         }
 
@@ -1056,7 +1047,7 @@ namespace IXICore
                             }
                         }
                     }
-                    endpoint.sendData(ProtocolMessageCode.getKeepAlives, mOut.ToArray(), null);
+                    endpoint.sendData(ProtocolMessageCode.getKeepAlives, mOut.ToArray());
                 }
             }
         }
@@ -1149,7 +1140,7 @@ namespace IXICore
                     }
                     else
                     {
-                        endpoint.sendData(ProtocolMessageCode.getTransactions2, mOut.ToArray(), null, 0, priority);
+                        endpoint.sendData(ProtocolMessageCode.getTransactions2, mOut.ToArray(), 0, priority);
                     }
                 }
             }
@@ -1229,7 +1220,7 @@ namespace IXICore
                                     }
                                 }
                             }
-                            endpoint.sendData(ProtocolMessageCode.keepAlivesChunk, mOut.ToArray(), null);
+                            endpoint.sendData(ProtocolMessageCode.keepAlivesChunk, mOut.ToArray());
                         }
                     }
                 }
@@ -1254,7 +1245,7 @@ namespace IXICore
                 }
                 if (endpoint != null)
                 {
-                    endpoint.sendData(ProtocolMessageCode.getSectorNodes, mw.ToArray(), null);
+                    endpoint.sendData(ProtocolMessageCode.getSectorNodes, mw.ToArray());
                 }
                 else
                 {

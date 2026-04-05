@@ -51,6 +51,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerBase.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerRandomized.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerStatic.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkClientManagerStream.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkEvents.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkQueue.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkRemoteEndpoint.cs" />
@@ -132,7 +133,6 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\KDTable.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\MemoryInfoProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
-    <Compile Include="$(MSBuildThisFileDirectory)Utils\NetDump.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Storage\StorageIndex.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Wordlist.cs" />

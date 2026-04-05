@@ -125,7 +125,7 @@ namespace IXICore.Network
                     // Immediately close all connected client sockets
                     foreach (RemoteEndpoint client in connectedClients)
                     {
-                        client.stop();
+                        client.stopAsync();
                     }
 
                     connectedClients.Clear();
@@ -170,7 +170,7 @@ namespace IXICore.Network
             // Go through the list of failed clients and remove them
             foreach (RemoteEndpoint client in failed_clients)
             {
-                client.stop();
+                client.stopAsync().Wait();
                 lock (connectedClients)
                 {
                     // Remove this endpoint from the network server
@@ -272,13 +272,12 @@ namespace IXICore.Network
         /// <param name="types">Types of clients to which the data should be sent.</param>
         /// <param name="code">Type of the protocol message being sent.</param>
         /// <param name="data">Byte-field of the data, appropriate for the specific `code` used.</param>
-        /// <param name="helper_data">Optional, additional data to transmit after `data`.</param>
         /// <param name="skipEndpoint">If given, the message will not be sent to this remote endpoint. This prevents echoing the message to the originating node.</param>
         /// <returns>True, if at least one message was sent to at least one client.</returns>
-        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
+        public static bool broadcastData(char[] types, ProtocolMessageCode code, byte[] data, RemoteEndpoint? skipEndpoint = null)
         {
             bool result = false;
-            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data, helper_data);
+            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data);
             lock (connectedClients)
             {
                 foreach (RemoteEndpoint endpoint in connectedClients)
@@ -322,15 +321,14 @@ namespace IXICore.Network
         /// <param name="code">Type of the protocol message being sent.</param>
         /// <param name="data">Byte-field of the data, appropriate for the specific `code` used.</param>
         /// <param name="address">Ixian Wallet Address which triggered the event</param>
-        /// <param name="helper_data">Optional, additional data to transmit after `data`.</param>
         /// <param name="skipEndpoint">If given, the message will not be sent to this remote endpoint. This prevents echoing the message to the originating node.</param>
         /// <returns>True, if at least one message was sent to at least one client.</returns>
-        public static bool broadcastEventData(NetworkEvents.Type type, ProtocolMessageCode code, byte[] data, byte[] address, byte[]? helper_data, RemoteEndpoint? skipEndpoint = null)
+        public static bool broadcastEventData(NetworkEvents.Type type, ProtocolMessageCode code, byte[] data, byte[] address, RemoteEndpoint? skipEndpoint = null)
         {
             bool result = false;
             try
             {
-                QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data, helper_data);
+                QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, data);
                 lock (connectedClients)
                 {
                     foreach (RemoteEndpoint endpoint in connectedClients)
@@ -390,7 +388,7 @@ namespace IXICore.Network
 
             Logging.trace(">>>> Preparing to forward to {0}", address.ToString());
 
-            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, message, null);
+            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, message);
             lock (connectedClients)
             {
                 foreach (RemoteEndpoint endpoint in connectedClients)
@@ -430,7 +428,7 @@ namespace IXICore.Network
         {
             Logging.info(">>>> Preparing to forward to everyone");
 
-            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, message, null);
+            QueueMessage queue_message = RemoteEndpoint.getQueueMessage(code, message);
             lock (connectedClients)
             {
                 foreach (RemoteEndpoint endpoint in connectedClients)
@@ -464,11 +462,10 @@ namespace IXICore.Network
         /// <param name="neighbor">IP address or hostname and port for the neighbor.</param>
         /// <param name="code">Type of the protocol message</param>
         /// <param name="data">Data required by the protocol message `code`.</param>
-        /// <param name="helper_data">Optional, additional data to transmit after `data`.</param>
         /// <returns>True if the data was sent to the specified neighbor.</returns>
-        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data, byte[] helper_data)
+        public static bool sendToClient(string neighbor, ProtocolMessageCode code, byte[] data)
         {
-            RemoteEndpoint client = null;
+            RemoteEndpoint? client = null;
             lock (connectedClients)
             {
                 foreach (RemoteEndpoint ep in connectedClients)
@@ -482,7 +479,7 @@ namespace IXICore.Network
             }
             if (client != null)
             {
-                client.sendData(code, data, helper_data);
+                client.sendData(code, data);
                 return true;
             }
             return false;
