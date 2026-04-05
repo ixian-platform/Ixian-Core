@@ -62,29 +62,29 @@ namespace IXICore.Network
 
         public static void stop()
         {
-            clientManagerBase.stop();
+            clientManagerBase?.stop();
         }
 
         public static void pause()
         {
-            clientManagerBase.pause();
+            clientManagerBase?.pause();
         }
 
         public static void resume()
         {
-            clientManagerBase.resume();
+            clientManagerBase?.resume();
         }
 
         // Immediately disconnects all clients
         public static void isolate()
         {
-            clientManagerBase.isolate();
+            clientManagerBase?.isolate();
         }
 
         // Reconnects to network clients
         public static void restartClients()
         {
-            clientManagerBase.restartClients();
+            clientManagerBase?.restartClients();
         }
 
         // Connects to a specified node, with the syntax host:port
