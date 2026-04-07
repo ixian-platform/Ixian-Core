@@ -11,8 +11,10 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using System;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading.Tasks;
 
 namespace IXICore.Network
 {

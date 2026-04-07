@@ -11,6 +11,8 @@
 // MIT License for more details.
 
 using RocksDbSharp;
+using System;
+using System.Collections.Generic;
 
 namespace IXICore.Storage
 {

@@ -10,6 +10,8 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using System.Collections.Generic;
+
 namespace IXICore.Activity
 {
     public interface IActivityStorage

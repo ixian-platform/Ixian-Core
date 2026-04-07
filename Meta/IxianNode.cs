@@ -15,6 +15,9 @@ using IXICore.Network;
 using IXICore.RegNames;
 using IXICore.Storage;
 using IXICore.Utils;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace IXICore.Meta
 {

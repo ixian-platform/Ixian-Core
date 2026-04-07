@@ -11,6 +11,8 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using System;
+using System.Collections.Generic;
 
 namespace IXICore.Network
 {

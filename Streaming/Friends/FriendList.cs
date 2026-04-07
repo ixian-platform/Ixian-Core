@@ -12,6 +12,11 @@
 
 using IXICore.Meta;
 using IXICore.Utils;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading;
 
 namespace IXICore.Streaming
 {

@@ -11,6 +11,9 @@
 // MIT License for more details.
 
 using IXICore.Utils;
+using System;
+using System.IO;
+using System.Linq;
 
 namespace IXICore
 {

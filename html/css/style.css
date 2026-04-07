@@ -215,6 +215,7 @@ body {
     transition: background-color 0.2s ease;
     width: 100%;
     box-sizing: border-box;
+    color: var(--text-dark);
 }
 
 .payment-content {

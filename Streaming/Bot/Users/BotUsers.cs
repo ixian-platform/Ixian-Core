@@ -12,6 +12,9 @@
 
 using IXICore.Meta;
 using IXICore.Utils;
+using System;
+using System.Collections.Generic;
+using System.IO;
 
 namespace IXICore.SpixiBot
 {

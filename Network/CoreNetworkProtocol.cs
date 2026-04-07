@@ -18,6 +18,10 @@ using IXICore.Network.Messages;
 using IXICore.RegNames;
 using IXICore.Streaming;
 using IXICore.Utils;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 

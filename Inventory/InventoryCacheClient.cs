@@ -13,6 +13,7 @@
 using IXICore.Meta;
 using IXICore.Network;
 using IXICore.Utils;
+using System;
 
 namespace IXICore.Inventory
 {
