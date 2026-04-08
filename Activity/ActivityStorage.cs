@@ -718,13 +718,14 @@ namespace IXICore.Activity
 
         private RocksDBOptimizations optimizationType;
 
-        public ActivityStorage(string path, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, RocksDBOptimizations optimizationType)
+        public ActivityStorage(string path, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, RocksDBOptimizations optimizationType, long minDiskSpace)
         {
             this.pathBase = path;
             this.maxDatabaseCache = maxDatabaseCache;
             this.maxBlocksPerDatabase = maxBlocksPerDatabase;
 
             this.optimizationType = optimizationType;
+            this.minDiskSpace = minDiskSpace;
         }
 
         private RocksDBInternal? getDatabase(ulong blockNum, bool onlyExisting = false)
@@ -751,7 +752,7 @@ namespace IXICore.Activity
                 {
                     if (!hasSufficientDiskSpace())
                     {
-                        throw new InvalidOperationException("Activity: Error opening database, free disk space is below 1GB.");
+                        throw new IOException($"Activity: Error opening database, free disk space is below {minDiskSpace}B.");
                     }
 
                     string db_path = Path.Combine(pathBase, baseBlockNum.ToString());
@@ -835,7 +836,8 @@ namespace IXICore.Activity
                 Logging.warn("Could not read available disk space.");
                 return true;
             }
-            return availSpace > minDiskSpace;
+            Logging.info($"Free space: {availSpace}B > {minDiskSpace}B");
+            return availSpace >= minDiskSpace;
         }
 
         public void cleanupCache()

@@ -16,6 +16,43 @@ using System.Runtime.InteropServices;
 
 namespace IXICore
 {
+    public static class DeviceStorage
+    {
+        // 👇 platform can assign this
+        public static Func<string, long>? PlatformGetAvailableDiskSpace = null;
+
+        public static long GetAvailableDiskSpace(string path)
+        {
+            if (PlatformGetAvailableDiskSpace != null)
+            {
+                try
+                {
+                    return PlatformGetAvailableDiskSpace(path);
+                }
+                catch
+                {
+                }
+                return -1;
+            }
+
+            try
+            {
+                string root = Path.GetPathRoot(Path.GetFullPath(path));
+
+                var drive = new DriveInfo(root);
+                if (drive.IsReady)
+                {
+                    return Math.Max(drive.AvailableFreeSpace, 0);
+                }
+            }
+            catch
+            {
+            }
+
+            return -1;
+        }
+    }
+
     /// <summary>
     ///  Platform-specific utilities.
     /// </summary>
@@ -89,28 +126,7 @@ namespace IXICore
         /// <returns>Number of available disk space bytes as a long or -1 on error</returns>
         public static long getAvailableDiskSpace(string path)
         {
-            try
-            {
-                if (onLinux() || onMac())
-                {
-                    var drive = new DriveInfo(path);
-                    return Math.Max(drive.AvailableFreeSpace, 0);
-                }
-                else
-                {
-                    string root = Path.GetPathRoot(Path.GetFullPath(path));
-
-                    var drive = new DriveInfo(root);
-                    if (drive.IsReady)
-                    {
-                        return Math.Max(drive.AvailableFreeSpace, 0);
-                    }
-                }
-            }
-            catch
-            {
-            }
-            return -1;
+            return DeviceStorage.GetAvailableDiskSpace(path);
         }
     }
 }

@@ -1166,7 +1166,7 @@ namespace IXICore
 
             private RocksDBOptimizations optimizationType;
 
-            public RocksDBStorage(string dataFolderBlocks, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, int maxOpenDatabases, RocksDBOptimizations optimizationType) : base(dataFolderBlocks)
+            public RocksDBStorage(string dataFolderBlocks, ulong maxDatabaseCache, ulong maxBlocksPerDatabase, int maxOpenDatabases, RocksDBOptimizations optimizationType, long minDiskSpace) : base(dataFolderBlocks)
             {
                 this.maxOpenDatabases = maxOpenDatabases;
                 this.maxDatabaseCache = maxDatabaseCache;
@@ -1178,6 +1178,7 @@ namespace IXICore
                 }
 
                 this.optimizationType = optimizationType;
+                this.minDiskSpace = minDiskSpace;
             }
 
             private RocksDBInternal? getDatabase(ulong blockNum, bool onlyExisting = false)
@@ -1204,7 +1205,7 @@ namespace IXICore
                     {
                         if (!hasSufficientDiskSpace())
                         {
-                            throw new InvalidOperationException("RocksDB: Error opening database, free disk space is below 1GB.");
+                            throw new IOException($"RocksDB: Error opening database, free disk space is below {minDiskSpace}B.");
                         }
 
                         string db_path = Path.Combine(pathBase, "0000", baseBlockNum.ToString());
@@ -1302,7 +1303,8 @@ namespace IXICore
                     Logging.warn("Could not read available disk space.");
                     return true;
                 }
-                return availSpace > minDiskSpace;
+                Logging.info($"Free space: {availSpace}B > {minDiskSpace}B");
+                return availSpace >= minDiskSpace;
             }
 
             protected override void cleanupCache()

@@ -16,10 +16,10 @@ namespace IXICore.Streaming
 {
     public class ReactionData
     {
-        public Address sender = null;
-        public string data = null;
+        public Address sender;
+        public string? data = null;
 
-        public ReactionData(Address sender, string data)
+        public ReactionData(Address sender, string? data)
         {
             this.sender = sender;
             this.data = data;

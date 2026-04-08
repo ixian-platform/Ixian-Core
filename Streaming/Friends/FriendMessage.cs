@@ -36,7 +36,7 @@ namespace IXICore.Streaming
 
     public class FriendMessage
     {
-        private byte[] _id;
+        private byte[]? _id = null;
         public string message;
         public long timestamp; // timestamp as specified by the sender
         public bool localSender;
@@ -50,7 +50,7 @@ namespace IXICore.Streaming
         public string filePath; // for file transfer
         public ulong fileSize; // for file transfer
 
-        public Address senderAddress;
+        public Address? senderAddress;
         public string senderNick = "";
 
         public long receivedTimestamp; // timestamp of when the message was received; used for storage purposes
@@ -60,7 +60,7 @@ namespace IXICore.Streaming
 
         public Dictionary<string, List<ReactionData>> reactions = new Dictionary<string, List<ReactionData>>();
 
-        public FriendMessage(byte[] id, string msg, long time, bool local_sender, FriendMessageType t, Address sender_address = null, string sender_nick = "")
+        public FriendMessage(byte[]? id, string msg, long time, bool local_sender, FriendMessageType t, Address? sender_address = null, string sender_nick = "")
         {
             _id = id;
             message = msg;
@@ -79,7 +79,7 @@ namespace IXICore.Streaming
             sent = false;
         }
 
-        public FriendMessage(string msg, long time, bool local_sender, FriendMessageType t, Address sender_address = null, string sender_nick = "")
+        public FriendMessage(string msg, long time, bool local_sender, FriendMessageType t, Address? sender_address = null, string sender_nick = "")
         {
             message = msg;
             timestamp = time;
@@ -260,7 +260,7 @@ namespace IXICore.Streaming
                 {
                     return false;
                 }
-                string data = null;
+                string? data = null;
                 if(reaction_data.Length > reaction.Length + 1)
                 {
                     data = reaction_data.Substring(reaction.Length + 1);

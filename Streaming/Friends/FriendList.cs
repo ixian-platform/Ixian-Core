@@ -91,7 +91,7 @@ namespace IXICore.Streaming
                     {
                         foreach (var channel in friend.channels.channels)
                         {
-                            List<FriendMessage> messages = friend.getMessages(channel.Value.index);
+                            List<FriendMessage>? messages = friend.getMessages(channel.Value.index);
                             if (messages == null)
                             {
                                 continue;
@@ -132,9 +132,9 @@ namespace IXICore.Streaming
             }
         }
         // Set the avatar for a specific wallet address
-        public static void setAvatar(Address wallet_address, byte[] avatar, byte[] resized_avatar, Address real_sender_address)
+        public static void setAvatar(Address wallet_address, byte[]? avatar, byte[]? resized_avatar, Address? real_sender_address)
         {
-            Friend friend = getFriend(wallet_address);
+            Friend? friend = getFriend(wallet_address);
             if (friend == null)
             {
                 Logging.error("Received avatar for a friend that's not in the friend list.");
@@ -158,9 +158,9 @@ namespace IXICore.Streaming
             }
         }
 
-        public static FriendMessage addMessageWithType(byte[] id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
+        public static FriendMessage? addMessageWithType(byte[]? id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
-            Friend friend = getFriend(wallet_address);
+            Friend? friend = getFriend(wallet_address);
             if(friend == null)
             {
                 // No matching contact found in friendlist
@@ -214,10 +214,10 @@ namespace IXICore.Streaming
             FriendMessage friend_message = new FriendMessage(id, message, timestamp, local_sender, type, sender_address, sender_nick);
             friend_message.payableDataLen = payable_data_len;
 
-            List<FriendMessage> messages = friend.getMessages(channel);
+            List<FriendMessage>? messages = friend.getMessages(channel);
             if(messages == null)
             {
-                Logging.warn("Message with id {0} was sent to invalid channel {1}.", Crypto.hashToString(id), channel);
+                Logging.warn("Message with id {0} was sent to invalid channel {1}.", Crypto.hashToString(friend_message.id), channel);
                 return null;
             }
             lock (messages)
@@ -225,7 +225,7 @@ namespace IXICore.Streaming
                 // TODO should be optimized
                 if(id != null)
                 {
-                    FriendMessage tmp_msg = messages.Find(x => x.id != null && x.id.SequenceEqual(id));
+                    FriendMessage? tmp_msg = messages.Find(x => x.id != null && x.id.SequenceEqual(id));
 
                     if(tmp_msg != null)
                     {
@@ -270,7 +270,7 @@ namespace IXICore.Streaming
             friends = friends.OrderBy(x => x.nickname).ToList();
         }
 
-        public static Friend addFriend(FriendType type, FriendState state, Address wallet_address, byte[]? public_key, string name, byte[]? aes_key, byte[]? chacha_key, long key_generated_time, bool approved = true)
+        public static Friend? addFriend(FriendType type, FriendState state, Address wallet_address, byte[]? public_key, string name, byte[]? aes_key, byte[]? chacha_key, long key_generated_time, bool approved = true)
         {
             Friend new_friend = new Friend(type, state, wallet_address, public_key, name, aes_key, chacha_key, key_generated_time, approved);
             return addFriend(new_friend);
@@ -420,7 +420,7 @@ namespace IXICore.Streaming
         {
             new Thread(() =>
             {
-                List<Friend> tmp_friends = null;
+                List<Friend> tmp_friends;
                 lock (friends)
                 {
                     tmp_friends = new List<Friend>(friends);
@@ -439,7 +439,7 @@ namespace IXICore.Streaming
         {
             new Thread(() =>
             {
-                List<Friend> tmp_friends = null;
+                List<Friend> tmp_friends;
                 lock (friends)
                 {
                     tmp_friends = new List<Friend>(friends);
@@ -490,7 +490,7 @@ namespace IXICore.Streaming
                     {
                         try
                         {
-                            Friend f = addFriend(new Friend(File.ReadAllBytes(acc_path)));
+                            Friend? f = addFriend(new Friend(File.ReadAllBytes(acc_path)));
                             if (f != null)
                             {
                                 f.loadMetaData();
