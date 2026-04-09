@@ -198,7 +198,7 @@ namespace IXICore
         /// <summary>
         /// Block height after which mining/PoW transactions are not accepted anymore.
         /// </summary>
-        public static readonly ulong miningExpirationBlockHeight = 105120000;
+        public static readonly ulong argon2ExpirationBlockHeight = 6307200;
 
 
         /// <summary>
@@ -321,24 +321,9 @@ namespace IXICore
                 pow_reward = (1051200 * 9);
                 pow_reward = (pow_reward / 2 + 10000) * 100000; // Divide by 2 (assuming 50% block coverage) + add inital 10 IXI block reward + add the full amount of 0s to cover IxiNumber decimals
             }
-            else if (blockNum < 6307200) // up to first halving
+            else if (blockNum < argon2ExpirationBlockHeight) // final reward
             {
                 pow_reward = 2304;
-                pow_reward *= 100000000;
-            }
-            else if (blockNum < 9460800) // up to 2nd halving
-            {
-                pow_reward = 1152;
-                pow_reward *= 100000000;
-            }
-            else if (blockNum < 12614400) // up to final reward
-            {
-                pow_reward = 576;
-                pow_reward *= 100000000;
-            }
-            else if (blockNum < miningExpirationBlockHeight) // final reward
-            {
-                pow_reward = 18;
                 pow_reward *= 100000000;
             }
 
@@ -368,19 +353,23 @@ namespace IXICore
             }
             else if (target_block_num < 9460800)
             {
-                reward = 288;
+                reward = 288 + 576; // 576 added to the reward from argon2id mining, which was deprecated
             }
             else if (target_block_num < 12614400)
             {
-                reward = 144;
+                reward = 144 + 288; // 288 added to the reward from argon2id mining, which was deprecated
             }
             else if (target_block_num < 15768000)
             {
-                reward = 72;
+                reward = 72 + 9; // 9 added to the reward from argon2id mining, which was deprecated
+            }
+            else if (target_block_num < 105120000)
+            {
+                reward = 36 + 9; // 9 added to the reward from argon2id mining, which was deprecated
             }
             else
             {
-                reward = 36; // 36 per block after block num > 15768000 (12 years)
+                reward = 36; // 36 per block after block num >= 105120000 
             }
 
             return reward;
