@@ -217,6 +217,8 @@ namespace IXICore.Network
 
         public void stop()
         {
+            Task? recTaskCopy = reconnectTask;
+            var ctsCopy = ctsLoop;
             lock (networkClients)
             {
                 if (ctsLoop == null)
@@ -225,7 +227,9 @@ namespace IXICore.Network
                 }
 
                 autoReconnect = false;
-                ctsLoop.Cancel();
+                ctsCopy?.Cancel();
+                ctsLoop = null;
+                reconnectTask = null;
                 wakeSignal.TrySetResult();
             }
             isolate();
@@ -233,14 +237,12 @@ namespace IXICore.Network
             try
             {
                 // Wait for reconnect loop to finish
-                reconnectTask?.GetAwaiter().GetResult();
+                recTaskCopy?.GetAwaiter().GetResult();
             }
             catch (OperationCanceledException) { }
             finally
             {
-                ctsLoop.Dispose();
-                ctsLoop = null;
-                reconnectTask = null;
+                ctsCopy?.Dispose();
             }
         }
 

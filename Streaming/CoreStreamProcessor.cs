@@ -134,24 +134,21 @@ namespace IXICore.Streaming
                 }
             }
 
-            Task.Run(async() =>
+            if (NetworkServer.getClient(friend.walletAddress) == null
+                && (friend.relayNode == null || NetworkServer.getClient(friend.relayNode) == null))
             {
-                if (NetworkServer.getClient(friend.walletAddress) == null
-                    && (friend.relayNode == null || NetworkServer.getClient(friend.relayNode) == null))
+                if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
+                    && friend.relayNode != null
+                    && friend.online)
                 {
-                    if (Clock.getNetworkTimestamp() - friend.updatedStreamingNodes < CoreConfig.clientPresenceExpiration
-                        && friend.relayNode != null
-                        && friend.online)
-                    {
-                        await StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).ConfigureAwait(false);
-                    }
-                    else
-                    {
-                        fetchFriendsPresence(friend, true);
-                    }
+                    StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).ConfigureAwait(false);
                 }
-                pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
-            });
+                else
+                {
+                    fetchFriendsPresence(friend, true);
+                }
+            }
+            pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
         }
 
         public static bool sendMessage(RemoteEndpoint endpoint, Friend friend, StreamMessage msg)

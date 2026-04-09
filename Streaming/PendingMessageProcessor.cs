@@ -35,7 +35,8 @@ namespace IXICore.Streaming
 
     abstract class PendingMessageProcessor
     {
-        Thread? pendingMessagesThread = null; // Thread that checks the offline messages list for outstanding messages
+        private CancellationTokenSource? cts;
+        Task? pendingMessagesTask = null; // Thread that checks the offline messages list for outstanding messages
         Task? offloadedMessagesTask = null;
         bool running = false;
 
@@ -45,6 +46,8 @@ namespace IXICore.Streaming
         string storagePath = "MsgQueue";
 
         bool enablePushNotificationServer;
+
+        object startLock = new();
 
         public PendingMessageProcessor(string root_storage_path, bool enable_push_notification_server)
         {
@@ -108,55 +111,84 @@ namespace IXICore.Streaming
 
         public void start()
         {
-            if(running)
+            lock (startLock)
             {
-                return;
+                if (running)
+                {
+                    return;
+                }
+                running = true;
+
+                if (!Directory.Exists(storagePath))
+                {
+                    Directory.CreateDirectory(storagePath);
+                }
+
+                msgQueue = Channel.CreateUnbounded<OffloadedMessage>();
+
+                cts = new CancellationTokenSource();
+
+                pendingMessagesTask = Task.Run(() => messageProcessorLoop(cts.Token));
+                pendingMessagesTask.ContinueWith(t =>
+                {
+                    Logging.error("Exception in task: " + t.Exception);
+                }, TaskContinuationOptions.OnlyOnFaulted);
+
+                offloadedMessagesTask = Task.Run(() => offloadedMessageProcessorLoop(cts.Token));
+                offloadedMessagesTask.ContinueWith(t =>
+                {
+                    Logging.error("Exception in task: " + t.Exception);
+                }, TaskContinuationOptions.OnlyOnFaulted);
             }
-            running = true;
-
-            if (!Directory.Exists(storagePath))
-            {
-                Directory.CreateDirectory(storagePath);
-            }
-
-            msgQueue = Channel.CreateUnbounded<OffloadedMessage>();
-
-            pendingMessagesThread = new Thread(messageProcessorLoop);
-            pendingMessagesThread.Name = "Pending_Message_Processor_Loop";
-            pendingMessagesThread.Start();
-
-            offloadedMessagesTask = Task.Run(() => offloadedMessageProcessorLoop());
-            offloadedMessagesTask.ContinueWith(t =>
-            {
-                Logging.error("Exception in task: " + t.Exception);
-            }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
         public void stop()
         {
-            running = false;
-            if (offloadedMessagesTask != null)
+            List<Task> tasks = new();
+            var ctsCopy = cts;
+            lock (startLock)
             {
-                try
+                if (!running)
                 {
-                    msgQueue.Writer.TryWrite(null);
-                    offloadedMessagesTask.GetAwaiter().GetResult();
+                    Logging.warn("Attempting to stop a PendingMessageProcessor that is not running.");
+                    return;
                 }
-                catch (Exception) { /* ignore */ }
-                offloadedMessagesTask = null;
+                running = false;
+                ctsCopy?.Cancel();
+                cts = null;
+                msgQueue?.Writer.TryComplete();
+                if (offloadedMessagesTask != null)
+                {
+                    tasks.Add(offloadedMessagesTask);
+                    offloadedMessagesTask = null;
+                }
+
+                if (pendingMessagesTask != null)
+                {
+                    try
+                    {
+                        tasks.Add(pendingMessagesTask);
+                    }
+                    catch (Exception) { /* ignore */ }
+                    pendingMessagesTask = null;
+                }
             }
 
-            if (pendingMessagesThread != null)
+            try
             {
-                pendingMessagesThread.Interrupt();
-                pendingMessagesThread.Join();
-                pendingMessagesThread = null;
-
-                pendingRecipients.Clear();
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // expected
+            }
+            finally
+            {
+                ctsCopy?.Dispose();
             }
         }
 
-        private void processPendingMessages()
+        private async Task processPendingMessages()
         {
             List<PendingRecipient> tmp_pending_recipients;
             lock (pendingRecipients)
@@ -200,7 +232,7 @@ namespace IXICore.Streaming
                     bool failed_sending = false;
                     foreach (var message_header in tmp_msg_headers)
                     {
-                        bool sent = processMessage(friend, message_header.filePath);
+                        bool sent = await processMessage(friend, message_header.filePath).ConfigureAwait(false);
                         if (message_header.sendToServer && !sent)
                         {
                             failed_sending = true;
@@ -236,7 +268,7 @@ namespace IXICore.Streaming
             msgQueue.Writer.TryWrite(om);
         }
 
-        private void sendMessage(OffloadedMessage om)
+        private async Task sendMessage(OffloadedMessage om)
         {
             PendingMessage pm = new PendingMessage(om.msg, om.sendToServer, om.sendPushNotification, om.removeAfterSending, om.channel);
             StreamMessage msg = pm.streamMessage;
@@ -265,11 +297,11 @@ namespace IXICore.Streaming
             }
             if (tmp_recipient.messageQueue.Count() == 1 || !om.addToPendingMessages)
             {
-                sendMessage(om.friend, pm, om.addToPendingMessages);
+                await sendMessage(om.friend, pm, om.addToPendingMessages).ConfigureAwait(false);
             }
         }
 
-        private bool processMessage(Friend friend, string file_path)
+        private async Task<bool> processMessage(Friend friend, string file_path)
         {
             PendingMessage pm = new PendingMessage(file_path);
             if (Clock.getNetworkTimestamp() - pm.streamMessage.timestamp > CoreConfig.messageExpirationSeconds)
@@ -284,7 +316,7 @@ namespace IXICore.Streaming
                 }
 
             }
-            return sendMessage(friend, pm);
+            return await sendMessage(friend, pm).ConfigureAwait(false);
         }
 
         public bool removeMessage(Friend friend, byte[] msg_id)
@@ -316,7 +348,7 @@ namespace IXICore.Streaming
             }
         }
 
-        private bool sendMessage(Friend friend, PendingMessage pending_message, bool add_to_pending_messages = true)
+        private async Task<bool> sendMessage(Friend friend, PendingMessage pending_message, bool add_to_pending_messages = true)
         {
             StreamMessage msg = pending_message.streamMessage;
             bool send_to_server = pending_message.sendToServer;
@@ -408,7 +440,7 @@ namespace IXICore.Streaming
                     {
                         if (friend.relayNode != null)
                         {
-                            StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).Wait();
+                            await StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).ConfigureAwait(false);
                             sent = StreamClientManager.sendToClient(new List<Peer>() { friend.relayNode }, ProtocolMessageCode.s2data, msg.getBytes());
                         }
                         else
@@ -517,47 +549,55 @@ namespace IXICore.Streaming
             return null;
         }
 
-        private void messageProcessorLoop()
+        private async Task messageProcessorLoop(CancellationToken ct)
         {
             loadMessageQueue();
 
             try
             {
-                while (running)
+                while (running && !ct.IsCancellationRequested)
                 {
                     try
                     {
-                        processPendingMessages();
+                        await processPendingMessages().ConfigureAwait(false);
                     }
-                    catch (Exception e)
+                    catch (Exception e) when (e is not OperationCanceledException)
                     {
                         Logging.error("Unknown exception occurred in messageProcessorLoop: " + e);
                     }
 
-                    Thread.Sleep(2500);
+                    await Task.Delay(2500, ct).ConfigureAwait(false);
                 }
             }
-            catch (ThreadInterruptedException)
+            catch (OperationCanceledException)
             {
+                // Normal shutdown
             }
         }
 
-        private async Task offloadedMessageProcessorLoop()
+        private async Task offloadedMessageProcessorLoop(CancellationToken ct)
         {
-            while (running)
+            try
             {
-                try
+                while (running && !ct.IsCancellationRequested)
                 {
-                    var om = await msgQueue.Reader.ReadAsync().ConfigureAwait(false);
-                    if (om != null)
+                    try
                     {
-                        sendMessage(om);
+                        var om = await msgQueue.Reader.ReadAsync(ct).ConfigureAwait(false);
+                        if (om != null)
+                        {
+                            await sendMessage(om).ConfigureAwait(false);
+                        }
+                    }
+                    catch (Exception e) when (e is not OperationCanceledException)
+                    {
+                        Logging.error("Unknown exception occurred in offloadedMessageProcessorLoop: " + e);
                     }
                 }
-                catch (Exception e)
-                {
-                    Logging.error("Unknown exception occurred in offloadedMessageProcessorLoop: " + e);
-                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Normal shutdown
             }
         }
 

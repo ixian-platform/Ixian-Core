@@ -163,14 +163,7 @@ namespace IXICore.Streaming
             Friend? friend = getFriend(wallet_address);
             if(friend == null)
             {
-                // No matching contact found in friendlist
-                // Add the contact, then issue the message again?
-                // TODO: need to fetch the stage 1 public key somehow here
-                // Ignoring such messages for now
-                //addFriend(wallet_address, "pubkey", "Unknown");
-                //addMessage(wallet_address, message);
-
-                Logging.warn("Received message but contact isn't in our contact list.");
+                Logging.warn("Received message but contact {0} isn't in our contact list.", wallet_address.ToString());
                 return null;
             }
 

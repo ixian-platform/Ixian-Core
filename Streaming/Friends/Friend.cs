@@ -500,7 +500,12 @@ namespace IXICore.Streaming
         // Get the number of unread messages
         public int getUnreadMessageCount()
         {
-            return metaData.unreadMessageCount;
+            if (metaData.botInfo == null
+                || metaData.botInfo.sendNotification)
+            {
+                return metaData.unreadMessageCount;
+            }
+            return 0;
         }
 
         // Flushes the temporary message history

@@ -104,7 +104,7 @@ namespace IXICore.Network
         // Maintain a queue of raw received data
         private Channel<QueueMessageRaw?>? recvRawQueueMessages;
 
-        private byte[]? socketReadBuffer = null;
+        private Memory<byte> socketReadBuffer;
 
         protected List<TimeSyncData> timeSyncs = new List<TimeSyncData>();
 
@@ -131,6 +131,7 @@ namespace IXICore.Network
         {
             messageHandler = handler;
             capacity = capacityPerQueue;
+            socketReadBuffer = new Memory<byte>(new byte[64 * 1024]);
         }
 
         protected void prepareSocket(Socket socket)
@@ -211,7 +212,8 @@ namespace IXICore.Network
         public virtual async Task stopAsync()
         {
             List<Task> tasks = new();
-
+            Socket? socket = clientSocket;
+            var ctsCopy = cts;
             lock (startLock)
             {
                 if (!running)
@@ -223,24 +225,44 @@ namespace IXICore.Network
                 running = false;
 
                 cts?.Cancel();
-
+                cts = null;
                 recvRawQueueMessages?.Writer.TryComplete();
                 sendQueueMessagesHighPriority?.Writer.TryComplete();
                 sendQueueMessagesNormalPriority?.Writer.TryComplete();
                 sendQueueMessagesLowPriority?.Writer.TryComplete();
+                recvRawQueueMessages = null;
+                sendQueueMessagesHighPriority = null;
+                sendQueueMessagesNormalPriority = null;
+                sendQueueMessagesLowPriority = null;
 
                 if (sendTask != null)
                 {
                     tasks.Add(sendTask);
+                    sendTask = null;
                 }
                 if (parseTask != null)
                 {
                     tasks.Add(parseTask);
+                    parseTask = null;
                 }
                 if (recvTask != null)
                 {
                     tasks.Add(recvTask);
+                    recvTask = null;
                 }
+
+                lock (subscribedFilters)
+                {
+                    subscribedFilters.Clear();
+                }
+
+                lock (inventory)
+                {
+                    inventory.Clear();
+                }
+
+                cts = null;
+                clientSocket = null;
             }
 
             try
@@ -253,35 +275,16 @@ namespace IXICore.Network
             }
             finally
             {
-                cts?.Dispose();
-                cts = null;
-
-                recvRawQueueMessages = null;
-                sendQueueMessagesHighPriority = null;
-                sendQueueMessagesNormalPriority = null;
-                sendQueueMessagesLowPriority = null;
-                recvTask = null;
-                sendTask = null;
-                parseTask = null;
-
-                lock (subscribedFilters)
-                {
-                    subscribedFilters.Clear();
-                }
-
-                lock (inventory)
-                {
-                    inventory.Clear();
-                }
+                ctsCopy?.Dispose();
             }
 
             // Close the client socket
             try
             {
-                if (clientSocket != null
-                    && clientSocket.Connected)
+                if (socket != null
+                    && socket.Connected)
                 {
-                    clientSocket.Shutdown(SocketShutdown.Both);
+                    socket.Shutdown(SocketShutdown.Both);
                 }
             }
             catch (ObjectDisposedException)
@@ -295,15 +298,11 @@ namespace IXICore.Network
 
             try
             {
-                clientSocket?.Close();
+                socket?.Close();
             }
             catch (Exception e)
             {
                 Logging.warn("Disconnect: Error closing client socket: {0}", e.Message);
-            }
-            finally
-            {
-                clientSocket = null;
             }
         }
 
@@ -323,7 +322,6 @@ namespace IXICore.Network
             var recvWriter = recvRawQueueMessages!.Writer;
             try
             {
-                socketReadBuffer = new byte[64 * 1024];
                 long lastReceivedMessageStatTime = Clock.getTimestampMillis();
                 while (!ct.IsCancellationRequested)
                 {
@@ -1009,7 +1007,7 @@ namespace IXICore.Network
             int rcv_count = 8;
             for (int i = 0; i < rcv_count && !ct.IsCancellationRequested;)
             {
-                int rcvd_count = socket.Receive(socketReadBuffer, i, rcv_count - i, SocketFlags.None);
+                int rcvd_count = await socket.ReceiveAsync(socketReadBuffer.Slice(i, rcv_count - i), SocketFlags.None, ct);
                 i += rcvd_count;
                 if (rcvd_count <= 0)
                 {
@@ -1019,7 +1017,7 @@ namespace IXICore.Network
             lock (timeSyncs)
             {
                 long my_cur_time = Clock.getTimestampMillis();
-                long cur_remote_time = BitConverter.ToInt64(socketReadBuffer, 0);
+                long cur_remote_time = BitConverter.ToInt64(socketReadBuffer.Slice(0, 8).ToArray(), 0);
                 long time_difference = my_cur_time - cur_remote_time;
                 if (timeSyncs.Count > 0)
                 {
@@ -1061,7 +1059,7 @@ namespace IXICore.Network
             int bytes_to_read = 1;
             while (socket.Connected && !ct.IsCancellationRequested)
             {
-                int bytes_received = socket.Receive(socketReadBuffer, bytes_to_read, SocketFlags.None);
+                int bytes_received = await socket.ReceiveAsync(socketReadBuffer.Slice(0, bytes_to_read), SocketFlags.None, ct);
                 if (bytes_received <= 0)
                 {
                     continue;
@@ -1070,10 +1068,10 @@ namespace IXICore.Network
                 lastDataReceivedTime = Clock.getTimestamp();
                 if (cur_header_len == 0)
                 {
-                    switch (socketReadBuffer[0])
+                    switch (socketReadBuffer.Span[0])
                     {
                         case 0xEA: // 0xEA is the message start byte of v6 base protocol
-                            header[0] = socketReadBuffer[0];
+                            header[0] = socketReadBuffer.Span[0];
                             cur_header_len = 1;
                             bytes_to_read = new_header_len - 1; // header length - start byte
                             expected_header_len = new_header_len;
@@ -1095,7 +1093,7 @@ namespace IXICore.Network
 
                 if (cur_header_len < expected_header_len)
                 {
-                    Buffer.BlockCopy(socketReadBuffer, 0, header, cur_header_len, bytes_received);
+                    Buffer.BlockCopy(socketReadBuffer.Slice(0, bytes_received).ToArray(), 0, header, cur_header_len, bytes_received);
                     cur_header_len += bytes_received;
                     if (cur_header_len == expected_header_len)
                     {
@@ -1143,7 +1141,7 @@ namespace IXICore.Network
                 }
                 else
                 {
-                    Buffer.BlockCopy(socketReadBuffer, 0, data, cur_data_len, bytes_received);
+                    Buffer.BlockCopy(socketReadBuffer.Slice(0, bytes_received).ToArray(), 0, data, cur_data_len, bytes_received);
                     cur_data_len += bytes_received;
                     if (cur_data_len == expected_data_len)
                     {
