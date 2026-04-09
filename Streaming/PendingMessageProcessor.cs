@@ -176,7 +176,7 @@ namespace IXICore.Streaming
 
             try
             {
-                await Task.WhenAll(tasks).ConfigureAwait(false);
+                Task.WhenAll(tasks).ConfigureAwait(false).GetAwaiter().GetResult();
             }
             catch (OperationCanceledException)
             {
