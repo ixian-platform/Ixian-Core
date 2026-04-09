@@ -178,7 +178,18 @@ namespace IXICore.Miner
                 return;
             }
 
-            Block candidateBlock = IxianHandler.getLastBlock();
+            Block? candidateBlock = IxianHandler.getLastBlock();
+
+            if (candidateBlock == null)
+            {
+                // No blocks, Not ready yet
+                return;
+            }
+
+            if (candidateBlock.timestamp + 1800 < Clock.getNetworkTimestamp())
+            {
+                candidateBlock = IxianHandler.getBlockHeader(candidateBlock.blockNum - 6);
+            }
 
             if (candidateBlock == null)
             {
