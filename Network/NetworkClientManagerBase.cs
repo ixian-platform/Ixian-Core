@@ -300,7 +300,7 @@ namespace IXICore.Network
             }
 
             string[] server = host.Split(':');
-            if (server.Count() < 2)
+            if (server.Length < 2)
             {
                 Logging.warn("Cannot connect to invalid hostname: {0}", host);
                 return null;

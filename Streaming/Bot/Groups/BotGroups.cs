@@ -198,7 +198,7 @@ namespace IXICore.SpixiBot
         {
             lock (groups)
             {
-                if (groups.Count() > 0)
+                if (groups.Count > 0)
                 {
                     return groups.Last().Value.index + 1;
                 }
@@ -239,7 +239,7 @@ namespace IXICore.SpixiBot
         {
             lock (groups)
             {
-                return groups.Count();
+                return groups.Count;
             }
         }
     }

@@ -581,15 +581,15 @@ namespace IXICore.Storage
                     }
                     string path = files[i];
                     var tmp_msgs = readMessagesFile(path);
-                    int msgs_to_take = msg_count - messages.Count();
+                    int msgs_to_take = msg_count - messages.Count;
                     if (reverse)
                     {
-                        int msgs_to_skip = tmp_msgs.Count() - msgs_to_take;
+                        int msgs_to_skip = tmp_msgs.Count - msgs_to_take;
                         if (msgs_to_skip < 0)
                         {
                             msgs_to_skip = 0;
                         }
-                        if (from_time_stamp != 0 && messages.Count() == 0)
+                        if (from_time_stamp != 0 && messages.Count == 0)
                         {
                             // Remove all messages that are newer than the from_time_stamp
                             tmp_msgs.RemoveAll(x => x.receivedTimestamp >= from_time_stamp);
@@ -598,14 +598,14 @@ namespace IXICore.Storage
                     }
                     else
                     {
-                        if (messages.Count() == 0)
+                        if (messages.Count == 0)
                         {
                             // Remove all messages that are older than the from_time_stamp
                             tmp_msgs.RemoveAll(x => x.receivedTimestamp <= from_time_stamp);
                         }
                         messages.AddRange(tmp_msgs.Take(msgs_to_take));
                     }
-                    if (messages.Count() >= msg_count)
+                    if (messages.Count >= msg_count)
                     {
                         break;
                     }

@@ -2696,7 +2696,7 @@ namespace IXICore.Streaming
                     return;
                 }
 
-                if (friend.sectorNodes.Count() == 0
+                if (friend.sectorNodes.Count == 0
                     || (curTimestamp - friend.updatedSectorNodes > CoreConfig.contactSectorNodeIntervalSeconds && Clock.getNetworkTimestamp() - friend.updatedStreamingNodes > CoreConfig.contactSectorNodeIntervalSeconds))
                 {
                     // If sector nodes are not yet initialized or we haven't received contact's presence information and haven't updated presence within the interval

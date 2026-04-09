@@ -277,7 +277,7 @@ namespace IXICore.Meta
 
                     lock (statements)
                     {
-                        if (statements.Count() > 0)
+                        if (statements.Count > 0)
                         {
                             statement = statements[0];
                             statements.RemoveAt(0);
@@ -446,7 +446,7 @@ namespace IXICore.Meta
         {
             lock (statements)
             {
-                return statements.Count();
+                return statements.Count;
             }
         }
 

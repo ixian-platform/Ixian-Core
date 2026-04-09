@@ -219,7 +219,7 @@ namespace IXICore.SpixiBot
         {
             lock (channels)
             {
-                if (channels.Count() > 0)
+                if (channels.Count > 0)
                 {
                     return channels.Last().Value.index + 1;
                 }

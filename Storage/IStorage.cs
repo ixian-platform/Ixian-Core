@@ -126,7 +126,7 @@ namespace IXICore
                     {
                         lock (queueStatements)
                         {
-                            int statements_count = queueStatements.Count();
+                            int statements_count = queueStatements.Count;
                             if (statements_count > 0)
                             {
                                 if (statements_count > 1)

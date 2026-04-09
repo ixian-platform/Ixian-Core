@@ -1026,7 +1026,7 @@ namespace IXICore.Network
                 }
                 TimeSyncData tsd = new TimeSyncData() { timeDifference = time_difference, remoteTime = cur_remote_time, processedTime = my_cur_time };
                 timeSyncs.Add(tsd);
-                if (timeSyncs.Count() >= 5)
+                if (timeSyncs.Count >= 5)
                 {
                     timeSyncComplete = true;
                 }

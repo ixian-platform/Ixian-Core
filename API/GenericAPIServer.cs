@@ -687,7 +687,7 @@ namespace IXICore
                 {
                     if (context != null)
                     {
-                        if (allowedIPs != null && allowedIPs.Count() > 0 && !allowedIPs.Contains(context.Request.RemoteEndPoint.Address.ToString()))
+                        if (allowedIPs != null && allowedIPs.Count > 0 && !allowedIPs.Contains(context.Request.RemoteEndPoint.Address.ToString()))
                         {
                             context.Response.Close();
                             Thread.Yield();

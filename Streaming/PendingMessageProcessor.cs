@@ -295,7 +295,7 @@ namespace IXICore.Streaming
                     tmp_recipient.messageQueue.Add(new PendingMessageHeader() { filePath = pm.filePath, id = pm.streamMessage.id, sendToServer = pm.sendToServer });
                 }
             }
-            if (tmp_recipient.messageQueue.Count() == 1 || !om.addToPendingMessages)
+            if (tmp_recipient.messageQueue.Count == 1 || !om.addToPendingMessages)
             {
                 await sendMessage(om.friend, pm, om.addToPendingMessages).ConfigureAwait(false);
             }

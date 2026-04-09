@@ -1105,8 +1105,8 @@ namespace IXICore
                         continue;
                     }
 
-                    if (entry.rejectedNodeList.Count() > 3
-                        && entry.rejectedNodeList.Count() > entry.confirmedNodeList.Count())
+                    if (entry.rejectedNodeList.Count > 3
+                        && entry.rejectedNodeList.Count > entry.confirmedNodeList.Count)
                     {
                         Logging.error("Error sending the transaction {0}, rejected", t.getTxIdString());
                         transactionInclusionCallbacks.transactionRejected(t);

@@ -278,7 +278,7 @@ namespace IXICore
 
             lock (myKeys)
             {
-                key_count = myKeys.Count();
+                key_count = myKeys.Count;
             }
 
             IxianKeyPair kp = kd.deriveKey(key_count, ConsensusConfig.defaultRsaKeySize, 65537);
@@ -1196,7 +1196,7 @@ namespace IXICore
 
                 lock (myKeys)
                 {
-                    writer.Write(myKeys.Count());
+                    writer.Write(myKeys.Count);
 
                     foreach (var entry in myKeys)
                     {

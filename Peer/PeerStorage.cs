@@ -110,7 +110,7 @@ namespace IXICore
         {
             // Check if the address format is correct
             string[] server = address.Split(':');
-            if (server.Count() < 2)
+            if (server.Length < 2)
             {
                 return false;
             }

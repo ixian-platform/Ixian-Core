@@ -370,7 +370,7 @@ namespace IXICore
                     {
                         lock (NetworkServer.connectedClients)
                         {
-                            if (NetworkServer.connectedClients.Count() - masterNodeCount > CoreConfig.maximumServerClients)
+                            if (NetworkServer.connectedClients.Count - masterNodeCount > CoreConfig.maximumServerClients)
                             {
                                 sendBye(endpoint, ProtocolByeCode.rejected, "Too many clients already connected.", "", false);
                                 return false;
@@ -680,8 +680,8 @@ namespace IXICore
                         servers = NetworkClientManager.networkClients.FindAll(x => x.blockHeight > block_num && x.isConnected() && x.helloReceived);
                         clients = NetworkServer.connectedClients.FindAll(x => x.blockHeight > block_num && x.isConnected() && x.helloReceived);
 
-                        serverCount = servers.Count();
-                        clientCount = clients.Count();
+                        serverCount = servers.Count;
+                        clientCount = clients.Count;
 
                         if (serverCount == 0 && clientCount == 0)
                         {
@@ -694,8 +694,8 @@ namespace IXICore
                         servers = NetworkClientManager.networkClients.FindAll(x => x.blockHeight > block_num && x.presenceAddress != null && types.Contains(x.presenceAddress.type) && x.isConnected() && x.helloReceived);
                         clients = NetworkServer.connectedClients.FindAll(x => x.blockHeight > block_num && x.presenceAddress != null && types.Contains(x.presenceAddress.type) && x.isConnected() && x.helloReceived);
 
-                        serverCount = servers.Count();
-                        clientCount = clients.Count();
+                        serverCount = servers.Count;
+                        clientCount = clients.Count;
 
                         if (serverCount == 0 && clientCount == 0)
                         {
@@ -704,8 +704,8 @@ namespace IXICore
                         }
                     }
 
-                    serverCount = servers.Count();
-                    clientCount = clients.Count();
+                    serverCount = servers.Count;
+                    clientCount = clients.Count;
 
                     if (serverCount == 0 && clientCount == 0)
                     {
@@ -782,7 +782,7 @@ namespace IXICore
         public static Cuckoo getMyAddressesCuckooFilter()
         {
             var my_addresses = IxianHandler.getWalletStorage().getMyAddresses();
-            Cuckoo filter = new Cuckoo(my_addresses.Count());
+            Cuckoo filter = new Cuckoo(my_addresses.Count);
             foreach (var addr in my_addresses)
             {
                 filter.Add(addr.addressNoChecksum);
@@ -1064,7 +1064,7 @@ namespace IXICore
             List<ulong> blockHeights = NetworkClientManager.getBlockHeights();
             blockHeights.AddRange(NetworkServer.getBlockHeights());
 
-            if (blockHeights.Count() < 1)
+            if (blockHeights.Count < 1)
             {
                 return 0;
             }
