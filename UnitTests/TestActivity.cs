@@ -17,7 +17,7 @@ namespace UnitTests
         [TestInitialize]
         public void Init()
         {
-            db = new ActivityStorage("test", 10UL << 20, 0, RocksDBOptimizations.Servers);
+            db = new ActivityStorage("test", 10UL << 20, 0, RocksDBOptimizations.Servers, 50 << 20);
             db.prepareStorage(false);
         }
 
