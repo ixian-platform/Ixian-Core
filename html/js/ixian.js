@@ -321,6 +321,7 @@ function getStatus() {
 
             sync_status = data["result"]["DLT Status"];
 
+            const warningOtherLabel = document.getElementById('warning_other_label');
             const warningOther = document.getElementById('warning_other');
             const warningSync = document.getElementById('warning_sync');
             warningOther.style.display = "block";
@@ -335,14 +336,14 @@ function getStatus() {
                 showSyncProgress(percent, "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".")
 
             } else if (sync_status == "ErrorForkedViaUpgrade") {
-                warning_bar.firstElementChild.innerHTML = "Network has been upgraded, please download a newer version of Ixian DLT.";
+                warningOtherLabel.innerHTML = "Network has been upgraded, please download a newer version of Ixian DLT.";
             } else if (sync_status == "ErrorLongTimeNoBlock") {
-                warning_bar.firstElementChild.innerHTML = "No fully signed block received for a while, make sure that you're connected to the internet.";
+                warningOtherLabel.innerHTML = "No fully signed block received for a while, make sure that you're connected to the internet.";
             }
             else {
                 // Hide the syncbar
                 warning_bar.style.display = "none";
-                warning_bar.firstElementChild.innerHTML = "";
+                warningOtherLabel.innerHTML = "";
             }
 
             var network_time_diff = data["result"]["Network time difference"];
@@ -350,10 +351,10 @@ function getStatus() {
 
             if (data["result"]["Network Servers"] > 2 && network_time_diff != real_network_time_diff) {
                 warning_bar.style.display = "block";
-                if (warning_bar.firstElementChild.innerHTML != "") {
-                    warning_bar.firstElementChild.innerHTML += "<br/>";
+                if (warningOtherLabel.innerHTML != "") {
+                    warningOtherLabel.innerHTML += "<br/>";
                 }
-                warning_bar.firstElementChild.innerHTML += "Please make sure that your computer's date and time are correct.";
+                warningOtherLabel.innerHTML += "Please make sure that your computer's date and time are correct.";
             }
 
             var node_type = data["result"]["Node Type"];
@@ -361,19 +362,19 @@ function getStatus() {
                 && data["result"]["Network Servers"] == "[]") {
                 if (data["result"]["Connectable"] == false) {
                     warning_bar.style.display = "block";
-                    if (warning_bar.firstElementChild.innerHTML != "") {
-                        warning_bar.firstElementChild.innerHTML += "<br/>";
+                    if (warningOtherLabel.innerHTML != "") {
+                        warningOtherLabel.innerHTML += "<br/>";
                     }
-                    warning_bar.firstElementChild.innerHTML += "This node is not connectable from the internet and other nodes can't connect to it. Please set-up port-forwarding.";
+                    warningOtherLabel.innerHTML += "This node is not connectable from the internet and other nodes can't connect to it. Please set-up port-forwarding.";
                 }
             }
 
             if (data["result"]["Update"] != "" && data["result"]["Update"] != undefined) {
                 warning_bar.style.display = "block";
-                if (warning_bar.firstElementChild.innerHTML != "") {
-                    warning_bar.firstElementChild.innerHTML += "<br/>";
+                if (warningOtherLabel.innerHTML != "") {
+                    warningOtherLabel.innerHTML += "<br/>";
                 }
-                warning_bar.firstElementChild.innerHTML += "An updated version of Ixian node (" + data["result"]["Update"] + ") is available, please visit https://www.ixian.io";
+                warningOtherLabel.innerHTML += "An updated version of Ixian node (" + data["result"]["Update"] + ") is available, please visit https://www.ixian.io";
             }
         });
 /*
