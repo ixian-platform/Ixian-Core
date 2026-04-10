@@ -227,5 +227,6 @@ namespace IXICore
         public static int messageExpirationSeconds = 86400 * 5; // 5 Days
 
         public static P2PTransactionMode p2pTransactionMode = P2PTransactionMode.PrimaryAddress;
+        public static AddressPaymentFlag defaultPaymentAddressMode = AddressPaymentFlag.OfflineTag;
     }
 }

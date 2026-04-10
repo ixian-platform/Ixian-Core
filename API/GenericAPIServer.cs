@@ -1432,7 +1432,8 @@ namespace IXICore
 
             foreach (Address addr in address_list)
             {
-                address_balance_list.Add(addr.ToString(), IxianHandler.getWalletBalance(addr).ToString());
+                ExtendedAddress ea = new ExtendedAddress(addr, CoreConfig.defaultPaymentAddressMode, null);
+                address_balance_list.Add(ea.ToString(), IxianHandler.getWalletBalance(addr).ToString());
             }
 
             return new JsonResponse { result = address_balance_list, error = error };
