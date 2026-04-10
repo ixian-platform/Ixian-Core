@@ -31,4 +31,4 @@ jobs:
       run: dotnet build
 
     - name: Running Unit Tests
-      run: dotnet test IXICore.sln --verbosity normal
+      run: dotnet test IXICore.sln -l "console;verbosity=detailed" -v:m
