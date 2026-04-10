@@ -184,7 +184,7 @@ namespace IXICore.Utils
                     Logging.info("Shutting down...");
                     Logging.flush();
 
-                    IxianHandler.shutdown();
+                    IxianHandler.requestShutdown();
                     
                     // Wait (max 5 seconds) for everything to die
                     DateTime waitStart = DateTime.Now;

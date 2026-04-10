@@ -279,7 +279,7 @@ namespace IXICore.RegNames
                 if (rewardPool < 0)
                 {
                     Logging.error("Fatal error: Reward pool is less than zero.");
-                    IxianHandler.shutdown();
+                    IxianHandler.requestShutdown();
                     throw new Exception("Reward pool is less than zero.");
                 }
                 return rewardPool;

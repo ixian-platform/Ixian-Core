@@ -283,6 +283,11 @@ namespace IXICore.Meta
             handlerClass.parseProtocolMessage(code, data, endpoint);
         }
 
+        public static void requestShutdown()
+        {
+            forceShutdown = true;
+        }
+
         public static void shutdown()
         {
             status = NodeStatus.stopping;
