@@ -638,8 +638,7 @@ namespace IXICore.Storage
         {
             if (!running)
             {
-                Logging.warn("Requested write account file but local storage is not running.");
-                return;
+                throw new Exception("Cannot request write messages, local storage is not running.");
             }
             lock (writeMessagesRequests)
             {
