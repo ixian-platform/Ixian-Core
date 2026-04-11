@@ -20,8 +20,8 @@ namespace IXICore.Inventory
     {
         transaction = 0,
         block = 1,
-        [Obsolete("Use blockSignature2 instead")]
-        blockSignature = 2,
+        //[Obsolete("Use blockSignature2 instead")]
+        //blockSignature = 2,
         keepAlive = 3,
         blockSignature2 = 4
     }
