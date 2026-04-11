@@ -281,6 +281,28 @@ namespace UnitTests
             Assert.IsTrue(original.RoutingAddress.SequenceEqual(restored.RoutingAddress));
         }
 
+
+        [TestMethod]
+        public void ToString_WithPrimaryFlagAndTag_ReturnValidBase58String()
+        {
+            // Arrange
+            var extAddr = new ExtendedAddress(_testAddress, AddressPaymentFlag.Primary, _testTag);
+
+            // Act
+            var base58String = extAddr.ToString();
+
+            // Assert
+            Assert.IsNotNull(base58String);
+            Assert.IsTrue(base58String.Length > 0);
+            Assert.IsTrue(base58String.Contains("_"));
+
+            var extAddrFromString = new ExtendedAddress(base58String);
+            Assert.AreEqual(AddressPaymentFlag.Primary, extAddrFromString.Flag);
+            Assert.IsTrue(extAddrFromString.PaymentAddress.SequenceEqual(_testAddress));
+            Assert.IsTrue(extAddrFromString.RoutingAddress.SequenceEqual(_testAddress));
+            Assert.IsTrue(extAddrFromString.Tag.SequenceEqual(_testTag));
+        }
+
         [TestMethod]
         public void ToString_WithPrimaryFlag_ReturnValidBase58String()
         {
@@ -293,7 +315,10 @@ namespace UnitTests
             // Assert
             Assert.IsNotNull(base58String);
             Assert.IsTrue(base58String.Length > 0);
-            Assert.IsTrue(base58String.Contains("_"));
+            Assert.IsFalse(base58String.Contains("_"));
+
+            var simpleAddress = new Address(base58String);
+            Assert.IsTrue(simpleAddress.SequenceEqual(_testAddress));
         }
 
         [TestMethod]
