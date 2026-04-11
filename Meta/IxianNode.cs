@@ -483,7 +483,7 @@ namespace IXICore.Meta
             return handlerClass.getTimeSinceLastBlock();
         }
 
-        public static bool addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction)
+        public static bool addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction, ulong appliedBlockNum = 0)
         {
             ActivityObject activity;
             ActivityType type;
@@ -493,6 +493,12 @@ namespace IXICore.Meta
             Address primary_address = transaction.pubKey;
 
             ActivityStatus status = ActivityStatus.Pending;
+            ulong applied = transaction.applied;
+            if (appliedBlockNum > 0)
+            {
+                status = ActivityStatus.Final;
+                applied = appliedBlockNum;
+            }
 
             if (IxianHandler.isMyAddress(primary_address))
             {
@@ -518,7 +524,7 @@ namespace IXICore.Meta
                                 value,
                                 transaction.timeStamp,
                                 status,
-                                transaction.applied,
+                                applied,
                                 transaction);
                 return activityStorage.insertActivity(activity);
             }
@@ -548,7 +554,7 @@ namespace IXICore.Meta
                                                           transaction.toList[address].amount,
                                                           transaction.timeStamp,
                                                           status,
-                                                          transaction.applied,
+                                                          applied,
                                                           transaction);
                             return activityStorage.insertActivity(activity);
                         }
