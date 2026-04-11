@@ -198,6 +198,12 @@ namespace IXICore
         /// <returns>Textual representation of the address.</returns>
         public override string ToString()
         {
+            if (Flag == AddressPaymentFlag.Primary
+                && Tag == null)
+            {
+                return PaymentAddress.ToString();
+            }
+
             var extendedDataBytes = GetExtendedData(true);
             return PaymentAddress.ToString() + _extensionDelimiter + Base58Check.Base58CheckEncoding.EncodePlain(extendedDataBytes);
         }

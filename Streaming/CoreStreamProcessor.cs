@@ -470,7 +470,8 @@ namespace IXICore.Streaming
         public virtual ReceiveDataResponse? receiveData(byte[] bytes, RemoteEndpoint endpoint, bool fireLocalNotification = true, bool alert = true)
         {
             if (!running
-                || IxianHandler.status == NodeStatus.stopping)
+                || IxianHandler.status == NodeStatus.stopping
+                || IxianHandler.status == NodeStatus.stopped)
             {
                 return null;
             }
@@ -634,7 +635,7 @@ namespace IXICore.Streaming
                                 break;
 
                             case SpixiMessageCode.chat:
-                                sendReceivedConfirmation(friend, sender_address, message.id, channel);
+                                // do not send received confirmation until message is processed
                                 break;
 
                             default:

@@ -160,6 +160,11 @@ namespace IXICore.Streaming
 
         public static FriendMessage? addMessageWithType(byte[]? id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
+            if (IxianHandler.status == NodeStatus.stopping
+                || IxianHandler.status == NodeStatus.stopped)
+            {
+                throw new Exception("Node is stopping or stopped, cannot add message.");
+            }
             Friend? friend = getFriend(wallet_address);
             if(friend == null)
             {
