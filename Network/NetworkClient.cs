@@ -95,7 +95,9 @@ namespace IXICore.Network
             try
             {
                 totalReconnects++;
-                if (!tcpClient.ConnectAsync(hostname, port).Wait(5000))
+                await tcpClient.ConnectAsync(hostname, port).WaitAsync(TimeSpan.FromSeconds(5));
+
+                if (!tcpClient.Connected)
                 {
                     Logging.info("Network client connection to {0}:{1} has failed.", hostname, port);
                     tcpClient.Close();
