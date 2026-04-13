@@ -28,13 +28,16 @@ namespace IXICore.Utils
             _list = new LinkedList<T>();
         }
 
-        public LinkedHashSet(HashSet<T> source, IEqualityComparer<T>? comparer = null)
+        public LinkedHashSet(IEnumerable<T> source, IEqualityComparer<T>? comparer = null)
         {
             _map = new Dictionary<T, LinkedListNode<T>>(comparer);
             _list = new LinkedList<T>();
 
             foreach (var item in source)
             {
+                if (_map.ContainsKey(item))
+                    continue;
+
                 var node = _list.AddLast(item);
                 _map.Add(item, node);
             }
