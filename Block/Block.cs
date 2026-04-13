@@ -76,7 +76,7 @@ namespace IXICore
         /// <summary>
         /// The list of transactions which should act on the WalletState from the previous block to produce the WalletState for this block.
         /// </summary>
-        public HashSet<byte[]> transactions = new HashSet<byte[]>(new ByteArrayComparer());
+        public LinkedHashSet<byte[]> transactions = new LinkedHashSet<byte[]>(new ByteArrayComparer());
 
         /// <summary>
         /// The list of Master Node signatures which enable the Ixian Consensus algorithm.
@@ -157,7 +157,7 @@ namespace IXICore
         /// <summary>
         ///  Checksum of the previous superblock - used only in superblock functionality.
         /// </summary>
-        public byte[] lastSuperBlockChecksum = null;
+        public byte[]? lastSuperBlockChecksum = null;
         /// <summary>
         ///  Block height of the previous superblock - used only in superblock functionality.
         /// </summary>
@@ -170,7 +170,7 @@ namespace IXICore
         ///  This field is not included in the block checksum, nor is it transmitted over the network. Master Nodes fill this information for themselves from the
         ///  special PoW-Solution transaction types in the TransactionPool.
         /// </remarks>
-        public byte[] powField = null;
+        public byte[]? powField = null;
 
 
         /// <summary>
@@ -209,7 +209,7 @@ namespace IXICore
         {
             version = BlockVer.v0;
             blockNum = 0;
-            transactions = new HashSet<byte[]>(new ByteArrayComparer());
+            transactions = new LinkedHashSet<byte[]>(new ByteArrayComparer());
             initPITTree();
         }
 

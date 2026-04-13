@@ -276,11 +276,7 @@ namespace IXICore
         /// <returns>True, if the Wallet may be safely deleted from WalletState.</returns>
         public bool isEmptyWallet()
         {
-            // TODO TODO Omega - delete 0 balance MS wallet?
-            return (balance.getAmount() == 0 // if wallets have any balance they may not be deleted
-                && type == WalletType.Normal  // Multisig wallets may not be deleted
-                );
-
+            return balance.getAmount() == 0;
         }
     }
 }

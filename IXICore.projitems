@@ -131,6 +131,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Utils\IxiNumber.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\IxiUtils.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\KDTable.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Utils\LinkedHashSet.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\MemoryInfoProvider.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\Mnemonics.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Utils\PrefixIndexedTree.cs" />
