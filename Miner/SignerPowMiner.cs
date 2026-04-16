@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -463,5 +463,46 @@ namespace IXICore.Miner
         {
             return GetSolutions(fromBlockHeight, toBlockHeight).OrderByDescending(x => x.difficulty).FirstOrDefault();
         }
+
+        public (byte[] challenge, IxiNumber minDifficulty, ulong blockHeight) GetChallenge()
+        {
+            if (currentBlockHeight == 0)
+            {
+                return (null, 0, 0);
+            }
+
+            var lastSolution = solutions.Values.OrderByDescending(x => x.blockNum).FirstOrDefault();
+            if (lastSolution != null)
+            {
+                return (PrepareChallenge(lastSolution.blockNum, IxianHandler.getBlockHash(lastSolution.blockNum), lastSolution.keyPair, Array.Empty<byte>()), solvingDifficulty, lastSolution.blockNum);
+            }
+            return (null, 0, 0);
+        }
+
+        public IxiNumber ProcessExternalSolution(ulong blockHeight, byte[] nonce)
+        {
+            if (nonce == null || nonce.Length <= 1)
+            {
+                return 0;
+            }
+
+            if (!solutions.TryGetValue(blockHeight, out var solution))
+            {
+                return 0;
+            }
+
+            byte[] challengeWithNonce = PrepareChallenge(blockHeight, IxianHandler.getBlockHash(blockHeight), solution.keyPair, nonce);
+            byte[] hash = CryptoManager.lib.sha3_512sq(challengeWithNonce);
+            var status = ProcessSolution(hash, challengeWithNonce, nonce.Length, solvingDifficulty, solution.blockNum, solution.keyPair);
+
+            if (status.solution != null
+                && blockHeight > lastFoundBlockHeight)
+            {
+                lastFoundBlockHeight = blockHeight;
+            }
+
+            return status.difficulty;
+        }
+
     }
 }
