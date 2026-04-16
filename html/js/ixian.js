@@ -330,11 +330,11 @@ function getStatus() {
             var warning_bar = document.getElementById("warning_bar");
             warning_bar.style.display = "block";
 
-            if (sync_status == "Synchronizing") {
+            if (sync_status == "Synchronizing"
+                || data["result"]["Network Block Height"] - data["result"]["Block Height"] > 10) {
                 // Show the syncbar
                 const percent = (data["result"]["Block Height"] * 100 / data["result"]["Network Block Height"]).toFixed(2);
                 showSyncProgress(percent, "Synchronizing the blockchain, block #" + data["result"]["Block Height"] + " / " + data["result"]["Network Block Height"] + ".")
-
             } else if (sync_status == "ErrorForkedViaUpgrade") {
                 warningOtherLabel.innerHTML = "Network has been upgraded, please download a newer version of Ixian DLT.";
             } else if (sync_status == "ErrorLongTimeNoBlock") {
