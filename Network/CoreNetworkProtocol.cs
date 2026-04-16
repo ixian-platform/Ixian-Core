@@ -1004,7 +1004,7 @@ namespace IXICore
             }
         }
 
-        public static void broadcastGetKeepAlives(List<InventoryItemKeepAlive> ka_list, RemoteEndpoint endpoint)
+        public static void broadcastGetKeepAlives(List<InventoryItemKeepAlive2> ka_list, RemoteEndpoint endpoint)
         {
             int ka_count = ka_list.Count;
             int max_ka_per_chunk = CoreConfig.maximumKeepAlivesPerChunk;
@@ -1027,7 +1027,7 @@ namespace IXICore
 
                         for (int j = 0; j < next_ka_count && i < ka_count; j++)
                         {
-                            InventoryItemKeepAlive ka = ka_list[i];
+                            InventoryItemKeepAlive2 ka = ka_list[i];
                             i++;
 
                             if (ka == null)

@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -72,7 +72,7 @@ namespace IXICore.Utils
         }
 
         // bytes extension
-        public static byte[] GetIxiBytes(this byte[]? value)
+        public static byte[] ToIxiBytes(this byte[]? value)
         {
             if (value == null)
             {
@@ -81,9 +81,15 @@ namespace IXICore.Utils
 
             byte[] lenBytes = value.Length.GetIxiVarIntBytes();
             byte[] bytes = new byte[lenBytes.Length + value.Length];
-            Array.Copy(lenBytes, 0, bytes, 0, lenBytes.Length);
-            Array.Copy(value, 0, bytes, lenBytes.Length, value.Length);
+            Buffer.BlockCopy(lenBytes, 0, bytes, 0, lenBytes.Length);
+            Buffer.BlockCopy(value, 0, bytes, lenBytes.Length, value.Length);
             return bytes;
+        }
+
+        // Obsolete, use ToIxiBytes(), left here for compatibility purposes
+        public static byte[] GetIxiBytes(this byte[]? value)
+        {
+            return ToIxiBytes(value);
         }
 
         public static (byte[] bytes, int bytesRead) ReadIxiBytes(this byte[] value, int offset)
@@ -105,7 +111,7 @@ namespace IXICore.Utils
             }
 
             byte[] bytes = new byte[len.num];
-            Array.Copy(value, offset, bytes, 0, (int)len.num);
+            Buffer.BlockCopy(value, offset, bytes, 0, (int)len.num);
             offset += (int)len.num;
             bytesRead += (int)len.num;
 
@@ -120,7 +126,7 @@ namespace IXICore.Utils
             }
 
             byte[] newObj = new byte[source.Length];
-            Array.Copy(source, newObj, source.Length);
+            Buffer.BlockCopy(source, 0, newObj, 0, source.Length);
             return newObj;
         }
 

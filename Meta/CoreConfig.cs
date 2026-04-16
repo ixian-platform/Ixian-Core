@@ -182,7 +182,7 @@ namespace IXICore
         /// <summary>
         /// Maximum number of items to be read from inventory.
         /// </summary>
-        public static int maxInventoryItems = 500;
+        public static int maxInventoryItems = 10000;
 
         /// <summary>
         /// Interval at which to send inventory packets in seconds.

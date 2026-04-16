@@ -123,7 +123,7 @@ namespace IXICore.Streaming
             }
         }
 
-        public void setLastMessage(FriendMessage msg, int channel)
+        public void setLastMessage(FriendMessage? msg, int channel)
         {
             lastMessage = msg == null ? null : new FriendMessage(msg.getBytes());
             lastMessageChannel = channel;
@@ -521,6 +521,9 @@ namespace IXICore.Streaming
         // Deletes the history file and flushes the temporary history
         public bool deleteHistory()
         {
+            metaData.setLastMessage(null, 0);
+            metaData.setUnreadMessageCount(0);
+            saveMetaData();
 
             if (IxianHandler.localStorage.deleteMessages(walletAddress) == false)
                 return false;

@@ -575,14 +575,14 @@ namespace IXICore.Network
                 itemsToSend = inventory.GetRange(0, takeCount);
                 inventory.RemoveRange(0, takeCount);
 
-                if (inventory.Count > CoreConfig.maxInventoryItems)
+                if (inventory.Count > 0)
                 {
                     morePending = true;
                 }
             }
 
             // Rough size estimate to reduce reallocations
-            int estimatedSize = 5 + itemsToSend.Count * 64;
+            int estimatedSize = 3 + itemsToSend.Count * 140;
             byte[] buffer = new byte[estimatedSize];
             int offset = 0;
 
@@ -593,13 +593,13 @@ namespace IXICore.Network
             {
                 byte[] itemBytes = item.getBytes();
 
-                offset += IxiVarInt.WriteIxiVarInt(buffer.AsSpan(offset), itemBytes.Length);
-
                 // Ensure capacity
-                if (offset + itemBytes.Length > buffer.Length)
+                if (offset + itemBytes.Length + 3 > buffer.Length)
                 {
-                    Array.Resize(ref buffer, Math.Max(buffer.Length * 2, offset + itemBytes.Length));
+                    Array.Resize(ref buffer, Math.Max(buffer.Length * 2, offset + itemBytes.Length + 3));
                 }
+
+                offset += IxiVarInt.WriteIxiVarInt(buffer.AsSpan(offset), itemBytes.Length);
 
                 itemBytes.CopyTo(buffer, offset);
                 offset += itemBytes.Length;

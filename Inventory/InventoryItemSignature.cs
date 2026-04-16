@@ -1,4 +1,4 @@
-﻿// Copyright (C) 2017-2025 Ixian
+﻿// Copyright (C) 2017-2026 Ixian
 // This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
@@ -81,8 +81,8 @@ namespace IXICore.Inventory
         static public byte[] getHash(byte[] solution, byte[] block_hash)
         {
             byte[] solution_block_hash = new byte[solution.Length + block_hash.Length];
-            Array.Copy(solution, solution_block_hash, solution.Length);
-            Array.Copy(block_hash, 0, solution_block_hash, solution.Length, block_hash.Length);
+            Buffer.BlockCopy(solution, 0, solution_block_hash, 0, solution.Length);
+            Buffer.BlockCopy(block_hash, 0, solution_block_hash, solution.Length, block_hash.Length);
             return CryptoManager.lib.sha3_512sqTrunc(solution_block_hash);
         }
     }

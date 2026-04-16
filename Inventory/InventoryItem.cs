@@ -22,8 +22,10 @@ namespace IXICore.Inventory
         block = 1,
         //[Obsolete("Use blockSignature2 instead")]
         //blockSignature = 2,
+        [Obsolete("Use keepAlive2 instead")]
         keepAlive = 3,
-        blockSignature2 = 4
+        blockSignature2 = 4,
+        keepAlive2 = 5,
     }
 
     public class InventoryItem
@@ -58,17 +60,11 @@ namespace IXICore.Inventory
 
         virtual public byte[] getBytes()
         {
-            using (MemoryStream m = new MemoryStream())
-            {
-                using (BinaryWriter writer = new BinaryWriter(m))
-                {
-                    writer.WriteIxiVarInt((int)type);
-
-                    writer.WriteIxiVarInt(hash.Length);
-                    writer.Write(hash);
-                }
-                return m.ToArray();
-            }
+            Span<byte> bytes = new byte[hash.Length + 2];
+            int offset = IxiVarInt.WriteIxiVarInt(bytes, (int)type);
+            byte[] hashIxiBytes = hash.ToIxiBytes();
+            hashIxiBytes.CopyTo(bytes.Slice(offset));
+            return bytes.ToArray();
         }
     }
 }

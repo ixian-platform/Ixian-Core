@@ -578,7 +578,7 @@ namespace IXICore
                             continue;
                         }
 
-                        KeepAlive ka = generateKeepAlive(force_generate_ka);
+                        KeepAlive? ka = generateKeepAlive(force_generate_ka);
 
                         if (ka == null)
                         {
@@ -589,9 +589,9 @@ namespace IXICore
 
                         byte[] ka_bytes = ka.getBytes();
 
-                        Address address = null;
+                        Address address;
                         long last_seen = 0;
-                        byte[] device_id = null;
+                        byte[] device_id;
                         char node_type;
 
                         // Update self presence
@@ -707,7 +707,7 @@ namespace IXICore
                         return false;
                     }
 
-                    PresenceAddress pa = listEntry.addresses.Find(x => x.device.SequenceEqual(ka.deviceId));
+                    PresenceAddress? pa = listEntry.addresses.Find(x => x.device.SequenceEqual(ka.deviceId));
 
                     if (pa != null)
                     {

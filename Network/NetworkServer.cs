@@ -772,7 +772,7 @@ namespace IXICore.Network
             return true;
         }
 
-        public static bool addToInventorySubscribed(InventoryItemKeepAlive item, RemoteEndpoint skip_endpoint)
+        public static bool addToInventorySubscribed(InventoryItemKeepAlive2 item, RemoteEndpoint skip_endpoint)
         {
             lock (connectedClients)
             {

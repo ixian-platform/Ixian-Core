@@ -33,7 +33,9 @@ namespace IXICore.Inventory
                 case InventoryItemTypes.block:
                     return handleBlock(item, endpoint);
                 case InventoryItemTypes.keepAlive:
-                    return handleKeepAlive(item, endpoint);
+                    return false;
+                case InventoryItemTypes.keepAlive2:
+                    return handleKeepAlive2(item, endpoint);
                 case InventoryItemTypes.transaction:
                     return CoreProtocolMessage.broadcastGetTransaction(item.hash, 0, endpoint);
                 default:
@@ -60,15 +62,15 @@ namespace IXICore.Inventory
             return false;
         }
 
-        private bool handleKeepAlive(InventoryItem item, RemoteEndpoint endpoint)
+        private bool handleKeepAlive2(InventoryItem item, RemoteEndpoint endpoint)
         {
             if (endpoint == null)
             {
                 return false;
             }
-            InventoryItemKeepAlive iika = (InventoryItemKeepAlive)item;
+            InventoryItemKeepAlive2 iika = (InventoryItemKeepAlive2)item;
             byte[] address = iika.address.addressNoChecksum;
-            Presence p = PresenceList.getPresenceByAddress(iika.address);
+            Presence? p = PresenceList.getPresenceByAddress(iika.address);
             if (p == null)
             {
                 CoreProtocolMessage.broadcastGetPresence(address, endpoint);
@@ -83,10 +85,10 @@ namespace IXICore.Inventory
                     byte[] device_len_bytes = ((ulong)iika.deviceId.Length).GetIxiVarIntBytes();
                     byte[] data = new byte[1 + address_len_bytes.Length + address.Length + device_len_bytes.Length + iika.deviceId.Length];
                     data[0] = 1;
-                    Array.Copy(address_len_bytes, 0, data, 1, address_len_bytes.Length);
-                    Array.Copy(address, 0, data, 1 + address_len_bytes.Length, address.Length);
-                    Array.Copy(device_len_bytes, 0, data, 1 + address_len_bytes.Length + address.Length, device_len_bytes.Length);
-                    Array.Copy(iika.deviceId, 0, data, 1 + address_len_bytes.Length + address.Length + device_len_bytes.Length, iika.deviceId.Length);
+                    Buffer.BlockCopy(address_len_bytes, 0, data, 1, address_len_bytes.Length);
+                    Buffer.BlockCopy(address, 0, data, 1 + address_len_bytes.Length, address.Length);
+                    Buffer.BlockCopy(device_len_bytes, 0, data, 1 + address_len_bytes.Length + address.Length, device_len_bytes.Length);
+                    Buffer.BlockCopy(iika.deviceId, 0, data, 1 + address_len_bytes.Length + address.Length + device_len_bytes.Length, iika.deviceId.Length);
                     endpoint.sendData(ProtocolMessageCode.getKeepAlives, data);
                     return true;
                 }
