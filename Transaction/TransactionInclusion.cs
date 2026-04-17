@@ -72,6 +72,7 @@ namespace IXICore
         public void transactionVerified(Transaction tx);
         public void transactionRejected(Transaction tx);
         public void transactionExpired(Transaction tx);
+        public void transactionCannotVerify(Transaction tx);
         public void blockReorg(Block blockHeader);
     }
 
@@ -1079,6 +1080,7 @@ namespace IXICore
         private void processOutgoingTransactions()
         {
             ulong last_block_height = IxianHandler.getLastBlockHeight();
+            ulong lowest_block_height = blockStorage.getLowestBlockInStorage();
             lock (pitCache)
             {
                 long cur_time = Clock.getTimestamp();
@@ -1094,6 +1096,14 @@ namespace IXICore
                     }
 
                     Transaction t = entry.transaction;
+
+                    if (entry.transaction.blockHeight < lowest_block_height)
+                    {
+                        Logging.error("Error verifying the transaction {0}, block height lower than our local block storage.", t.getTxIdString());
+                        transactionInclusionCallbacks.transactionCannotVerify(t);
+                        PendingTransactions.remove(t.id);
+                        continue;
+                    }
 
                     // if transaction expired, remove it from pending transactions
                     if (last_block_height > ConsensusConfig.getRedactedWindowSize()
@@ -1425,7 +1435,7 @@ namespace IXICore
             }
 
             Logging.warn("Recovery mode activated for block #{0} {1}, missing required sigs:{2}, missing sigs: {3}, cur time: {4}, block time: {5}, total signer difficulty: {6}, requiredSignerDifficultyAdjusted: {7}.",
-                curBlock.blockNum, Crypto.hashToString(curBlock.calculateChecksum()), missingRequiredSigs, missingSigs, Clock.getNetworkTimestamp(), curBlock.timestamp, totalSignerDifficulty, requiredSignerDifficulty);
+                curBlock.blockNum, Crypto.hashToString(curBlock.blockChecksum), missingRequiredSigs, missingSigs, Clock.getNetworkTimestamp(), curBlock.timestamp, totalSignerDifficulty, requiredSignerDifficulty);
 
             return true;
         }

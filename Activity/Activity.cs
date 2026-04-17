@@ -59,7 +59,8 @@ namespace IXICore.Activity
         Final = 2,
         Expired = 3,
         Reverted = 4,
-        Rejected = 5
+        Rejected = 5,
+        Unknown = 6
     }
 
     public class AddressConverter : JsonConverter<Address>
