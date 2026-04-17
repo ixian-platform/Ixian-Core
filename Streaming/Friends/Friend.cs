@@ -677,7 +677,7 @@ namespace IXICore.Streaming
                 return false;
             }
 
-            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set read indicator, message does not exist");
@@ -714,7 +714,7 @@ namespace IXICore.Streaming
             {
                 return false;
             }
-            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set received indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
@@ -747,7 +747,7 @@ namespace IXICore.Streaming
             {
                 return false;
             }
-            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
@@ -779,7 +779,7 @@ namespace IXICore.Streaming
             {
                 return false;
             }
-            FriendMessage? msg = tmp_messages.Find(x => x.id.SequenceEqual(id));
+            FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
                 Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
@@ -865,7 +865,7 @@ namespace IXICore.Streaming
                 {
                     return null;
                 }
-                return tmp_messages.Find(x => x.id.SequenceEqual(session_id));
+                return tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(session_id));
             }
         }
 
@@ -877,7 +877,7 @@ namespace IXICore.Streaming
                 return false;
             }
 
-            var fm = tmp_messages.Find(x => x.id.SequenceEqual(message_id));
+            var fm = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(message_id));
             if(fm == null)
             {
                 return false;
@@ -922,7 +922,7 @@ namespace IXICore.Streaming
                 {
                     return null;
                 }
-                return tmp_messages.Find(x => x.id.SequenceEqual(msg_id));
+                return tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(msg_id));
             }
             catch (Exception e)
             {
@@ -945,7 +945,7 @@ namespace IXICore.Streaming
                 {
                     return false;
                 }
-                FriendMessage? fm = tmp_messages.Find(x => x.id.SequenceEqual(msg_id));
+                FriendMessage? fm = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(msg_id));
                 if (fm != null)
                 {
                     fm.message = "";
@@ -989,7 +989,7 @@ namespace IXICore.Streaming
                 {
                     return false;
                 }
-                FriendMessage? fm = tmp_messages.Find(x => x.id.SequenceEqual(reaction_data.msgId));
+                FriendMessage? fm = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(reaction_data.msgId));
                 if (fm != null)
                 {
                     if (fm.reactions.Count >= 10)

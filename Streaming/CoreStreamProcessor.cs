@@ -1777,26 +1777,24 @@ namespace IXICore.Streaming
         protected bool handleRequestFundsResponse(byte[] id, Address sender_wallet, string msg_id_tx_id)
         {
             // Retrieve the corresponding contact
-            Friend friend = FriendList.getFriend(sender_wallet);
+            Friend? friend = FriendList.getFriend(sender_wallet);
             if (friend == null)
             {
                 return false;
             }
 
             string[] msg_id_tx_id_split = msg_id_tx_id.Split(':');
-            byte[] msg_id = null;
-            string tx_id = null;
+            byte[] msg_id;
             if (msg_id_tx_id_split.Length == 2)
             {
                 msg_id = Crypto.stringToHash(msg_id_tx_id_split[0]);
-                tx_id = msg_id_tx_id_split[1];
             }
             else
             {
                 msg_id = Crypto.stringToHash(msg_id_tx_id);
             }
 
-            FriendMessage msg = friend.getMessages(0).Find(x => x.id.SequenceEqual(msg_id));
+            FriendMessage? msg = friend.getMessages(0)?.Find(x => x.id != null && x.id.SequenceEqual(msg_id));
             if (msg == null)
             {
                 return false;
@@ -2987,23 +2985,28 @@ namespace IXICore.Streaming
         {
             foreach (ExtendedAddress extendedAddress in extendedAddresses)
             {
-                Friend? friend = FriendList.getFriend(extendedAddress.RoutingAddress);
-                if (friend == null)
-                {
-                    var p = PresenceList.getPresenceByAddress(extendedAddress.RoutingAddress);
-                    friend = FriendList.addFriend(FriendType.Payment, FriendState.Unknown, extendedAddress.RoutingAddress, p?.pubkey, extendedAddress.RoutingAddress.ToString(), null, null, 0, false);
-                    if (p != null)
-                    {
-                        // TODO use actual wallet address once Presence hostname contains such address
-                        friend.relayNode = new Peer(p.addresses.First().address, null, p.addresses.First().lastSeenTime, 0, 0, 0);
-                        friend.updatedStreamingNodes = friend.relayNode.lastSeen;
-                        friend.lastSeenTime = friend.relayNode.lastSeen;
-                        friend.online = true;
-                    }
-                    friend.save();
-                }
-                transactionSend(friend, tx, requestId);
+                transactionSend(tx, extendedAddress, requestId);
             }
+        }
+
+        public static void transactionSend(Transaction tx, ExtendedAddress extendedAddress, byte[]? requestId)
+        {
+            Friend? friend = FriendList.getFriend(extendedAddress.RoutingAddress);
+            if (friend == null)
+            {
+                var p = PresenceList.getPresenceByAddress(extendedAddress.RoutingAddress);
+                friend = FriendList.addFriend(FriendType.Payment, FriendState.Unknown, extendedAddress.RoutingAddress, p?.pubkey, extendedAddress.RoutingAddress.ToString(), null, null, 0, false);
+                if (p != null)
+                {
+                    // TODO use actual wallet address once Presence hostname contains such address
+                    friend.relayNode = new Peer(p.addresses.First().address, null, p.addresses.First().lastSeenTime, 0, 0, 0);
+                    friend.updatedStreamingNodes = friend.relayNode.lastSeen;
+                    friend.lastSeenTime = friend.relayNode.lastSeen;
+                    friend.online = true;
+                }
+                friend.save();
+            }
+            transactionSend(friend, tx, requestId);
         }
 
         public static void transactionSend(Friend friend, Transaction tx, byte[]? requestId)
