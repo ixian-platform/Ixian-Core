@@ -165,12 +165,17 @@ function getActivity() {
                 paymentsEl.innerHTML += document.getElementById("templates").getElementsByClassName("payment")[0].outerHTML;
                 var htmlEl = paymentsEl.lastElementChild;
 
-                htmlEl.getElementsByClassName("pdesc")[0].innerHTML = addressListToString(data["result"][i]["addressList"], false);
+                var type = data["result"][i]["type"];
+                if (type == 101 || type == 400) {
+                    htmlEl.getElementsByClassName("pdesc")[0].innerHTML = addressListToString(data["result"][i]["toAddressList"], false);
+                } else {
+                    htmlEl.getElementsByClassName("pdesc")[0].innerHTML = addressListToString(data["result"][i]["fromAddressList"], false);
+                }
 
-                data["result"][i]["addressList"] = addressListToString(data["result"][i]["addressList"], true);
+                data["result"][i]["fromAddressList"] = addressListToString(data["result"][i]["fromAddressList"], true);
+                data["result"][i]["toAddressList"] = addressListToString(data["result"][i]["toAddressList"], true);
                 htmlEl.getElementsByClassName("pdetails")[0].innerHTML = jsonToHtml(data["result"][i]);
 
-                var type = data["result"][i]["type"];
                 if (type == 100) {
                     htmlEl.className += " received";
                     htmlEl.getElementsByClassName("pamount")[0].innerHTML = data["result"][i]["value"];

@@ -35,6 +35,7 @@ namespace IXICore.Activity
         private StorageIndex? idxActivityId;
         private StorageIndex? idxBlockHeightActivityId;
         private StorageIndex? idxStatusActivityId;
+        private StorageIndex? idxAddressActivityId;
 
         private readonly object rockLock = new object();
 
@@ -50,12 +51,15 @@ namespace IXICore.Activity
 
         public ulong minBlockNumber { get; private set; }
         public ulong maxBlockNumber { get; private set; }
-        public int dbVersion { get; private set; }
+        public int dbVersion { get; private set; } = 1;
         public bool isOpen
         {
             get
             {
-                return database != null;
+                lock (rockLock)
+                {
+                    return database != null;
+                }
             }
         }
         public DateTime lastUsedTime { get; private set; }
@@ -68,7 +72,6 @@ namespace IXICore.Activity
         {
             minBlockNumber = 0;
             maxBlockNumber = 0;
-            dbVersion = 0;
 
             this.dbPath = dbPath;
             this.blockCache = blockCache;
@@ -111,7 +114,7 @@ namespace IXICore.Activity
             metaBbto.SetBlockSize(4 * 1024);
             metaBbto.SetCacheIndexAndFilterBlocks(true);
             metaBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-            metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
+            metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(10, false));
             metaBbto.SetWholeKeyFiltering(true);
             metaBbto.SetFormatVersion(6);
 
@@ -126,8 +129,8 @@ namespace IXICore.Activity
                     },
                     { "meta", new ColumnFamilyOptions()
                         .SetBlockBasedTableFactory(metaBbto)
-                        .OptimizeForPointLookup(128)
-                        .SetWriteBufferSize(64UL << 10)
+                        .OptimizeForPointLookup(64)
+                        .SetWriteBufferSize(128UL << 10)
                         .SetMaxWriteBufferNumber(1)
                     },
                     { "raw_tx", new ColumnFamilyOptions()
@@ -156,6 +159,13 @@ namespace IXICore.Activity
                         .SetMaxWriteBufferNumber(2)
                         .SetMinWriteBufferNumberToMerge(1)
                         .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(2))
+                    },
+                    { "index_address_activity_id", new ColumnFamilyOptions()
+                        .SetBlockBasedTableFactory(activityBbto)
+                        .SetWriteBufferSize(1UL << 20)
+                        .SetMaxWriteBufferNumber(2)
+                        .SetMinWriteBufferNumberToMerge(1)
+                        .SetPrefixExtractor(SliceTransform.CreateFixedPrefix(16))
                     }
                 };
 
@@ -168,25 +178,70 @@ namespace IXICore.Activity
 
             var dbOptions = opts.dbOptions;
             dbOptions.SetCompression(RocksDbSharp.Compression.Lz4)
-                     .SetWriteBufferSize(4UL << 20)
-                     .SetMaxWriteBufferNumber(2)
-                     .SetTargetFileSizeBase(32UL << 20)
                      .SetMaxBackgroundCompactions(1)
                      .SetMaxBackgroundFlushes(1)
                      .IncreaseParallelism(1)
-                     .SetBytesPerSync(1UL << 20)
+                     .SetTargetFileSizeBase(8UL << 20)
+                     .SetTargetFileSizeMultiplier(2)
+                     .SetLevelCompactionDynamicLevelBytes(false)
+
+                     .SetUseDirectReads(false)
+                     .SetUseDirectIoForFlushAndCompaction(false)
                      .SetCompactionReadaheadSize(2UL << 20)
-                     .SetMaxOpenFiles(60);
+                     .SetBytesPerSync(1UL << 20)
+
+                     .SetUseFsync(0)
+                     .SetWALTtlSeconds(0)
+                     .SetWALSizeLimitMB(64)
+                     .SetMaxTotalWalSize(64UL << 20)
+
+                     .SetMaxOpenFiles(30)
+
+                     .SetKeepLogFileNum(2)
+                     .SetMaxLogFileSize(512 << 10)
+
+                     .SetWriteBufferSize(1UL << 20)
+                     .SetMaxWriteBufferNumber(2);
 
             var columnFamilies = opts.columnFamilies;
 
+            var activityBbto = new BlockBasedTableOptions()
+                    .SetBlockCache(blockCache.Handle)
+                    .SetBlockSize(32 * 1024)
+                    .SetCacheIndexAndFilterBlocks(true)
+                    .SetPinL0FilterAndIndexBlocksInCache(true)
+                    .SetFilterPolicy(BloomFilterPolicy.Create(10, false))
+                    .SetWholeKeyFiltering(true)
+                    .SetFormatVersion(6);
+
             var activityCfOpts = columnFamilies.ToList().Find(x => x.Name == "activity");
-            activityCfOpts.Options.SetWriteBufferSize(2UL << 20)
-                                  .SetMaxWriteBufferNumber(2);
+            activityCfOpts.Options.SetBlockBasedTableFactory(activityBbto)
+                                  .SetWriteBufferSize(2UL << 20)
+                                  .SetMaxWriteBufferNumber(2)
+                                  .SetMinWriteBufferNumberToMerge(1);
 
             var rawTxCfOpts = columnFamilies.ToList().Find(x => x.Name == "raw_tx");
-            rawTxCfOpts.Options.SetWriteBufferSize(4UL << 20)
-                               .SetMaxWriteBufferNumber(2);
+            rawTxCfOpts.Options.SetBlockBasedTableFactory(activityBbto)
+                               .SetWriteBufferSize(4UL << 20)
+                               .SetMaxWriteBufferNumber(2)
+                               .SetMinWriteBufferNumberToMerge(1);
+
+            var indexTable = new BlockBasedTableOptions()
+                    .SetBlockCache(blockCache.Handle)
+                    .SetBlockSize(8 * 1024)
+                    .SetCacheIndexAndFilterBlocks(true)
+                    .SetFilterPolicy(BloomFilterPolicy.Create(8, false))
+                    .SetWholeKeyFiltering(true)
+                    .SetFormatVersion(6);
+
+            foreach (var cf in columnFamilies.Where(x => x.Name.StartsWith("index_")))
+            {
+                cf.Options
+                    .SetBlockBasedTableFactory(indexTable)
+                    .SetWriteBufferSize(512UL << 10)
+                    .SetMaxWriteBufferNumber(2)
+                    .SetMinWriteBufferNumberToMerge(1);
+            }
 
             return (dbOptions, columnFamilies);
         }
@@ -214,6 +269,7 @@ namespace IXICore.Activity
                 idxBlockHeightActivityId = new StorageIndex("index_block_height_activity_id", database);
                 idxActivityId = new StorageIndex("index_activity_id", database);
                 idxStatusActivityId = new StorageIndex("index_status_activity_id", database);
+                idxAddressActivityId = new StorageIndex("index_address_activity_id", database);
 
                 // read initial meta values
                 byte[] versionBytes = database.Get(META_KEY_DB_VERSION, metaCF);
@@ -227,13 +283,31 @@ namespace IXICore.Activity
                 {
                     try
                     {
-                        dbVersion = BinaryPrimitives.ReadInt32BigEndian(versionBytes);
+                        int tmpDbVersion = BinaryPrimitives.ReadInt32BigEndian(versionBytes);
 
-                        byte[] minBlockBytes = database.Get(META_KEY_MIN_BLOCK, metaCF);
-                        minBlockNumber = BinaryPrimitives.ReadUInt64BigEndian(minBlockBytes);
+                        if (tmpDbVersion < dbVersion)
+                        {
+                            Logging.warn("Activity Database '{0}' version '{1}' is too old, recreating.", dbPath, tmpDbVersion);
 
-                        byte[] maxBlockBytes = database.Get(META_KEY_MAX_BLOCK, metaCF);
-                        maxBlockNumber = BinaryPrimitives.ReadUInt64BigEndian(maxBlockBytes);
+                            database.DropColumnFamily("activity");
+                            database.DropColumnFamily("meta");
+                            database.DropColumnFamily("raw_tx");
+                            database.DropColumnFamily("index_block_height_activity_id");
+                            database.DropColumnFamily("index_activity_id");
+                            database.DropColumnFamily("index_status_activity_id");
+                            database.DropColumnFamily("index_address_activity_id");
+
+                            closeDatabase();
+                            openDatabase();
+                        }
+                        else
+                        {
+                            byte[] minBlockBytes = database.Get(META_KEY_MIN_BLOCK, metaCF);
+                            minBlockNumber = BinaryPrimitives.ReadUInt64BigEndian(minBlockBytes);
+
+                            byte[] maxBlockBytes = database.Get(META_KEY_MAX_BLOCK, metaCF);
+                            maxBlockNumber = BinaryPrimitives.ReadUInt64BigEndian(maxBlockBytes);
+                        }
                     }
                     catch
                     {
@@ -277,6 +351,7 @@ namespace IXICore.Activity
                 idxBlockHeightActivityId = null;
                 idxActivityId = null;
                 idxStatusActivityId = null;
+                idxAddressActivityId = null;
 
                 database.Dispose();
                 database = null;
@@ -307,6 +382,25 @@ namespace IXICore.Activity
             }
         }
 
+        private void insertAddressIndexes(ActivityObject activity, byte[] timestampTypeIdKey, WriteBatch writeBatch)
+        {
+            if (activity.fromAddressList != null && activity.fromAddressList.Count > 0)
+            {
+                foreach (var addressEntry in activity.fromAddressList)
+                {
+                    idxAddressActivityId!.addIndexEntry(addressEntry.Key.addressNoChecksum.AsSpan(0, 16), timestampTypeIdKey, Array.Empty<byte>(), writeBatch);
+                }
+            }
+
+            if (activity.toAddressList != null && activity.toAddressList.Count > 0)
+            {
+                foreach (var addressEntry in activity.toAddressList)
+                {
+                    idxAddressActivityId!.addIndexEntry(addressEntry.Key.addressNoChecksum.AsSpan(0, 16), timestampTypeIdKey, Array.Empty<byte>(), writeBatch);
+                }
+            }
+        }
+
         public bool insertActivity(ActivityObject activity)
         {
             lock (rockLock)
@@ -316,8 +410,9 @@ namespace IXICore.Activity
                     return false;
                 }
                 byte[] seedHash = activity.seedHash;
-                byte[] seed16 = seedHash.Length >= 16 ? seedHash.AsSpan(0, 16).ToArray() : seedHash;
-                if (idxActivityId!.hasKey(activity.id, seed16))
+                Span<byte> seed16 = seedHash.Length >= 16 ? seedHash.AsSpan(0, 16) : seedHash;
+                byte[]? timestampTypeIdKey = idxActivityId!.getEntry(activity.id, seed16);
+                if (timestampTypeIdKey != null && timestampTypeIdKey.Length > 0)
                 {
                     return false;
                 }
@@ -325,17 +420,28 @@ namespace IXICore.Activity
                 lastUsedTime = DateTime.Now;
                 using (WriteBatch writeBatch = new WriteBatch())
                 {
-                    byte[] timestampTypeIdKey = StorageIndex.combineKeys(Clock.getTimestampMillis().GetBytesBE(), StorageIndex.combineKeys(((short)activity.type).GetBytesBE(), activity.id));
+                    timestampTypeIdKey = StorageIndex.combineKeys(Clock.getTimestampMillis().GetBytesBE(), StorageIndex.combineKeys(((short)activity.type).GetBytesBE(), activity.id));
                     byte[] key = StorageIndex.combineKeys(seed16, timestampTypeIdKey);
                     writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_PAYLOAD, key), activity.GetBytes(), activityCF);
                     writeBatch.Put(StorageIndex.combineKeys(ACTIVITY_KEY_META, activity.id), activity.GetMetaBytes(), activityCF);
                     idxActivityId.addIndexEntry(activity.id, seed16, timestampTypeIdKey, writeBatch);
+
+                    insertAddressIndexes(activity, timestampTypeIdKey, writeBatch);
+
                     if (activity.transaction != null
                         && !database.HasKey(activity.id, rawTxCF))
                     {
                         writeBatch.Put(activity.id, activity.transaction.getBytes(false, true), rawTxCF);
                     }
-                    if (activity.status != ActivityStatus.Final)
+                    if (activity.status == ActivityStatus.Final)
+                    {
+                        if (activity.appliedBlockHeight == 0)
+                        {
+                            throw new Exception("Cannot set status to final with applied block height 0.");
+                        }
+                        idxBlockHeightActivityId!.addIndexEntry(activity.appliedBlockHeight.GetBytesBE(), activity.id, Array.Empty<byte>(), writeBatch);
+                    }
+                    else
                     {
                         idxStatusActivityId!.addIndexEntry(((short)activity.status).GetBytesBE(), activity.id, Array.Empty<byte>(), writeBatch);
                     }
@@ -659,11 +765,11 @@ namespace IXICore.Activity
             }
             lock (rockLock)
             {
+                List<ActivityObject> activities = new List<ActivityObject>();
                 if (database == null)
                 {
-                    return null;
+                    return activities;
                 }
-                List<ActivityObject> activities = new List<ActivityObject>();
                 foreach (var (indexMem, valueMem) in idxStatusActivityId!.getEntriesForKey(((short)status).GetBytesBE()))
                 {
                     var activity = getActivityById(indexMem.ToArray(), null, includeTransaction);
@@ -677,6 +783,135 @@ namespace IXICore.Activity
             }
         }
 
+        public List<ActivityObject> getActivitiesByAddress(
+            Address address,
+            ActivityType? typeFilter,
+            byte[]? fromActivityId = null,
+            int count = 50,
+            bool descending = false)
+        {
+            lock (rockLock)
+            {
+                var result = new List<ActivityObject>(count);
+
+                if (database == null)
+                    return result;
+
+                Span<byte> address16 = address.addressNoChecksum.Length >= 16 ? address.addressNoChecksum.AsSpan(0, 16) : address.addressNoChecksum;
+
+                lastUsedTime = DateTime.Now;
+
+                byte[] upperBound = StorageIndex.combineKeys(address16, oneByteFF);
+
+                // Resolve fromActivityId via secondary index
+                byte[]? exactFromKey = null;
+
+                if (fromActivityId != null && fromActivityId.Length > 0)
+                {
+                    foreach (var (_, valueMem) in idxActivityId!.getEntriesForKey(fromActivityId))
+                    {
+                        var candidateKey = StorageIndex.combineKeys(address16, valueMem.Span);
+
+                        // verify it actually exists in address index
+                        var existing = database.Get(candidateKey, idxAddressActivityId!.rocksIndexHandle);
+                        if (existing != null)
+                        {
+                            exactFromKey = candidateKey;
+                            break;
+                        }
+                    }
+                }
+
+                var ro = new ReadOptions().SetTotalOrderSeek(true);
+                if (!descending)
+                    ro.SetIterateUpperBound(upperBound);
+
+                using var it = database.NewIterator(idxAddressActivityId!.rocksIndexHandle, ro);
+
+                if (!descending)
+                {
+                    if (exactFromKey != null)
+                    {
+                        it.Seek(exactFromKey);
+
+                        if (it.Valid() && it.Key().AsSpan().SequenceEqual(exactFromKey))
+                            it.Next(); // exclusive
+
+                        while (it.Valid() && !hasPrefix(it.Key(), address16))
+                            it.Next();
+                    }
+                    else
+                    {
+                        it.Seek(address16);
+                        while (it.Valid() && !hasPrefix(it.Key(), address16))
+                            it.Next();
+                    }
+
+                    for (; it.Valid(); it.Next())
+                    {
+                        var k = it.Key().AsSpan();
+                        if (!hasPrefix(k, address16)) break;
+
+                        var suffix = k.Slice(address16.Length);
+                        if (suffix.Length < 10) continue;
+
+                        short typeShort = BinaryPrimitives.ReadInt16BigEndian(suffix.Slice(8, 2));
+                        if (typeFilter != null && typeShort != (short)typeFilter.Value) continue;
+
+                        byte[] realId = suffix.Slice(10).ToArray();
+
+                        var ao = getActivityById(realId);
+                        if (ao != null)
+                            result.Add(ao);
+
+                        if (result.Count >= count) break;
+                    }
+                }
+                else
+                {
+                    if (exactFromKey != null)
+                    {
+                        it.Seek(exactFromKey);
+
+                        if (it.Valid() && it.Key().AsSpan().SequenceEqual(exactFromKey))
+                            it.Prev(); // exclusive
+                        else if (!it.Valid())
+                            it.SeekToLast();
+                    }
+                    else
+                    {
+                        it.Seek(upperBound);
+                        if (!it.Valid()) it.SeekToLast();
+                    }
+
+                    while (it.Valid() && !hasPrefix(it.Key(), address16))
+                        it.Prev();
+
+                    for (; it.Valid(); it.Prev())
+                    {
+                        var k = it.Key().AsSpan();
+                        if (!hasPrefix(k, address16)) break;
+
+                        var suffix = k.Slice(address16.Length);
+                        if (suffix.Length < 10) continue;
+
+                        short typeShort = BinaryPrimitives.ReadInt16BigEndian(suffix.Slice(8, 2));
+                        if (typeFilter != null && typeShort != (short)typeFilter.Value) continue;
+
+                        byte[] realId = suffix.Slice(10).ToArray();
+
+                        var ao = getActivityById(realId);
+                        if (ao != null)
+                            result.Add(ao);
+
+                        if (result.Count >= count) break;
+                    }
+                }
+
+                return result;
+            }
+        }
+
         public void flush()
         {
             if (database == null)
@@ -684,7 +919,7 @@ namespace IXICore.Activity
                 throw new Exception($"Database {dbPath} is not open.");
             }
 
-            Logging.info("RocksDB: Pruning TXIDs from blocks on database '{0}'.", dbPath);
+            Logging.info("RocksDB: Flushing database '{0}'.", dbPath);
             lock (rockLock)
             {
                 database.Flush(new FlushOptions().SetWaitForFlush(true));
@@ -1127,6 +1362,18 @@ namespace IXICore.Activity
             {
                 var db = getDatabase(0);
                 return db!.getActivitiesByStatus(status, includeTransaction);
+            }
+        }
+
+        public List<ActivityObject> getActivitiesByAddress(Address address, ActivityType? type, byte[]? fromActivityId = null, int count = 50, bool descending = false)
+        {
+            lock (openDatabases)
+            {
+                var db = getDatabase(0, true);
+                if (db == null)
+                    return new();
+
+                return db.getActivitiesByAddress(address, type, fromActivityId, count, descending);
             }
         }
 

@@ -522,6 +522,10 @@ namespace IXICore
             Block? lastSuperBlock = null;
             if (isSuperBlock)
             {
+                if (blockVerificationMode == TIVBlockVerificationMode.Minimal)
+                {
+                    cachedRequiredSignerDifficulty.Set(header.blockNum, header.version, SignerPowSolution.bitsToDifficulty(header.signerBits), header.timestamp);
+                }
                 var expectedDifficulty = getRequiredSignerDifficulty(header.blockNum, false, header.version, header.timestamp);
                 if (expectedDifficulty == null)
                 {

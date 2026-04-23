@@ -15,6 +15,7 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using ToEntry = IXICore.Transaction.ToEntry;
 
 namespace IXICore.Activity
 {
@@ -150,6 +151,40 @@ namespace IXICore.Activity
         }
     }
 
+    public class AddressToEntryDictConverter : JsonConverter<IDictionary<Address, ToEntry>>
+    {
+        public override void WriteJson(JsonWriter writer, IDictionary<Address, ToEntry>? value, JsonSerializer serializer)
+        {
+            writer.WriteStartObject();
+            if (value != null)
+            {
+                foreach (var kv in value)
+                {
+                    writer.WritePropertyName(kv.Key.ToString());
+                    writer.WriteValue(kv.Value?.amount.ToString());
+                }
+            }
+            writer.WriteEndObject();
+        }
+
+        public override IDictionary<Address, ToEntry> ReadJson(JsonReader reader, Type objectType, IDictionary<Address, ToEntry>? existingValue, bool hasExistingValue, JsonSerializer serializer)
+        {
+            var dict = new Dictionary<Address, ToEntry>();
+            if (reader.TokenType == JsonToken.Null)
+                return dict;
+
+            var obj = serializer.Deserialize<Dictionary<string, byte[]>>(reader);
+            if (obj != null)
+            {
+                foreach (var kv in obj)
+                {
+                    dict[new Address(kv.Key)] = new ToEntry(0, new IxiNumber(kv.Value));
+                }
+            }
+            return dict;
+        }
+    }
+
     /// <summary>
     /// An activity item which describes a potentially interesting event on the DLT or S2 network.
     /// </summary>
@@ -158,41 +193,44 @@ namespace IXICore.Activity
         [JsonConverter(typeof(TXIDConverter))]
         public byte[] id { get; set; }
         public byte[] seedHash { get; set; }
+        public ActivityType type { get; set; }
+        public long timestamp { get; set; }
+        public ActivityStatus status { get; set; }
 
-        [JsonConverter(typeof(AddressConverter))]
-        public Address walletAddress { get; set; }
 
         [JsonConverter(typeof(AddressIxiNumberDictConverter))]
-        public IDictionary<Address, IxiNumber> addressList { get; set; }
-        public ActivityType type { get; set; }
-        public byte[]? data { get; set; }
+        public IDictionary<Address, IxiNumber> fromAddressList { get; set; }
+
+        [JsonConverter(typeof(AddressToEntryDictConverter))]
+        public IDictionary<Address, ToEntry> toAddressList { get; set; }
 
         [JsonConverter(typeof(IxiNumberConverter))]
         public IxiNumber value { get; set; }
-        public long timestamp { get; set; }
-        public ActivityStatus status { get; set; }
+
+        [JsonConverter(typeof(IxiNumberConverter))]
+        public IxiNumber fee { get; set; }
         public ulong appliedBlockHeight { get; set; }
         public Transaction? transaction { get; set; }
 
         public ActivityObject(byte[] seedHash,
-                              Address walletAddress,
+                              IDictionary<Address, IxiNumber> fromAddressList,
                               byte[] id,
-                              IDictionary<Address, IxiNumber> addressList,
+                              IDictionary<Address, ToEntry> toAddressList,
                               ActivityType type,
-                              byte[]? data,
                               IxiNumber value,
+                              IxiNumber fee,
                               long timestamp,
                               ActivityStatus status,
                               ulong appliedBlockHeight,
-                              Transaction transaction)
+                              Transaction? transaction)
         {
             this.id = id;
             this.seedHash = seedHash.AsSpan(0, 16).ToArray();
-            this.walletAddress = walletAddress;
-            this.addressList = addressList;
+            this.fromAddressList = fromAddressList;
+            this.toAddressList = toAddressList;
             this.type = type;
-            this.data = data;
             this.value = value;
+            this.fee = fee;
             this.timestamp = timestamp;
             this.status = status;
             this.appliedBlockHeight = appliedBlockHeight;
@@ -202,7 +240,12 @@ namespace IXICore.Activity
         /// <summary>
         /// Reconstructs from serialized bytes
         /// </summary>
-        public ActivityObject(byte[] bytes, byte[] seedHash, ActivityType type, byte[] id, byte[]? metaBytes, byte[]? transactionBytes)
+        public ActivityObject(byte[] bytes,
+                                   byte[] seedHash,
+                                   ActivityType type,
+                                   byte[] id,
+                                   byte[]? metaBytes,
+                                   byte[]? transactionBytes)
         {
             using (MemoryStream ms = new MemoryStream(bytes))
             using (BinaryReader br = new BinaryReader(ms))
@@ -211,32 +254,33 @@ namespace IXICore.Activity
                 this.type = type;
                 this.id = id;
 
-                int wlLen = (int)br.ReadIxiVarUInt();
-                walletAddress = new Address(br.ReadBytes(wlLen));
-
-                int addrCount = (int)br.ReadIxiVarUInt();
-                addressList = new Dictionary<Address, IxiNumber>(addrCount);
-                for (int i = 0; i < addrCount; i++)
+                int fromAddrCount = (int)br.ReadIxiVarUInt();
+                fromAddressList = new Dictionary<Address, IxiNumber>(fromAddrCount, new AddressComparer());
+                for (int i = 0; i < fromAddrCount; i++)
                 {
-                    int aLen = (int)br.ReadIxiVarUInt();
-                    byte[] aBytes = br.ReadBytes(aLen);
+                    byte[] aBytes = br.ReadIxiBytes()!;
                     Address addr = new Address(aBytes);
 
-                    int vLen = (int)br.ReadIxiVarUInt();
-                    byte[] vBytes = br.ReadBytes(vLen);
+                    byte[] vBytes = br.ReadIxiBytes()!;
                     IxiNumber val = new IxiNumber(vBytes);
 
-                    addressList[addr] = val;
+                    fromAddressList[addr] = val;
                 }
 
-                int dLen = (int)br.ReadIxiVarUInt();
-                if (dLen > 0)
+                int toAddrCount = (int)br.ReadIxiVarUInt();
+                toAddressList = new Dictionary<Address, ToEntry>(toAddrCount, new AddressComparer());
+                for (int i = 0; i < toAddrCount; i++)
                 {
-                    data = br.ReadBytes(dLen);
+                    byte[] aBytes = br.ReadIxiBytes()!;
+                    Address addr = new Address(aBytes);
+
+                    byte[] vBytes = br.ReadIxiBytes()!;
+                    ToEntry val = new ToEntry(0, vBytes);
+                    toAddressList[addr] = val;
                 }
 
-                int valLen = (int)br.ReadIxiVarUInt();
-                value = new IxiNumber(br.ReadBytes(valLen));
+                value = new IxiNumber(br.ReadIxiBytes()!);
+                fee = new IxiNumber(br.ReadIxiBytes()!);
 
                 if (metaBytes != null)
                 {
@@ -274,12 +318,10 @@ namespace IXICore.Activity
             using (MemoryStream ms = new MemoryStream())
             using (BinaryWriter bw = new BinaryWriter(ms))
             {
-                bw.Write(walletAddress.addressNoChecksum.GetIxiBytes());
-
-                bw.Write(addressList.Count.GetIxiVarIntBytes());
-                if (addressList != null)
+                bw.Write(fromAddressList.Count.GetIxiVarIntBytes());
+                if (fromAddressList != null)
                 {
-                    foreach (var kv in addressList)
+                    foreach (var kv in fromAddressList)
                     {
                         byte[] addrBytes = kv.Key.addressNoChecksum;
                         bw.Write(addrBytes.GetIxiBytes());
@@ -289,9 +331,21 @@ namespace IXICore.Activity
                     }
                 }
 
-                bw.Write(data.GetIxiBytes());
+                bw.Write(toAddressList.Count.GetIxiVarIntBytes());
+                if (toAddressList != null)
+                {
+                    foreach (var kv in toAddressList)
+                    {
+                        byte[] addrBytes = kv.Key.addressNoChecksum;
+                        bw.Write(addrBytes.GetIxiBytes());
+
+                        byte[] valBytes = kv.Value.getBytes();
+                        bw.Write(valBytes.GetIxiBytes());
+                    }
+                }
 
                 bw.Write(value.getBytes().GetIxiBytes());
+                bw.Write(fee.getBytes().GetIxiBytes());
 
                 bw.Flush();
                 return ms.ToArray();

@@ -127,16 +127,9 @@ namespace IXICore
                 {
                     using (BinaryReader reader = new BinaryReader(m))
                     {
-                        int dataChecksumLen = (int)reader.ReadIxiVarUInt();
-                        if (dataChecksumLen > 0)
-                        {
-                            _dataChecksum = reader.ReadBytes(dataChecksumLen);
-                        }
-                        int dataLen = (int)reader.ReadIxiVarUInt();
-                        if (dataLen > 0)
-                        {
-                            data = reader.ReadBytes(dataLen);
-                        }
+                        amount = reader.ReadIxiNumber();
+                        _dataChecksum = reader.ReadIxiBytes();
+                        data = reader.ReadIxiBytes();
                     }
                 }
             }
@@ -178,16 +171,9 @@ namespace IXICore
                 {
                     using (BinaryWriter writer = new BinaryWriter(m))
                     {
-                        if(_dataChecksum != null)
-                        {
-                            writer.WriteIxiVarInt(_dataChecksum.Length);
-                            writer.Write(_dataChecksum);
-                        }
-                        if (_data != null)
-                        {
-                            writer.WriteIxiVarInt(_data.Length);
-                            writer.Write(_data);
-                        }
+                        writer.WriteIxiNumber(amount);
+                        writer.WriteIxiBytes(_dataChecksum);
+                        writer.WriteIxiBytes(_data);
                     }
                     return m.ToArray();
                 }
