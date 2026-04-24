@@ -190,7 +190,7 @@ namespace IXICore.Miner
 
             if (candidateBlock.timestamp + 1800 < Clock.getNetworkTimestamp())
             {
-                candidateBlock = IxianHandler.getBlockHeader(candidateBlock.blockNum - 6);
+                candidateBlock = IxianHandler.getBlockHeader(candidateBlock.blockNum - ConsensusConfig.sigOverlapOffset);
             }
 
             if (candidateBlock == null)
