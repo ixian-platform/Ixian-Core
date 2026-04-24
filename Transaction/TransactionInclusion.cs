@@ -1301,7 +1301,7 @@ namespace IXICore
                 throw new Exception("Current block timestamp must be provided to calculate required signer difficulty.");
             }
             ulong blockNum = lastBlockHeader.blockNum + 1;
-            ulong blockOffset = 7;
+            ulong blockOffset = ConsensusConfig.requiredConsensusOffset;
             if (blockNum < blockOffset + 1) return ConsensusConfig.minBlockSignerPowDifficulty; // special case for first X blocks - since sigFreeze happens n-5 blocks
 
             if (cachedRequiredSignerDifficulty.BlockNum == blockNum
