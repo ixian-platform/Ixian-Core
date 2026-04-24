@@ -2641,7 +2641,7 @@ namespace IXICore
             Array.Copy(txid, type_len + bh_len, tx_hash, 0, tx_hash.Length);
             if (type == 0)
             {
-                s_txid = "stk-" + (bh - 5) + "-" + bh + "-" + Base58Check.Base58CheckEncoding.EncodePlain(tx_hash);
+                s_txid = "stk-" + (bh - ConsensusConfig.sigfreezeOffset) + "-" + bh + "-" + Base58Check.Base58CheckEncoding.EncodePlain(tx_hash);
             }
             else
             {
