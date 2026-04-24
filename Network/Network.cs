@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using Mono.Nat;
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -711,13 +712,12 @@ namespace IXICore.Network
             return false;
         }
 
-
-        static public void configureNetwork(string externalIp, int port)
+        static public void configureNetwork(string externalIp, int p2pPort, int stunPort = 0)
         {
             // Network configuration
             UPnP upnp = new UPnP();
 
-            IxianHandler.publicPort = port;
+            IxianHandler.publicPort = p2pPort;
 
             if (externalIp != "" && IPAddress.TryParse(externalIp, out _))
             {
@@ -732,7 +732,7 @@ namespace IXICore.Network
                 {
                     if (IPv4Subnet.IsPublicIP(local_ip.Address))
                     {
-                        Logging.info(String.Format("Public IP detected: {0}, mask {1}.", local_ip.Address.ToString(), local_ip.SubnetMask.ToString()));
+                        Logging.info("Public IP detected: {0}, mask {1}.", local_ip.Address.ToString(), local_ip.SubnetMask.ToString());
                         IxianHandler.publicIP = local_ip.Address.ToString();
                     }
                 }
@@ -745,26 +745,43 @@ namespace IXICore.Network
                     }
                     else
                     {
-                        Logging.warn(String.Format("None of the locally configured IP addresses are public. Attempting UPnP..."));
+                        Logging.warn("None of the locally configured IP addresses are public. Attempting UPnP...");
                         Task<IPAddress> public_ip = upnp.GetExternalIPAddress();
                         if (public_ip.Wait(1000))
                         {
                             if (public_ip.Result != null)
                             {
-                                Logging.info(String.Format("UPNP-determined public IP: {0}. Attempting to configure a port-forwarding rule.", public_ip.Result.ToString()));
-                                if (upnp.MapPublicPort(port, primary_local))
+                                Logging.info("UPNP-determined public IP: {0}. Attempting to configure a port-forwarding rule.", public_ip.Result.ToString());
+                                if (upnp.MapPublicPort(Protocol.Tcp, p2pPort, primary_local))
                                 {
                                     IxianHandler.publicIP = public_ip.Result.ToString(); //upnp.getMappedIP();
-                                    Logging.info(string.Format("Network configured. Public IP is: {0}", IxianHandler.publicIP));
+                                    Logging.info("Network configured. Public IP is: {0}", IxianHandler.publicIP);
                                 }
                                 else
                                 {
-                                    Logging.warn("UPnP configuration failed, please set port forwarding for port {0} manually.", port);
+                                    Logging.warn("UPnP configuration failed, please set port forwarding for port TCP {0} manually.", p2pPort);
+                                }
+
+                                if (stunPort != 0
+                                    && upnp.MapPublicPort(Protocol.Udp, stunPort, primary_local))
+                                {
+                                    Logging.info("STUN port configured.");
+                                }
+                                else
+                                {
+                                    Logging.warn("UPnP configuration failed, please set port forwarding for port UDP {0} manually.", stunPort);
                                 }
                             }
                             else
                             {
-                                Logging.warn("UPnP configuration failed, please set port forwarding for port {0} manually.", port);
+                                if (stunPort != 0)
+                                {
+                                    Logging.warn("UPnP configuration failed, please set port forwarding for ports TCP {0} and UDP {1} manually.", p2pPort, stunPort);
+                                }
+                                else
+                                {
+                                    Logging.warn("UPnP configuration failed, please set port forwarding for port TCP {0} manually.", p2pPort);
+                                }
                             }
                         }
 

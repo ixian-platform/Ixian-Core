@@ -18,7 +18,6 @@ using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace IXICore
@@ -136,7 +135,7 @@ namespace IXICore
                 metaBbto.SetBlockSize(4 * 1024);
                 metaBbto.SetCacheIndexAndFilterBlocks(true);
                 metaBbto.SetPinL0FilterAndIndexBlocksInCache(true);
-                metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(14, true));
+                metaBbto.SetFilterPolicy(BloomFilterPolicy.Create(10, false));
                 metaBbto.SetWholeKeyFiltering(true);
                 metaBbto.SetFormatVersion(6);
 
@@ -177,8 +176,8 @@ namespace IXICore
                         },
                         { "meta", new ColumnFamilyOptions()
                             .SetBlockBasedTableFactory(metaBbto)
-                            .OptimizeForPointLookup(128)
-                            .SetWriteBufferSize(64UL << 10)
+                            .OptimizeForPointLookup(64)
+                            .SetWriteBufferSize(128UL << 10)
                             .SetMaxWriteBufferNumber(1)
                         },
                         { "index_blocks_checksum_meta", new ColumnFamilyOptions()
@@ -212,38 +211,60 @@ namespace IXICore
 
                 var dbOptions = opts.dbOptions;
                 dbOptions.SetCompression(RocksDbSharp.Compression.Lz4)
-                         .SetWriteBufferSize(4UL << 20)
-                         .SetMaxWriteBufferNumber(2)
-                         .SetTargetFileSizeBase(32UL << 20)
-                         .SetMaxBackgroundCompactions(1)
-                         .SetMaxBackgroundFlushes(1)
-                         .IncreaseParallelism(1)
-                         .SetBytesPerSync(1UL << 20)
-                         .SetCompactionReadaheadSize(2UL << 20)
-                         .SetMaxOpenFiles(30);
+                     .SetMaxBackgroundCompactions(1)
+                     .SetMaxBackgroundFlushes(1)
+                     .IncreaseParallelism(1)
+                     .SetTargetFileSizeBase(8UL << 20)
+                     .SetTargetFileSizeMultiplier(2)
+                     .SetLevelCompactionDynamicLevelBytes(false)
+
+                     .SetUseDirectReads(false)
+                     .SetUseDirectIoForFlushAndCompaction(false)
+                     .SetCompactionReadaheadSize(2UL << 20)
+                     .SetBytesPerSync(1UL << 20)
+
+                     .SetUseFsync(0)
+                     .SetWALTtlSeconds(0)
+                     .SetWALSizeLimitMB(64)
+                     .SetMaxTotalWalSize(64UL << 20)
+
+                     .SetMaxOpenFiles(30)
+
+                     .SetKeepLogFileNum(2)
+                     .SetMaxLogFileSize(512 << 10)
+
+                     .SetWriteBufferSize(1UL << 20)
+                     .SetMaxWriteBufferNumber(2);
 
                 var columnFamilies = opts.columnFamilies;
                 
                 var blocksCfOpts = columnFamilies.ToList().Find(x => x.Name == "blocks");
                 blocksCfOpts.Options.SetWriteBufferSize(4UL << 20)
-                                    .SetMaxWriteBufferNumber(2);
+                                    .SetMaxWriteBufferNumber(2)
+                                    .SetMinWriteBufferNumberToMerge(1);
 
                 var txCfOpts = columnFamilies.ToList().Find(x => x.Name == "transactions");
                 txCfOpts.Options.SetWriteBufferSize(2UL << 20)
-                                .SetMaxWriteBufferNumber(2);
+                                .SetMaxWriteBufferNumber(2)
+                                .SetMinWriteBufferNumberToMerge(1);
 
-                var idxBlocksChecksumMeta = columnFamilies.ToList().Find(x => x.Name == "index_blocks_checksum_meta");
-                idxBlocksChecksumMeta.Options.SetWriteBufferSize(1UL << 20)
-                                             .SetMaxWriteBufferNumber(2);
+                var indexTable = new BlockBasedTableOptions()
+                        .SetBlockCache(blockCache.Handle)
+                        .SetBlockSize(8 * 1024)
+                        .SetCacheIndexAndFilterBlocks(true)
+                        .SetFilterPolicy(BloomFilterPolicy.Create(8, false))
+                        .SetWholeKeyFiltering(true)
+                        .SetFormatVersion(6);
 
-                var idxTxAppliedTypeCfOpts = columnFamilies.ToList().Find(x => x.Name == "index_tx_applied_type");
-                idxTxAppliedTypeCfOpts.Options.SetWriteBufferSize(1UL << 20)
-                                              .SetMaxWriteBufferNumber(2);
+                foreach (var cf in columnFamilies.Where(x => x.Name.StartsWith("index_")))
+                {
+                    cf.Options
+                        .SetBlockBasedTableFactory(indexTable)
+                        .SetWriteBufferSize(512UL << 10)
+                        .SetMaxWriteBufferNumber(2)
+                        .SetMinWriteBufferNumberToMerge(1);
+                }
 
-                var idxAddrTxsCfOpts = columnFamilies.ToList().Find(x => x.Name == "index_address_txs");
-                idxAddrTxsCfOpts.Options.SetWriteBufferSize(1UL << 20)
-                                        .SetMaxWriteBufferNumber(2);
-                
                 return (dbOptions, columnFamilies);
             }
 
@@ -1133,7 +1154,7 @@ namespace IXICore
                     throw new Exception($"Database {dbPath} is not open.");
                 }
 
-                Logging.info("RocksDB: Pruning TXIDs from blocks on database '{0}'.", dbPath);
+                Logging.info("RocksDB: Flushing database '{0}'.", dbPath);
                 lock (rockLock)
                 {
                     database.Flush(new FlushOptions().SetWaitForFlush(true));

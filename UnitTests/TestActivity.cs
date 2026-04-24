@@ -6,6 +6,7 @@ using System.Threading;
 using IXICore;
 using System.Collections.Generic;
 using IXICore.Storage;
+using ToEntry = IXICore.Transaction.ToEntry;
 
 namespace UnitTests
 {
@@ -69,16 +70,19 @@ namespace UnitTests
 
         private static ActivityObject MakeActivity(byte[] seed16, ulong block, ActivityType type, ActivityStatus status, string valueStr, long? ts = null)
         {
-            Dictionary<Address, IxiNumber> addressList = new Dictionary<Address, IxiNumber>();
-            addressList.Add(new Address("16LUmwUnU9M4Wn92nrvCStj83LDCRwvAaSio6Xtb3yvqqqCCz"), 100);
-            addressList.Add(new Address("3vcJsrUNCjhfFD5Nqohx6pVmwDXeR2Gh8aePdj3cJ2ttLHCoSCxDB82qVTAKqZTcU"), 200);
+            Dictionary<Address, IxiNumber> fromAddressList = new Dictionary<Address, IxiNumber>();
+            fromAddressList.Add(new Address("16LUmwUnU9M4Wn92nrvCStj83LDCRwvAaSio6Xtb3yvqqqCCz"), 300);
+
+            Dictionary<Address, ToEntry> toAddressList = new Dictionary<Address, ToEntry>();
+            toAddressList.Add(new Address("16LUmwUnU9M4Wn92nrvCStj83LDCRwvAaSio6Xtb3yvqqqCCz"), new ToEntry(0, 100));
+            toAddressList.Add(new Address("3vcJsrUNCjhfFD5Nqohx6pVmwDXeR2Gh8aePdj3cJ2ttLHCoSCxDB82qVTAKqZTcU"), new ToEntry(0, 200));
             var ao = new ActivityObject(seed16,
-                                        new Address("16LUmwUnU9M4Wn92nrvCStj83LDCRwvAaSio6Xtb3yvqqqCCz"),
+                                        fromAddressList,
                                         New16(),
-                                        addressList,
+                                        toAddressList,
                                         type,
-                                        New16(),
                                         new IxiNumber(valueStr),
+                                        new IxiNumber("0.01"),
                                         ts ?? Clock.getTimestamp(),
                                         status,
                                         block,
@@ -444,5 +448,163 @@ namespace UnitTests
             }
         }
 
+        [TestMethod]
+        public void AddressQuery_Basic_Order_Ascending()
+        {
+            var seed = FixedSeed16(0xA1);
+            var t = AnyActivityType();
+            var s = AnyStatus();
+
+            var a1 = InsertOne(seed, 1, t, s, "1");
+            var a2 = InsertOne(seed, 2, t, s, "2");
+            var a3 = InsertOne(seed, 3, t, s, "3");
+
+            var addr = a1.fromAddressList.First().Key;
+
+            var list = (db as ActivityStorage).getActivitiesByAddress(addr, null, null, 10, false);
+
+            Assert.AreEqual(3, list.Count);
+            Assert.IsTrue(list[0].timestamp <= list[1].timestamp &&
+                          list[1].timestamp <= list[2].timestamp);
+        }
+
+        [TestMethod]
+        public void AddressQuery_Pagination_Ascending_Exclusive()
+        {
+            var seed = FixedSeed16(0xA2);
+            var t = AnyActivityType();
+            var s = AnyStatus();
+
+            var a1 = InsertOne(seed, 1, t, s, "1");
+            var a2 = InsertOne(seed, 2, t, s, "2");
+            var a3 = InsertOne(seed, 3, t, s, "3");
+
+            var addr = a1.fromAddressList.First().Key;
+
+            var page = (db as ActivityStorage).getActivitiesByAddress(addr, null, a2.id, 10, false);
+
+            Assert.AreEqual(1, page.Count);
+            Assert.IsTrue(page[0].id.SequenceEqual(a3.id));
+        }
+
+        [TestMethod]
+        public void AddressQuery_Pagination_Descending_Exclusive()
+        {
+            var seed = FixedSeed16(0xA3);
+            var t = AnyActivityType();
+            var s = AnyStatus();
+
+            var a1 = InsertOne(seed, 1, t, s, "1");
+            var a2 = InsertOne(seed, 2, t, s, "2");
+            var a3 = InsertOne(seed, 3, t, s, "3");
+
+            var addr = a1.fromAddressList.First().Key;
+
+            var page = (db as ActivityStorage).getActivitiesByAddress(addr, null, a2.id, 10, true);
+
+            Assert.AreEqual(1, page.Count);
+            Assert.IsTrue(page[0].id.SequenceEqual(a1.id));
+        }
+
+        [TestMethod]
+        public void AddressQuery_FilterByType()
+        {
+            var seed = FixedSeed16(0xA4);
+            var tA = AnyActivityType();
+            var tB = AnotherType(tA);
+            var s = AnyStatus();
+
+            InsertOne(seed, 1, tA, s, "1");
+            InsertOne(seed, 2, tB, s, "2");
+            InsertOne(seed, 3, tA, s, "3");
+
+            var addr = new Address("16LUmwUnU9M4Wn92nrvCStj83LDCRwvAaSio6Xtb3yvqqqCCz");
+
+            var list = (db as ActivityStorage).getActivitiesByAddress(addr, tA, null, 10, false);
+
+            Assert.AreEqual(2, list.Count);
+            Assert.IsTrue(list.All(x => x.type == tA));
+        }
+
+        [TestMethod]
+        public void AddressQuery_Includes_AddressList_Entries()
+        {
+            var seed = FixedSeed16(0xA5);
+            var t = AnyActivityType();
+            var s = AnyStatus();
+
+            var ao = MakeActivity(seed, 1, t, s, "1");
+            Assert.IsTrue(db.insertActivity(ao));
+
+            // pick one from addressList
+            var extraAddr = ao.fromAddressList.First().Key;
+
+            var list = (db as ActivityStorage).getActivitiesByAddress(extraAddr, null, null, 10, false);
+
+            Assert.AreEqual(1, list.Count);
+            Assert.IsTrue(list[0].id.SequenceEqual(ao.id));
+        }
+
+        [TestMethod]
+        public void AddressQuery_Foreign_FromActivityId_Ignored()
+        {
+            var seedA = FixedSeed16(0xA6);
+            var seedB = FixedSeed16(0xB6);
+
+            var t = AnyActivityType();
+            var s = AnyStatus();
+
+            var a1 = InsertOne(seedA, 1, t, s, "1");
+            var a2 = InsertOne(seedA, 2, t, s, "2");
+
+            var foreign = InsertOne(seedB, 3, t, s, "3");
+
+            var addr = a1.fromAddressList.First().Key;
+
+            var list = (db as ActivityStorage).getActivitiesByAddress(addr, null, foreign.id, 10, false);
+
+            Assert.AreEqual(0, list.Count);
+        }
+
+        [TestMethod]
+        public void AddressQuery_Fuzz_Pagination_Order_And_NoBleed()
+        {
+            var seed = FixedSeed16(0xAF);
+            var t = AnyActivityType();
+            var s = AnyStatus();
+
+            var inserted = new List<ActivityObject>();
+
+            for (int i = 0; i < 50; i++)
+            {
+                var ao = InsertOne(seed, (ulong)(100 + i), t, s, i.ToString());
+                inserted.Add(ao);
+            }
+
+            var addr = inserted[0].fromAddressList.First().Key;
+
+            var ordered = inserted.OrderBy(x => x.timestamp).ToList();
+
+            // forward paging
+            byte[] cursor = null;
+            int index = -1;
+
+            for (int i = 0; i < 5; i++)
+            {
+                var page = (db as ActivityStorage).getActivitiesByAddress(addr, null, cursor, 7, false);
+
+                var expected = ordered.Skip(index + 1).Take(7).ToList();
+
+                Assert.AreEqual(expected.Count, page.Count);
+
+                for (int j = 0; j < page.Count; j++)
+                    Assert.IsTrue(page[j].id.SequenceEqual(expected[j].id));
+
+                if (page.Count == 0) break;
+
+                cursor = page.Last().id;
+                index = ordered.FindIndex(x => x.id.SequenceEqual(cursor));
+            }
+        }
     }
 }

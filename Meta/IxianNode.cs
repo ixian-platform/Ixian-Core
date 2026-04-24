@@ -483,13 +483,11 @@ namespace IXICore.Meta
             return handlerClass.getTimeSinceLastBlock();
         }
 
-        public static bool addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction, ulong appliedBlockNum = 0)
+        public static bool addTransactionToActivityStorage(IActivityStorage activityStorage, Transaction transaction, ulong appliedBlockNum = 0, bool dummyTransaction = false)
         {
             ActivityObject activity;
             ActivityType type;
             IxiNumber value = transaction.amount + transaction.fee;
-            Dictionary<byte[], List<byte[]>> wallet_list;
-            Address wallet;
             Address primary_address = transaction.pubKey;
 
             ActivityStatus status = ActivityStatus.Pending;
@@ -499,11 +497,17 @@ namespace IXICore.Meta
                 status = ActivityStatus.Final;
                 applied = appliedBlockNum;
             }
+            var fromList = transaction.fromList.ToDictionary(kv => new Address(transaction.pubKey.getInputBytes(), kv.Key), kv => kv.Value);
+            if (dummyTransaction)
+            {
+                fromList = transaction.fromList.ToDictionary(kv => new Address(kv.Key), kv => kv.Value);
+            }
+            var toList = IxianHandler.extractMyAddressesFromAddressList(transaction.toList);
+
 
             if (IxianHandler.isMyAddress(primary_address))
             {
                 // We are the sender
-                wallet = primary_address;
                 type = ActivityType.TransactionSent;
                 if (transaction.type == (int)Transaction.Type.PoWSolution)
                 {
@@ -515,23 +519,55 @@ namespace IXICore.Meta
                     type = ActivityType.IxiName;
                 }
 
-                activity = new ActivityObject(IxianHandler.getWalletStorageBySecondaryAddress(primary_address).getSeedHash(),
-                                wallet,
-                                transaction.id,
-                                transaction.toList.ToDictionary(kvp => kvp.Key, kvp => kvp.Value.amount),
-                                type,
-                                transaction.toList.First().Value.data,
-                                value,
-                                transaction.timeStamp,
-                                status,
-                                applied,
-                                transaction);
+                // TODO add support for multiple wallets/seeds in the future
+                var fromEntry = transaction.fromList.First();
+                Address address = new Address(transaction.pubKey.getInputBytes(), fromEntry.Key);
+                if (dummyTransaction)
+                {
+                    address = new Address(fromEntry.Key);
+                }
+                var ws = IxianHandler.getWalletStorageBySecondaryAddress(address);
+                if (ws == null)
+                {
+                    return false;
+                }
+
+                // Calculate the total amount sent to ourselves in this transaction (change/reorg)
+                IxiNumber selfToTotalAmount = 0;
+                if (toList != null)
+                {
+                    foreach (var wallets in toList)
+                    {
+                        // TODO add support for multiple wallets/seeds in the future
+                        if (!ws.getSeedHash().SequenceEqual(wallets.Key))
+                        {
+                            continue;
+                        }
+                        foreach (var wallet in wallets.Value)
+                        {
+                            var wAddr = new Address(wallet);
+                            selfToTotalAmount = selfToTotalAmount + transaction.toList[wAddr].amount;
+                        }
+                    }
+                }
+
+                activity = new ActivityObject(ws.getSeedHash(),
+                            fromList,
+                            transaction.id,
+                            transaction.toList,
+                            type,
+                            value - selfToTotalAmount,
+                            transaction.fee,
+                            transaction.timeStamp,
+                            status,
+                            applied,
+                            !dummyTransaction ? transaction : null);
+
                 return activityStorage.insertActivity(activity);
             }
             else
             {
-                wallet_list = IxianHandler.extractMyAddressesFromAddressList(transaction.toList);
-                if (wallet_list != null)
+                if (toList != null)
                 {
                     // We are the recipient
                     type = ActivityType.TransactionReceived;
@@ -540,24 +576,31 @@ namespace IXICore.Meta
                         type = ActivityType.StakingReward;
                     }
 
-                    foreach (var extractedWallet in wallet_list)
+                    foreach (var extractedWallet in toList)
                     {
-                        foreach (var addressBytes in extractedWallet.Value)
+                        // prepare toEntries
+                        var toEntries = new Dictionary<Address, Transaction.ToEntry>();
+                        IxiNumber totalAmount = 0;
+                        foreach (var wallet in extractedWallet.Value)
                         {
-                            Address address = new Address(addressBytes);
-                            activity = new ActivityObject(extractedWallet.Key,
-                                                          address,
-                                                          transaction.id,
-                                                          transaction.fromList.ToDictionary(kvp => new Address(transaction.pubKey.addressNoChecksum, kvp.Key), kvp => kvp.Value),
-                                                          type,
-                                                          transaction.toList[address].data,
-                                                          transaction.toList[address].amount,
-                                                          transaction.timeStamp,
-                                                          status,
-                                                          applied,
-                                                          transaction);
-                            return activityStorage.insertActivity(activity);
+                            var wAddr = new Address(wallet);
+                            toEntries.Add(wAddr, transaction.toList[wAddr]);
+                            totalAmount = totalAmount + transaction.toList[wAddr].amount;
                         }
+
+                        activity = new ActivityObject(extractedWallet.Key,
+                                                        fromList,
+                                                        transaction.id,
+                                                        toEntries,
+                                                        type,
+                                                        totalAmount,
+                                                        transaction.fee,
+                                                        transaction.timeStamp,
+                                                        status,
+                                                        applied,
+                                                        !dummyTransaction ? transaction : null);
+
+                        return activityStorage.insertActivity(activity);
                     }
                 }
             }

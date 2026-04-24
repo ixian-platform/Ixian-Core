@@ -57,6 +57,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkRemoteEndpoint.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\NetworkServer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Network\StreamClientManager.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Network\STUN.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Peer\Peer.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Peer\PeerStorage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Platform\NativeMethods.cs" />

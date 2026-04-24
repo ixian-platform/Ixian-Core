@@ -1639,9 +1639,10 @@ namespace IXICore
                 base_address = new Address(Base58Check.Base58CheckEncoding.DecodePlain(base_address_str));
             }
 
-            Address new_address = IxianHandler.getWalletStorage(wallet_address).generateNewAddress(base_address, null);
+            Address? new_address = IxianHandler.getWalletStorage(wallet_address).generateNewAddress(base_address, null);
             if (new_address != null)
             {
+                IxianHandler.balances.Add(new_address, new Balance(new_address, 0));
                 return new JsonResponse { result = new_address.ToString(), error = null };
             }
             else

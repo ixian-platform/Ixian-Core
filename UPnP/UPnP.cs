@@ -135,7 +135,7 @@ namespace IXICore
             return GetPublicPortMappingInternal(publicPort);
         }
 
-        public bool MapPublicPort(int publicPort, IPAddress localIP)
+        public bool MapPublicPort(Protocol protocol, int publicPort, IPAddress localIP)
         {
             if (publicPort <= 0 || publicPort > 65535)
             {
@@ -143,7 +143,7 @@ namespace IXICore
                 return false;
             }
 
-            Logging.info($"Attempting to map external port {publicPort} to local IP {localIP}");
+            Logging.info($"Attempting to map external port {protocol} {publicPort} to local IP {localIP}");
 
             if (!AcquireRouterDevice())
             {
@@ -154,7 +154,7 @@ namespace IXICore
             try
             {
                 var mapping = new Mapping(
-                    Protocol.Tcp,
+                    protocol,
                     publicPort,
                     publicPort,
                     0,
@@ -163,13 +163,13 @@ namespace IXICore
 
                 _routerDevice.CreatePortMap(mapping);
 
-                Logging.info($"External port {publicPort} mapped to {localIP}:{publicPort}");
+                Logging.info($"External port {protocol} {publicPort} mapped to {localIP}:{publicPort}");
                 _mappedPublicPort = publicPort;
                 return true;
             }
             catch (Exception ex)
             {
-                Logging.error($"Error while mapping public port {publicPort}: {ex.Message}");
+                Logging.error($"Error while mapping public port {protocol} {publicPort}: {ex.Message}");
                 return false;
             }
         }
