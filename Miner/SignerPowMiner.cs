@@ -158,8 +158,10 @@ namespace IXICore.Miner
                             blockHeight = block.blockNum;
                         }
                     }
-
-                    CalculateHash(blockHeight, keyPair, challenge);
+                    if (currentBlockHeight != 0)
+                    {
+                        CalculateHash(blockHeight, keyPair, challenge);
+                    }
                 }
                 catch (Exception e)
                 {
