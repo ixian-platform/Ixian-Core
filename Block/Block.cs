@@ -2294,7 +2294,7 @@ namespace IXICore
                 {
                     continue;
                 }
-                if (merged_signature.powSolution != null)
+                if (merged_signature.powSolution != null && merged_signature.blockNum == blocknum)
                 {
                     result.Add((merged_signature.recipientPubKeyOrAddress, merged_signature.powSolution.difficulty));
                 }
