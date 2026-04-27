@@ -576,7 +576,8 @@ namespace IXICore
             {
                 requiredOverlappingSigs = (minRequiredSigCount / 2) + 1;
             }
-            if (overlappingSigCount < requiredOverlappingSigs)
+            if (overlappingSigCount < requiredOverlappingSigs
+                && !handleBlockchainRecoveryMode(header, overlappingSigCount, frozenSigCount, totalSignerDifficulty, getRequiredSignerDifficulty(header.blockNum, false, header.version, header.timestamp)))
             {
                 Logging.error("TIV: Block header does not contain enough overlapping signatures. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                 return false;
@@ -685,7 +686,7 @@ namespace IXICore
                         }
                         // TODO investigate the reason for excluding block 4729000 from difficulty check. It was added as a hotfix for a specific historic issue, but there should be no need for
                         // such exceptions. It occurs only for TIV verification and not on the DLT side.
-                        if (SignerPowSolution.difficultyToBits(expectedDifficulty) != header.signerBits
+                        if (expectedDifficulty != SignerPowSolution.bitsToDifficulty(header.signerBits)
                             && header.blockNum != 4729000)
                         {
                             Logging.error("TIV: Block header signer bits do not match the expected retargeted difficulty. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
@@ -1382,6 +1383,37 @@ namespace IXICore
                 blockCount = (ulong)ConsensusConfig.difficultyAdjustmentExpectedBlockCount;
             }
             var newDifficulty = totalDifficulty / blockCount;
+
+            // Limit to max *2, /2
+            int changeFactor = 2;
+            if (blockVersion > BlockVer.v13)
+            {
+                changeFactor = 4;
+            }
+            var prevRequiredSignerDifficulty = getRequiredSignerDifficulty(blockNum - 1, false);
+            if (prevRequiredSignerDifficulty != null)
+            {
+                IxiNumber maxDifficulty = prevRequiredSignerDifficulty * changeFactor;
+                if (newDifficulty > maxDifficulty)
+                {
+                    newDifficulty = maxDifficulty;
+                }
+                else
+                {
+                    IxiNumber minDifficulty = prevRequiredSignerDifficulty / changeFactor;
+                    if (newDifficulty < minDifficulty)
+                    {
+                        newDifficulty = minDifficulty;
+                    }
+                }
+            }
+
+            if (newDifficulty < ConsensusConfig.minBlockSignerPowDifficulty)
+            {
+                newDifficulty = ConsensusConfig.minBlockSignerPowDifficulty;
+            }
+
+
             cachedRequiredSignerDifficulty.Set(blockNum, blockVersion, newDifficulty, curBlockTimestamp);
             return newDifficulty;
         }
