@@ -684,10 +684,7 @@ namespace IXICore
                             Logging.warn("TIV: Failed to calculate expected signer difficulty for block header. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                             return true;
                         }
-                        // TODO investigate the reason for excluding block 4729000 from difficulty check. It was added as a hotfix for a specific historic issue, but there should be no need for
-                        // such exceptions. It occurs only for TIV verification and not on the DLT side.
-                        if (expectedDifficulty != SignerPowSolution.bitsToDifficulty(header.signerBits)
-                            && header.blockNum != 4729000)
+                        if (expectedDifficulty != SignerPowSolution.bitsToDifficulty(header.signerBits))
                         {
                             Logging.error("TIV: Block header signer bits do not match the expected retargeted difficulty. Block number: {0} - {1}", header.blockNum, Crypto.hashToString(header.blockChecksum));
                             return false;
@@ -817,6 +814,11 @@ namespace IXICore
 
             // TODO 'header.overrideCompactedCheck = true;' can be removed after Block.getBytes() compacted safety is removed
             header.overrideCompactedCheck = true;
+
+            if (header.blockNum > 1 && (header.version >= BlockVer.v10))
+            {
+                populateBlockSignatures(header);
+            }
             if (blockStorage.insertBlock(header))
             {
                 lastBlockHeader = header;
