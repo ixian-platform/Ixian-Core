@@ -67,7 +67,10 @@ namespace IXICore.Streaming
                         Friend? friend = FriendList.getFriend(new Address(Path.GetFileName(dir_path)));
                         if (friend == null)
                         {
-                            Directory.Delete(dir_path, true);
+                            if (Directory.Exists(dir_path))
+                            {
+                                Directory.Delete(dir_path, true);
+                            }
                             continue;
                         }
                         PendingRecipient pr = new PendingRecipient(friend.walletAddress);
@@ -200,7 +203,11 @@ namespace IXICore.Streaming
                 Friend? friend = FriendList.getFriend(recipient.address);
                 if (friend == null)
                 {
-                    Directory.Delete(Path.Combine(storagePath, recipient.address.ToString()), true);
+                    string dir_path = Path.Combine(storagePath, recipient.address.ToString());
+                    if (Directory.Exists(dir_path))
+                    {
+                        Directory.Delete(dir_path, true);
+                    }
                     lock (pendingRecipients)
                     {
                         pendingRecipients.Remove(recipient);

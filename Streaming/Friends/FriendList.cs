@@ -199,9 +199,6 @@ namespace IXICore.Streaming
                         }
                     }
                 }
-            }else
-            {
-                sender_nick = friend.nickname;
             }
 
             if(timestamp == 0)

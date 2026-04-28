@@ -22,13 +22,13 @@ namespace IXICore.SpixiBot
     public class BotUsers
     {
         public Dictionary<Address, BotContact> contacts = new Dictionary<Address, BotContact>(new AddressComparer());
-        public List<Address> contactsList = new List<Address>();
+        private List<Address> contactsList = new List<Address>();
 
         string contactsPath = "contacts.ixi";
-        string avatarPath = "Avatars";
+        string? avatarPath = "Avatars";
         bool saveNickAsString = false;
 
-        public BotUsers(string contacts_path, string avatar_path, bool save_nick_as_string)
+        public BotUsers(string contacts_path, string? avatar_path, bool save_nick_as_string)
         {
             saveNickAsString = save_nick_as_string;
             contactsPath = contacts_path;
@@ -120,6 +120,7 @@ namespace IXICore.SpixiBot
 
                         BotContact bc = new BotContact(contact_bytes, saveNickAsString);
                         Address address = new Address(bc.publicKey);
+                        contactsList.Add(address);
                         contacts.AddOrReplace(address, bc);
                     }
                 }
@@ -145,7 +146,7 @@ namespace IXICore.SpixiBot
             return false;
         }
 
-        public BotContact getUser(Address address)
+        public BotContact? getUser(Address address)
         {
             lock(contacts)
             {
@@ -271,7 +272,17 @@ namespace IXICore.SpixiBot
             }
         }
 
-        public string getAvatarPath(Address address)
+        public void clearUsers()
+        {
+            lock (contacts)
+            {
+                contacts.Clear();
+                contactsList.Clear();
+                writeContactsToFile();
+            }
+        }
+
+        public string? getAvatarPath(Address address)
         {
             if (avatarPath == null)
             {

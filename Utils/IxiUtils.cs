@@ -107,7 +107,7 @@ namespace IXICore.Utils
 
             if (len.num == 0)
             {
-                return (null, offset);
+                return (null, len.bytesRead);
             }
 
             byte[] bytes = new byte[len.num];

@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -387,29 +388,42 @@ namespace IXICore.Network
             {
                 while (!shouldStop)
                 {
-                    TLC.Report();
-                    bool message_found = false;
-                    lock (queue)
+                    try
                     {
-                        if (queue.Count > 0)
+                        TLC.Report();
+                        bool message_found = false;
+                        lock (queue)
                         {
-                            // Pick the oldest message
-                            active_message = queue[0];
-                            message_found = true;
-                            // Remove it from the queue
-                            queue.RemoveAt(0);
+                            if (queue.Count > 0)
+                            {
+                                // Pick the oldest message
+                                active_message = queue[0];
+                                message_found = true;
+                                // Remove it from the queue
+                                queue.RemoveAt(0);
+                            }
+                        }
+
+                        if (message_found)
+                        {
+                            Logging.trace("Received {0} ({1}B) - {2}...", active_message.code, active_message.data.Length, Crypto.hashToString(active_message.data.Take(60).ToArray()));
+                            // Active message set, attempt to parse it
+                            IxianHandler.parseProtocolMessage(active_message.code, active_message.data, active_message.endpoint);
+                        }
+                        else
+                        {
+                            // Sleep for 50ms to prevent cpu waste
+                            Thread.Sleep(50);
                         }
                     }
-
-                    if (message_found)
+                    catch (ThreadInterruptedException)
                     {
-                        Logging.trace("Received {0} ({1}B) - {2}...", active_message.code, active_message.data.Length, Crypto.hashToString(active_message.data.Take(60).ToArray()));
-                        // Active message set, attempt to parse it
-                        IxianHandler.parseProtocolMessage(active_message.code, active_message.data, active_message.endpoint);
+                        // Thread interrupted, exit
+                        break;
                     }
-                    else
+                    catch (Exception e)
                     {
-                        // Sleep for 50ms to prevent cpu waste
+                        Logging.error("Exception in queueLoop: " + e);
                         Thread.Sleep(50);
                     }
                 }
