@@ -1406,7 +1406,7 @@ namespace IXICore
             Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
-                wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
+                wallet = new Address((string)parameters["wallet"]);
             }
 
             IxiNumber balance = IxianHandler.getWalletStorage(wallet).getMyTotalBalance(IxianHandler.getWalletStorage(wallet).getPrimaryAddress());
@@ -1422,7 +1422,13 @@ namespace IXICore
             Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
-                wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
+                wallet = new Address((string)parameters["wallet"]);
+            }
+
+            AddressPaymentFlag paymentAddressMode = CoreConfig.defaultPaymentAddressMode;
+            if (parameters.ContainsKey("paymentAddressMode"))
+            {
+                paymentAddressMode = (AddressPaymentFlag)parameters["paymentAddressMode"];
             }
 
             // Show own address, balance and blockchain synchronization status
@@ -1432,7 +1438,17 @@ namespace IXICore
 
             foreach (Address addr in address_list)
             {
-                ExtendedAddress ea = new ExtendedAddress(addr, CoreConfig.defaultPaymentAddressMode, null);
+                ExtendedAddress ea;
+                if (paymentAddressMode == AddressPaymentFlag.Primary
+                    || IxianHandler.primaryWalletAddress.addressNoChecksum.SequenceEqual(addr.addressNoChecksum))
+                {
+                    ea = new ExtendedAddress(addr, paymentAddressMode, null);
+                }
+                else
+                {
+                    // If not primary payment mode, add routing address to secondary addresses
+                    ea = new ExtendedAddress(IxianHandler.primaryWalletAddress, addr, null);
+                }
                 address_balance_list.Add(ea.ToString(), IxianHandler.getWalletBalance(addr).ToString());
             }
 
@@ -1446,7 +1462,7 @@ namespace IXICore
             Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
-                wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
+                wallet = new Address((string)parameters["wallet"]);
             }
 
             return new JsonResponse { result = Crypto.hashToString(IxianHandler.getWalletStorage(wallet).getPrimaryPublicKey()), error = error };
