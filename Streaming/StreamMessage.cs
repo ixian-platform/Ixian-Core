@@ -27,8 +27,13 @@ namespace IXICore
     }
     public class StreamMessageDataConverter : JsonConverter<byte[]>
     {
-        public override void WriteJson(JsonWriter writer, byte[] value, JsonSerializer serializer)
+        public override void WriteJson(JsonWriter writer, byte[]? value, JsonSerializer serializer)
         {
+            if (value == null)
+            {
+                serializer.Serialize(writer, null);
+                return;
+            }
             var sm = new SpixiMessage(value);
 
             var smi = new SpixiMessageInternal()
@@ -50,7 +55,11 @@ namespace IXICore
 
         public override byte[]? ReadJson(JsonReader reader, Type objectType, byte[]? existingValue, bool hasExistingValue, JsonSerializer serializer)
         {
-            return JsonConvert.DeserializeObject<SpixiMessage>((string)reader.Value).getBytes();
+            if (reader.Value == null)
+            {
+                return null;
+            }
+            return JsonConvert.DeserializeObject<SpixiMessage>((string)reader.Value)?.getBytes();
         }
     }
 
@@ -76,8 +85,6 @@ namespace IXICore
         public int version { get; private set; } = 0;                 // Stream Message version
 
         public StreamMessageCode type;          // Stream Message type
-        [JsonConverter(typeof(AddressConverter))]
-        public Address? realSender = null;        // Used by group chat bots
         [JsonConverter(typeof(AddressConverter))]
         public Address sender = null;            // Sender wallet
 
@@ -112,6 +119,11 @@ namespace IXICore
         public long timestamp = 0; // TODO Can probably be moved to SpixiMessage
 
         public bool requireRcvConfirmation = true;
+
+        private StreamMessage()
+        {
+
+        }
 
         public StreamMessage(int version = 0)
         {

@@ -787,11 +787,13 @@ namespace IXICore.Activity
             Address address,
             ActivityType? typeFilter,
             byte[]? fromActivityId = null,
-            int count = 50,
+            int count = 0,
             bool descending = false)
         {
             lock (rockLock)
             {
+                if (count <= 0) count = 50;
+
                 var result = new List<ActivityObject>(count);
 
                 if (database == null)
@@ -1365,7 +1367,7 @@ namespace IXICore.Activity
             }
         }
 
-        public List<ActivityObject> getActivitiesByAddress(Address address, ActivityType? type, byte[]? fromActivityId = null, int count = 50, bool descending = false)
+        public List<ActivityObject> getActivitiesByAddress(Address address, ActivityType? type, byte[]? fromActivityId = null, int count = 0, bool descending = false)
         {
             lock (openDatabases)
             {

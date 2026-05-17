@@ -22,6 +22,9 @@ namespace IXICore.Streaming
 {
     class OfflinePushMessages
     {
+        public static ulong receivedOfflineMessages = 0;
+        public static ulong sentOfflineMessages = 0;
+
         private static long lastUpdate = 0;
         private static int cooldownPeriod = 60; // cooldown period in seconds
 
@@ -69,6 +72,7 @@ namespace IXICore.Streaming
                     string body = response.Content.ReadAsStringAsync().Result;
                     if (body.Equals("OK"))
                     {
+                        sentOfflineMessages++;
                         return true;
                     }
                 }catch(Exception e)
@@ -157,6 +161,7 @@ namespace IXICore.Streaming
                                         f.setPublicKey(pk);
                                     }
                                 }
+                                receivedOfflineMessages++;
                                 streamProcessor.receiveData(data, null, fireLocalNotification, alert);
                             }
                             else

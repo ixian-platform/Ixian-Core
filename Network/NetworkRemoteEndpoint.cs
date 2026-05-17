@@ -43,6 +43,10 @@ namespace IXICore.Network
 
     public class RemoteEndpoint : IAsyncDisposable
     {
+        public static ulong receivedNetworkMessages = 0;
+        public static ulong toSendNetworkMessages = 0;
+        public static ulong sentNetworkMessages = 0;
+
         class MessageHeader
         {
             public ProtocolMessageCode code;
@@ -330,6 +334,7 @@ namespace IXICore.Network
                     QueueMessageRaw? raw_msg = await readSocketData(ct).ConfigureAwait(false);
                     if (raw_msg != null)
                     {
+                        receivedNetworkMessages++;
                         message_received = true;
                         recvWriter.TryWrite(raw_msg);
                     }
@@ -491,6 +496,7 @@ namespace IXICore.Network
                         messageCount++;
 
                         await sendDataInternal(socket, msg.code, msg.data, msg.checksum, ct).ConfigureAwait(false);
+                        sentNetworkMessages++;
 
                         if (msg.code == ProtocolMessageCode.bye)
                         {
@@ -822,6 +828,7 @@ namespace IXICore.Network
 
         public void sendData(QueueMessage message, long msgId = 0, MessagePriority priority = MessagePriority.auto)
         {
+            toSendNetworkMessages++;
             if (!isConnected())
             {
                 return;

@@ -183,12 +183,20 @@ namespace IXICore
                 Logging.error("Cannot decrypt message, no AES and CHACHA keys were provided.");
                 return null;
             }
+            (byte[] bytes, int bytesRead) message_nonce;
+            try
+            {
+                message_nonce = data_to_decrypt.ReadIxiBytes(offset);
+                offset += message_nonce.bytesRead;
+                var dataLen = data_to_decrypt.GetIxiVarUInt(offset);
+                offset += dataLen.bytesRead;
+            }
+            catch (Exception e)
+            {
+                Logging.error("Failed to read message nonce and data length from encrypted message: {0}", e.Message);
+                return null;
+            }
 
-            var message_nonce = data_to_decrypt.ReadIxiBytes(offset);
-            offset += message_nonce.bytesRead;
-            var dataLen = data_to_decrypt.GetIxiVarUInt(offset);
-            offset += dataLen.bytesRead;
-            
             var derived_chacha_secret = deriveKeyAndIv(message_nonce.bytes, chacha_key, 12);
             byte[] chacha_decrypted = CryptoManager.lib.decryptWithChachaPoly1305(data_to_decrypt, derived_chacha_secret.key, derived_chacha_secret.iv, aad, offset);
             if (chacha_decrypted != null)

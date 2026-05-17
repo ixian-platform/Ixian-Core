@@ -190,6 +190,10 @@ namespace IXICore
             {
 
             }
+            catch (Exception)
+            {
+
+            }
         }
 
         public void stop()
