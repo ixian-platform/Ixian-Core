@@ -49,6 +49,12 @@ namespace IXICore.Streaming
 
         object startLock = new();
 
+        private bool processMessagesForOfflineContacts = true;
+
+        public static ulong toSendStreamMessages = 0;
+        public static ulong sentStreamMessages = 0;
+
+
         public PendingMessageProcessor(string root_storage_path, bool enable_push_notification_server)
         {
             storagePath = Path.Combine(root_storage_path, storagePath);
@@ -223,7 +229,8 @@ namespace IXICore.Streaming
                     continue;
                 }
                 List<PendingMessageHeader>? message_headers = null;
-                if (!friend.online)
+                if (!processMessagesForOfflineContacts
+                    && !friend.online)
                 {
                     CoreStreamProcessor.fetchFriendsPresence(friend);
                     message_headers = recipient.messageQueue.FindAll(x => x.sendToServer);
@@ -256,6 +263,7 @@ namespace IXICore.Streaming
 
         public void sendMessage(Friend friend, StreamMessage msg, int channel, bool add_to_pending_messages, bool send_to_server, bool send_push_notification, bool remove_after_sending = false)
         {
+            toSendStreamMessages++;
             if (!running)
             {
                 Logging.warn("Cannot send message, Pending Message Processor is not running.");
@@ -331,28 +339,28 @@ namespace IXICore.Streaming
             lock (pendingRecipients)
             {
                 PendingRecipient? pending_recipient = pendingRecipients.Find(x => x.address.SequenceEqual(friend.walletAddress));
-                if (pending_recipient != null)
+                if (pending_recipient == null)
                 {
-                    PendingMessageHeader? tmp_msg_header = pending_recipient.messageQueue.Find(x => x.id.SequenceEqual(msg_id));
-                    if (tmp_msg_header != null)
+                    return false;
+                }
+                PendingMessageHeader? tmp_msg_header = pending_recipient.messageQueue.Find(x => x.id.SequenceEqual(msg_id));
+                if (tmp_msg_header == null)
+                {
+                    return false;
+                }
+                pending_recipient.messageQueue.Remove(tmp_msg_header);
+                if (File.Exists(tmp_msg_header.filePath))
+                {
+                    File.Delete(tmp_msg_header.filePath);
+
+                    if (friend.type == FriendType.Payment
+                        && pending_recipient.messageQueue.Count == 0)
                     {
-                        pending_recipient.messageQueue.Remove(tmp_msg_header);
-                        if (File.Exists(tmp_msg_header.filePath))
-                        {
-                            File.Delete(tmp_msg_header.filePath);
-
-                            if (friend.type == FriendType.Payment
-                                && pending_recipient.messageQueue.Count == 0)
-                            {
-                                FriendList.removeFriend(friend);
-                            }
-
-                            return true;
-                        }
+                        FriendList.removeFriend(friend);
                     }
                 }
-                return false;
             }
+            return true;
         }
 
         private async Task<bool> sendMessage(Friend friend, PendingMessage pending_message, bool add_to_pending_messages = true)
@@ -412,14 +420,15 @@ namespace IXICore.Streaming
             {
                 if(!friend.bot)
                 {
-                    Logging.warn("Could not send message to {0}, due to missing encryption keys!", msg.recipient.ToString());
+                    Logging.error("Could not send message to {0}, due to missing encryption keys!", msg.recipient.ToString());
                     // Return true in case it has other messages in the queue that need to be processed and aren't encrypted
                     return true;
                 }else
                 {
-                    // TODO TODO TODO perhaps it would be better to discard such message and notify the user
-                    Logging.warn("Tried sending encrypted message of type {0} without encryption keys to {1}, which is a bot, changing message encryption type to none!", msg.type, msg.recipient.ToString());
-                    msg.encryptionType = StreamMessageEncryptionCode.none;
+                    // TODO notify the user
+                    Logging.error("Tried sending encrypted message of type {0} without encryption keys to {1}, which is a bot, changing message encryption type to none!", msg.type, msg.recipient.ToString());
+                    // Return true in case it has other messages in the queue that need to be processed and aren't encrypted
+                    return true;
                 }
             }
 
@@ -464,6 +473,10 @@ namespace IXICore.Streaming
             if (!sent)
             {
                 CoreStreamProcessor.fetchFriendsPresence(friend);
+            }
+            else
+            {
+                sentStreamMessages++;
             }
             if (friend.forcePush || !friend.online || !sent)
             {
@@ -567,6 +580,7 @@ namespace IXICore.Streaming
                     try
                     {
                         await processPendingMessages().ConfigureAwait(false);
+                        processMessagesForOfflineContacts = false;
                     }
                     catch (Exception e) when (e is not OperationCanceledException)
                     {
@@ -618,6 +632,16 @@ namespace IXICore.Streaming
                     Directory.Delete(storagePath, true);
                 }
             }
+        }
+
+        public ulong countPendingMessages()
+        {
+            ulong count = 0;
+            foreach (var recipient in pendingRecipients)
+            {
+                count += (ulong)recipient.messageQueue.Count;
+            }
+            return count;
         }
 
         protected abstract void onMessageSent(Friend friend, int channel, StreamMessage msg);

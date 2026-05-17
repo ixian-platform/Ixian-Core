@@ -23,7 +23,7 @@ namespace IXICore.Storage
 {
     public interface LocalStorageCallbacks
     {
-        public void processMessage(FriendMessage friendMessage);
+        public void processMessage(Friend friend, int channel, FriendMessage friendMessage);
     }
 
     class WriteRequest
@@ -229,7 +229,7 @@ namespace IXICore.Storage
                     int channel = request_channel.Key;
                     try
                     {
-                        writeMessages(request.Key, channel, friend.getMessages(channel));
+                        writeMessages(friend, channel, friend.getMessages(channel));
                     }
                     catch (Exception e)
                     {
@@ -478,7 +478,7 @@ namespace IXICore.Storage
             }
         }
 
-        private List<FriendMessage> readMessagesFile(string path)
+        private List<FriendMessage> readMessagesFile(Friend friend, int channel, string path)
         {
             lock (messagesLock)
             {
@@ -515,7 +515,7 @@ namespace IXICore.Storage
                         FriendMessage msg = new FriendMessage(reader.ReadBytes(msg_len));
                         messages.Add(msg);
 
-                        localStorageCallbacks.processMessage(msg);
+                        localStorageCallbacks.processMessage(friend, channel, msg);
                     }
 
                 }
@@ -537,11 +537,12 @@ namespace IXICore.Storage
         }
 
         // Reads the message archive for a given wallet
-        public List<FriendMessage> readLastMessages(Address wallet_bytes, int channel, long from_time_stamp = 0, int msg_count = 100, bool reverse = true)
+        public List<FriendMessage> readLastMessages(Friend friend, int channel, long from_time_stamp = 0, int msg_count = 100, bool reverse = true)
         {
             lock (messagesLock)
             {
-                string wallet = wallet_bytes.ToString();
+                Address wallet_address = friend.walletAddress;
+                string wallet = wallet_address.ToString();
                 string messages_path = Path.Combine(documentsPath, "Chats", wallet, channel.ToString());
 
                 List<FriendMessage> messages = new List<FriendMessage>();
@@ -580,7 +581,7 @@ namespace IXICore.Storage
                         }
                     }
                     string path = files[i];
-                    var tmp_msgs = readMessagesFile(path);
+                    var tmp_msgs = readMessagesFile(friend, channel, path);
                     int msgs_to_take = msg_count - messages.Count;
                     if (reverse)
                     {
@@ -661,7 +662,7 @@ namespace IXICore.Storage
         }
 
         // Writes the message archive for a given wallet
-        private bool writeMessages(Address address, int channel, List<FriendMessage>? messages)
+        private bool writeMessages(Friend friend, int channel, List<FriendMessage>? messages)
         {
             if (messages == null)
             {
@@ -675,6 +676,7 @@ namespace IXICore.Storage
             }
             lock (messagesLock)
             {
+                Address address = friend.walletAddress;
                 string wallet = address.ToString();
                 string messages_path = Path.Combine(documentsPath, "Chats", wallet, channel.ToString());
 
@@ -690,7 +692,7 @@ namespace IXICore.Storage
                 }
                 else
                 {
-                    var tmp_messages = readMessagesFile(messages_full_path);
+                    var tmp_messages = readMessagesFile(friend, channel, messages_full_path);
                     tmp_messages.RemoveAll(x => x.receivedTimestamp >= local_messages.First().receivedTimestamp);
 
                     local_messages.InsertRange(0, tmp_messages);
@@ -853,7 +855,7 @@ namespace IXICore.Storage
             Directory.CreateDirectory(avatarsPath);
         }
 
-        public string? getAvatarPath(string friend_address, bool thumb = true)
+        public string? getAvatarPath(string friend_address, bool thumb = true, bool add_ts = true)
         {
             string size_str = "";
             if (thumb)
@@ -865,8 +867,22 @@ namespace IXICore.Storage
 
             if (File.Exists(avatar_filename))
             {
+                if (!add_ts)
+                {
+                    return avatar_filename;
+                }
                 string ts = "?t=" + File.GetLastWriteTimeUtc(avatar_filename).Second; // Unique parameter for proper HTML based refresh
                 return avatar_filename + ts;
+            }
+            return null;
+        }
+
+        public byte[]? getAvatarBytes(string friend_address, bool thumb)
+        {
+            string? path = getAvatarPath(friend_address, thumb, false);
+            if (path != null && File.Exists(path))
+            {
+                return File.ReadAllBytes(path);
             }
             return null;
         }
