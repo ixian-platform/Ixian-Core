@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using IXICore.Utils;
 using System;
 using System.IO;
 
@@ -72,28 +73,25 @@ namespace IXICore
         transactionRequest = 49,
         openSecureConnection = 50,
         closeSecureConnection = 51,
+        createGroup = 52,
         reserved = 0xF0, // 0xF0-0xFF reserved for custom apps/services
     }
-
-    // TODO TODO TODO add checksum from StreamMessage/parent message to SpixiMessage when encrypted and when StreamMessage isn't signed and compare the checksums, to make sure StreamMessage hasn't been tampered with
 
     class SpixiMessage
     {
         public SpixiMessageCode type;          // Spixi Message type
-        public byte[] data = null;             // Actual message data
+        public byte[] data;             // Actual message data
         public int channel = 0;
+        public byte[]? groupAddress = null;
+        public byte[]? groupSenderAddress = null;
 
-        public SpixiMessage()
-        {
-            type = SpixiMessageCode.chat;
-            data = null;
-        }
-
-        public SpixiMessage(SpixiMessageCode in_type, byte[] in_data, int in_channel = 0)
+        public SpixiMessage(SpixiMessageCode in_type, byte[] in_data, int in_channel = 0, byte[]? groupAddress = null, byte[]? groupSenderAddress = null)
         {
             type = in_type;
             data = in_data;
             channel = in_channel;
+            this.groupAddress = groupAddress;
+            this.groupSenderAddress = groupSenderAddress;
         }
 
         public SpixiMessage(byte[] bytes)
@@ -118,6 +116,12 @@ namespace IXICore
                         if (reader.BaseStream.Length - reader.BaseStream.Position > 0)
                         {
                             channel = reader.ReadInt32();
+                        }
+
+                        if (reader.BaseStream.Length - reader.BaseStream.Position > 0)
+                        {
+                            groupAddress = reader.ReadIxiBytes();
+                            groupSenderAddress = reader.ReadIxiBytes();
                         }
                     }
                 }
@@ -152,6 +156,9 @@ namespace IXICore
                     }
 
                     writer.Write(channel);
+
+                    writer.WriteIxiBytes(groupAddress);
+                    writer.WriteIxiBytes(groupSenderAddress);
                 }
                 return m.ToArray();
             }

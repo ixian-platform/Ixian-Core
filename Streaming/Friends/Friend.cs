@@ -152,7 +152,8 @@ namespace IXICore.Streaming
     {
         Normal = 0,
         Temporary = 1,
-        Payment = 2
+        Payment = 2,
+        Group = 3
     }
 
     public enum FriendState
@@ -249,6 +250,11 @@ namespace IXICore.Streaming
         public void setBotMode()
         {
             bot = true;
+            setGroupMode();
+        }
+
+        public void setGroupMode()
+        {
             string base_path = Path.Combine(FriendList.accountsPath, walletAddress.ToString());
             users = new BotUsers(Path.Combine(base_path, "contacts.dat"), null, true);
             users.loadContactsFromFile();
@@ -379,6 +385,11 @@ namespace IXICore.Streaming
                         if (version >= 9)
                         {
                             type = (FriendType)reader.ReadInt32();
+                        }
+
+                        if (type == FriendType.Group)
+                        {
+                            setGroupMode();
                         }
                     } catch (Exception e)
                     {
@@ -680,7 +691,7 @@ namespace IXICore.Streaming
             FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
-                Logging.error("Error trying to set read indicator, message does not exist");
+                Logging.trace("Error trying to set read indicator, message to {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
                 return false;
             }
 
@@ -717,7 +728,7 @@ namespace IXICore.Streaming
             FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
-                Logging.error("Error trying to set received indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
+                Logging.trace("Error trying to set received indicator, message to {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
                 return false;
             }
 
@@ -739,7 +750,6 @@ namespace IXICore.Streaming
             return true;
         }
 
-
         public bool setMessageSent(int channel, byte[] id)
         {
             var tmp_messages = getMessages(channel);
@@ -750,7 +760,7 @@ namespace IXICore.Streaming
             FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
-                Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
+                Logging.trace("Error trying to set sent indicator, message to {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
                 return false;
             }
 
@@ -782,13 +792,13 @@ namespace IXICore.Streaming
             FriendMessage? msg = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(id));
             if (msg == null)
             {
-                Logging.error("Error trying to set sent indicator, message from {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
+                Logging.error("Error trying to set error indicator, message to {0} for channel {1} does not exist", walletAddress.ToString(), channel.ToString());
                 return false;
             }
 
             if (msg.localSender)
             {
-                if (!msg.sent)
+                if (!msg.read)
                 {
                     if (!msg.errorSending)
                     {
@@ -900,7 +910,7 @@ namespace IXICore.Streaming
                     if (!messages.ContainsKey(channel) || msg_count != 100)
                     {
                         // Read messages from chat history
-                        messages[channel] = IxianHandler.localStorage.readLastMessages(walletAddress, channel, 0, msg_count);
+                        messages[channel] = IxianHandler.localStorage.readLastMessages(this, channel, 0, msg_count);
                     }
                     return messages[channel];
                 }
@@ -972,12 +982,16 @@ namespace IXICore.Streaming
 
         public bool addReaction(Address sender_address, ReactionMessage reaction_data, int channel)
         {
-            if (!reaction_data.reaction.StartsWith("tip:") && !reaction_data.reaction.StartsWith("like:"))
+            if (!reaction_data.reaction.StartsWith("tip:")
+                && !reaction_data.reaction.StartsWith("like:")
+                && !reaction_data.reaction.StartsWith("received:")
+                && !reaction_data.reaction.StartsWith("seen:")
+                && !reaction_data.reaction.StartsWith("fileReceived:"))
             {
                 Logging.warn("Invalid reaction data: " + reaction_data.reaction);
                 return false;
             }
-            if (reaction_data.reaction.Length > 128)
+            if (reaction_data.reaction.Length > 32)
             {
                 Logging.warn("Invalid reaction data length: " + reaction_data.reaction);
                 return false;
@@ -992,13 +1006,35 @@ namespace IXICore.Streaming
                 FriendMessage? fm = tmp_messages.Find(x => x.id != null && x.id.SequenceEqual(reaction_data.msgId));
                 if (fm != null)
                 {
-                    if (fm.reactions.Count >= 10)
+                    if (fm.reactions.Count >= 10
+                        && !fm.reactions.ContainsKey(reaction_data.reaction))
                     {
-                        Logging.warn("Too many reactions on message " + Crypto.hashToString(reaction_data.msgId));
+                        Logging.warn("Too many reaction types on message " + Crypto.hashToString(reaction_data.msgId));
                         return false;
                     }
                     if (fm.addReaction(sender_address, reaction_data.reaction))
                     {
+                        if (reaction_data.reaction.StartsWith("received:"))
+                        {
+                            if (fm.reactions["received"].Count() + 1 >= users.count())
+                            {
+                                setMessageReceived(channel, fm.id);
+                            }
+                        }
+                        else if (reaction_data.reaction.StartsWith("seen:"))
+                        {
+                            if (fm.reactions["seen"].Count() + 1 >= users.count())
+                            {
+                                setMessageRead(channel, fm.id);
+                            }
+                        }
+                        else if (reaction_data.reaction.StartsWith("fileReceived:"))
+                        {
+                            if (fm.reactions["fileReceived"].Count() + 1 >= users.count())
+                            {
+                                fm.completed = true;
+                            }
+                        }
                         IxianHandler.localStorage.requestWriteMessages(walletAddress, channel);
                         return true;
                     }
@@ -1103,6 +1139,11 @@ namespace IXICore.Streaming
                     Directory.Delete(base_path, true);
                 }
             }
+        }
+
+        public bool hasCapabilities(StreamCapabilities capabilities)
+        {
+            return (streamCapabilities & capabilities) == capabilities;
         }
     }
 }

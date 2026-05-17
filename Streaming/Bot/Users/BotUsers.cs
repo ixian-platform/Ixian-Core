@@ -15,14 +15,14 @@ using IXICore.Utils;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace IXICore.SpixiBot
 {
     // TODO use a database for storing users. For now a workaround of last 500 users only will be stored due to memory constraints
     public class BotUsers
     {
-        public Dictionary<Address, BotContact> contacts = new Dictionary<Address, BotContact>(new AddressComparer());
-        private List<Address> contactsList = new List<Address>();
+        public OrderedDictionary<Address, BotContact> contacts = new OrderedDictionary<Address, BotContact>(new AddressComparer());
 
         string contactsPath = "contacts.ixi";
         string? avatarPath = "Avatars";
@@ -62,15 +62,22 @@ namespace IXICore.SpixiBot
 
                 try
                 {
-                    int version = 0;
+                    int version = 1;
                     writer.Write(version);
+
+                    writer.Write(false); // Can be reused in the future
 
                     int num_contacts = contacts.Count;
                     writer.Write(num_contacts);
 
                     foreach (var contact in contacts)
                     {
-                        byte[] contact_bytes = contact.Value.getBytes(saveNickAsString);
+                        var contact_info = contact.Value;
+                        if (contact_info == null)
+                        {
+                            continue;
+                        }
+                        byte[] contact_bytes = contact_info.getBytes(saveNickAsString);
                         writer.Write(contact_bytes.Length);
                         writer.Write(contact_bytes);
                     }
@@ -112,6 +119,11 @@ namespace IXICore.SpixiBot
                 {
                     int version = reader.ReadInt32();
 
+                    if (version > 0)
+                    {
+                        reader.ReadBoolean(); // Can be reused in the future
+                    }
+
                     int num_contacts = reader.ReadInt32();
                     for (int i = 0; i < num_contacts; i++)
                     {
@@ -120,7 +132,6 @@ namespace IXICore.SpixiBot
 
                         BotContact bc = new BotContact(contact_bytes, saveNickAsString);
                         Address address = new Address(bc.publicKey);
-                        contactsList.Add(address);
                         contacts.AddOrReplace(address, bc);
                     }
                 }
@@ -131,6 +142,14 @@ namespace IXICore.SpixiBot
                 }
 
                 reader.Close();
+            }
+        }
+
+        public Address getOwner()
+        {
+            lock (contacts)
+            {
+                return contacts.First().Key;
             }
         }
 
@@ -148,9 +167,9 @@ namespace IXICore.SpixiBot
 
         public BotContact? getUser(Address address)
         {
-            lock(contacts)
+            lock (contacts)
             {
-                if(contacts.ContainsKey(address))
+                if (contacts.ContainsKey(address))
                 {
                     return contacts[address];
                 }
@@ -167,7 +186,6 @@ namespace IXICore.SpixiBot
                     return false;
                 }
                 contacts.Remove(address);
-                contactsList.Remove(address);
                 writeContactsToFile();
             }
             return true;
@@ -179,13 +197,11 @@ namespace IXICore.SpixiBot
             {
                 if (!hasUser(address))
                 {
-                    contactsList.Add(address);
                     contacts.Add(address, new BotContact(null, pub_key, 0, false));
                     // TODO temporary limit, should be removed after switching to db
                     if (limit && contacts.Count > 500)
                     {
-                        contacts.Remove(contactsList[0]);
-                        contactsList.RemoveAt(0);
+                        contacts.Remove(address);
                     }
                     writeContactsToFile();
                 }
@@ -195,7 +211,7 @@ namespace IXICore.SpixiBot
 
         public bool setAvatar(Address address, byte[] avatar_message)
         {
-            if(avatarPath == null)
+            if (avatarPath == null)
             {
                 throw new Exception("Cannot set avatar, avatarPath is null.");
             }
@@ -257,16 +273,11 @@ namespace IXICore.SpixiBot
             lock (contacts)
             {
                 Address address = new Address(user.publicKey);
-                if(!contacts.ContainsKey(address))
-                {
-                    contactsList.Add(address);
-                }
                 contacts.AddOrReplace(address, user);
                 // TODO temporary limit, should be removed after switching to db
                 if (limit && contacts.Count > 500)
                 {
-                    contacts.Remove(contactsList[0]);
-                    contactsList.RemoveAt(0);
+                    contacts.Remove(contacts.First().Key);
                 }
                 writeContactsToFile();
             }
@@ -277,7 +288,6 @@ namespace IXICore.SpixiBot
             lock (contacts)
             {
                 contacts.Clear();
-                contactsList.Clear();
                 writeContactsToFile();
             }
         }

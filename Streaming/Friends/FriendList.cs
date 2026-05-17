@@ -319,9 +319,31 @@ namespace IXICore.Streaming
             return true;
         }
 
+        private static bool isFriendInGroup(Address wallet_address)
+        {
+            lock (friends)
+            {
+                foreach (Friend friend in friends)
+                {
+                    if (friend.type == FriendType.Group
+                        && friend.users.hasUser(wallet_address))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
         // Removes a friend from the list
         public static bool removeFriend(Friend friend)
         {
+            if (isFriendInGroup(friend.walletAddress))
+            {
+                Logging.warn("Cannot remove friend {0} because they are a participant in a group.", friend.walletAddress.ToString());
+                return false;
+            }
+
             // Remove history file
             IxianHandler.localStorage.deleteMessages(friend.walletAddress);
 

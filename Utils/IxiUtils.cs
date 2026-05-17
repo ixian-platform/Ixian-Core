@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace IXICore.Utils
 {
@@ -252,6 +253,63 @@ namespace IXICore.Utils
 
             writer.WriteIxiVarInt(bytes.Length);
             writer.Write(bytes);
+        }
+
+        public static OrderedDictionary<TKey, TElement> ToOrderedDictionary<TSource, TKey, TElement>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector, Func<TSource, TElement> elementSelector) where TKey : notnull =>
+            ToOrderedDictionary(source, keySelector, elementSelector, null);
+
+        public static OrderedDictionary<TKey, TElement> ToOrderedDictionary<TSource, TKey, TElement>(this IEnumerable<TSource> source, Func<TSource, TKey> keySelector, Func<TSource, TElement> elementSelector, IEqualityComparer<TKey>? comparer) where TKey : notnull
+        {
+            if (source is null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            if (keySelector is null)
+            {
+                throw new ArgumentNullException(nameof(keySelector));
+            }
+
+            if (elementSelector is null)
+            {
+                throw new ArgumentNullException(nameof(elementSelector));
+            }
+
+            if (source.TryGetNonEnumeratedCount(out int capacity))
+            {
+                if (capacity == 0)
+                {
+                    return new OrderedDictionary<TKey, TElement>(comparer);
+                }
+
+                if (source is TSource[] array)
+                {
+                    return SpanToOrderedDictionary(array, keySelector, elementSelector, comparer);
+                }
+
+                if (source is List<TSource> list)
+                {
+                    ReadOnlySpan<TSource> span = CollectionsMarshal.AsSpan(list);
+                    return SpanToOrderedDictionary(span, keySelector, elementSelector, comparer);
+                }
+            }
+
+            OrderedDictionary<TKey, TElement> d = new OrderedDictionary<TKey, TElement>(capacity, comparer);
+            foreach (TSource element in source)
+            {
+                d.Add(keySelector(element), elementSelector(element));
+            }
+
+            return d;
+        }
+        private static OrderedDictionary<TKey, TElement> SpanToOrderedDictionary<TSource, TKey, TElement>(ReadOnlySpan<TSource> source, Func<TSource, TKey> keySelector, Func<TSource, TElement> elementSelector, IEqualityComparer<TKey>? comparer) where TKey : notnull
+        {
+            OrderedDictionary<TKey, TElement> d = new OrderedDictionary<TKey, TElement>(source.Length, comparer);
+            foreach (TSource element in source)
+            {
+                d.Add(keySelector(element), elementSelector(element));
+            }
+            return d;
         }
     }
 

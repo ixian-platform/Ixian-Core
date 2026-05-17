@@ -1,5 +1,5 @@
-﻿// Copyright (C) 2017-2020 Ixian OU
-// This file is part of Ixian Core - www.github.com/ProjectIxian/Ixian-Core
+﻿// Copyright (C) 2017-2026 Ixian
+// This file is part of Ixian Core - www.github.com/ixian-platform/Ixian-Core
 //
 // Ixian Core is free software: you can redistribute it and/or modify
 // it under the terms of the MIT License as published
@@ -10,7 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
-using IXICore;
+using IXICore.Utils;
 using System.IO;
 
 namespace IXICore.SpixiBot
@@ -18,7 +18,7 @@ namespace IXICore.SpixiBot
     public class BotInfo
     {
         public short version;
-        public string serverName;
+        public string serverName = "";
         public string serverDescription;
         public IxiNumber cost;
         public long settingsGeneratedTime = 0;
@@ -27,12 +27,12 @@ namespace IXICore.SpixiBot
         public int defaultChannel = 0;
         public bool sendNotification = false;
         public long userCount = 0;
+        public byte[]? randomId;
+        public bool hideParticipantAddresses = false;
 
-
-        public BotInfo(short version, string server_name, string server_description, IxiNumber cost, long settings_generated_time, bool admin, int default_group, int default_channel, bool send_notification, long userCount)
+        public BotInfo(short version, byte[]? random_id, bool hide_participant_addresses, string server_description, IxiNumber cost, long settings_generated_time, bool admin, int default_group, int default_channel, bool send_notification, long userCount)
         {
             this.version = version;
-            serverName = server_name;
             serverDescription = server_description;
             this.cost = cost;
             settingsGeneratedTime = settings_generated_time;
@@ -41,6 +41,8 @@ namespace IXICore.SpixiBot
             defaultChannel = default_channel;
             sendNotification = send_notification;
             this.userCount = userCount;
+            randomId = random_id;
+            hideParticipantAddresses = hide_participant_addresses;
         }
 
         public BotInfo(byte[] contact_bytes)
@@ -65,6 +67,11 @@ namespace IXICore.SpixiBot
                     {
                         userCount = reader.ReadInt64();
                     }
+                    if (m.Position < m.Length)
+                    {
+                        randomId = reader.ReadIxiBytes();
+                        hideParticipantAddresses = reader.ReadBoolean();
+                    }
                 }
             }
         }
@@ -85,6 +92,8 @@ namespace IXICore.SpixiBot
                     writer.Write(defaultChannel);
                     writer.Write(sendNotification);
                     writer.Write(userCount);
+                    writer.WriteIxiBytes(randomId);
+                    writer.Write(hideParticipantAddresses);
                 }
                 return m.ToArray();
             }
