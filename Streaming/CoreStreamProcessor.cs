@@ -136,19 +136,27 @@ namespace IXICore.Streaming
                 }
             }
 
-            if (NetworkServer.getClient(friend.walletAddress) == null
-                && (friend.relayNode == null || NetworkServer.getClient(friend.relayNode) == null))
+            try
             {
-                if (friend.relayNode != null
-                    && friend.online)
+                if (NetworkServer.getClient(friend.walletAddress) == null
+                    && (friend.relayNode == null || NetworkServer.getClient(friend.relayNode) == null))
                 {
-                    await StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).ConfigureAwait(false);
-                }
-                else
-                {
-                    fetchFriendsPresence(friend, true);
+                    if (friend.relayNode != null
+                        && friend.online)
+                    {
+                        await StreamClientManager.connectTo(friend.relayNode.hostname, friend.relayNode.walletAddress).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        fetchFriendsPresence(friend, true);
+                    }
                 }
             }
+            catch (Exception ex)
+            {
+                Logging.error("Error while trying to connect to friend {0} before sending message: {1}", friend.walletAddress.ToString(), ex.Message);
+            }
+
             pendingMessageProcessor.sendMessage(friend, msg, channel, add_to_pending_messages, send_to_server, send_push_notification, remove_after_sending);
         }
 

@@ -293,125 +293,133 @@ namespace IXICore.Network
         // Connects to a specified node, with the syntax host:port
         public async Task<NetworkClient?> connectTo(string host, Address wallet_address)
         {
-            if (host.Length < 3)
+            try
             {
-                Logging.error("Invalid host address {0}", host);
-                return null;
-            }
-
-            string[] server = host.Split(':');
-            if (server.Length < 2)
-            {
-                Logging.warn("Cannot connect to invalid hostname: {0}", host);
-                return null;
-            }
-
-            // Resolve the hostname first
-            string resolved_server_name = NetworkUtils.resolveHostname(server[0]);
-
-            // Skip hostnames we can't resolve
-            if (resolved_server_name.Length < 1)
-            {
-                Logging.warn("Cannot resolve IP for {0}, skipping connection.", server[0]);
-                return null;
-            }
-
-            string resolved_host = string.Format("{0}:{1}", resolved_server_name, server[1]);
-
-            if (NetworkServer.isRunning())
-            {
-                // Verify against the publicly disclosed ip
-                // Don't connect to self
-                if (resolved_server_name.Equals(IxianHandler.publicIP, StringComparison.Ordinal))
+                if (host.Length < 3)
                 {
-                    if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
-                    {
-                        Logging.info("Skipping connection to public self seed node {0}", host);
-                        return null;
-                    }
+                    Logging.error("Invalid host address {0}", host);
+                    return null;
                 }
 
-                // Get all self addresses and run through them
-                List<string> self_addresses = NetworkUtils.GetAllLocalIPAddresses();
-                foreach (string self_address in self_addresses)
+                string[] server = host.Split(':');
+                if (server.Length < 2)
                 {
+                    Logging.warn("Cannot connect to invalid hostname: {0}", host);
+                    return null;
+                }
+
+                // Resolve the hostname first
+                string resolved_server_name = NetworkUtils.resolveHostname(server[0]);
+
+                // Skip hostnames we can't resolve
+                if (resolved_server_name.Length < 1)
+                {
+                    Logging.warn("Cannot resolve IP for {0}, skipping connection.", server[0]);
+                    return null;
+                }
+
+                string resolved_host = string.Format("{0}:{1}", resolved_server_name, server[1]);
+
+                if (NetworkServer.isRunning())
+                {
+                    // Verify against the publicly disclosed ip
                     // Don't connect to self
-                    if (resolved_server_name.Equals(self_address, StringComparison.Ordinal))
+                    if (resolved_server_name.Equals(IxianHandler.publicIP, StringComparison.Ordinal))
                     {
                         if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
                         {
-                            Logging.info("Skipping connection to self seed node {0}", host);
+                            Logging.info("Skipping connection to public self seed node {0}", host);
+                            return null;
+                        }
+                    }
+
+                    // Get all self addresses and run through them
+                    List<string> self_addresses = NetworkUtils.GetAllLocalIPAddresses();
+                    foreach (string self_address in self_addresses)
+                    {
+                        // Don't connect to self
+                        if (resolved_server_name.Equals(self_address, StringComparison.Ordinal))
+                        {
+                            if (server[1].Equals(string.Format("{0}", IxianHandler.publicPort), StringComparison.Ordinal))
+                            {
+                                Logging.info("Skipping connection to self seed node {0}", host);
+                                return null;
+                            }
+                        }
+                    }
+                }
+
+                lock (connectingClients)
+                {
+                    foreach (string client in connectingClients)
+                    {
+                        if (resolved_host.Equals(client, StringComparison.Ordinal))
+                        {
+                            // We're already connecting to this client
+                            return null;
+                        }
+                    }
+
+                    // Add the client to the connecting clients list
+                    connectingClients.Add(resolved_host);
+                }
+
+                // Check if node is already in the client list
+                lock (networkClients)
+                {
+                    foreach (NetworkClient client in networkClients)
+                    {
+                        if (client.getFullAddress(true).Equals(resolved_host, StringComparison.Ordinal))
+                        {
+                            // Address is already in the client list
                             return null;
                         }
                     }
                 }
-            }
 
-            lock (connectingClients)
-            {
-                foreach (string client in connectingClients)
+                // Check if node is already in the server list
+                string[] connectedClients = NetworkServer.getConnectedClients(true);
+                for (int i = 0; i < connectedClients.Length; i++)
                 {
-                    if (resolved_host.Equals(client, StringComparison.Ordinal))
-                    {
-                        // We're already connecting to this client
-                        return null;
-                    }
-                }
-
-                // Add the client to the connecting clients list
-                connectingClients.Add(resolved_host);
-            }
-
-            // Check if node is already in the client list
-            lock (networkClients)
-            {
-                foreach (NetworkClient client in networkClients)
-                {
-                    if (client.getFullAddress(true).Equals(resolved_host, StringComparison.Ordinal))
+                    if (connectedClients[i].Equals(resolved_host, StringComparison.Ordinal))
                     {
                         // Address is already in the client list
                         return null;
                     }
                 }
-            }
 
-            // Check if node is already in the server list
-            string[] connectedClients = NetworkServer.getConnectedClients(true);
-            for (int i = 0; i < connectedClients.Length; i++)
-            {
-                if (connectedClients[i].Equals(resolved_host, StringComparison.Ordinal))
+                // Connect to the specified node
+                NetworkClient? new_client = new NetworkClient(bindAddress);
+                // Recompose the connection address from the resolved IP and the original port
+                bool result = await new_client.connectToServer(resolved_server_name, Convert.ToInt32(server[1]), wallet_address).ConfigureAwait(false);
+
+                // Add this node to the client list if connection was successfull
+                if (result == true)
                 {
-                    // Address is already in the client list
-                    return null;
+                    // Add this node to the client list
+                    lock (networkClients)
+                    {
+                        networkClients.Add(new_client);
+                    }
                 }
-            }
-
-            // Connect to the specified node
-            NetworkClient? new_client = new NetworkClient(bindAddress);
-            // Recompose the connection address from the resolved IP and the original port
-            bool result = await new_client.connectToServer(resolved_server_name, Convert.ToInt32(server[1]), wallet_address).ConfigureAwait(false);
-
-            // Add this node to the client list if connection was successfull
-            if (result == true)
-            {
-                // Add this node to the client list
-                lock (networkClients)
+                else
                 {
-                    networkClients.Add(new_client);
+                    new_client = null;
                 }
-            }
-            else
-            {
-                new_client = null;
-            }
 
-            // Remove this node from the connecting clients list
-            lock (connectingClients)
-            {
-                connectingClients.Remove(resolved_host);
-            }
+                // Remove this node from the connecting clients list
+                lock (connectingClients)
+                {
+                    connectingClients.Remove(resolved_host);
+                }
 
-            return new_client;
+                return new_client;
+            }
+            catch (Exception ex)
+            {
+                Logging.error("Error occurred while connecting to client {0}: {1}", host, ex.Message);
+            }
+            return null;
         }
 
         // Send data to all connected nodes
