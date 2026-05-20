@@ -85,7 +85,7 @@ namespace IXICore.Utils
         }
 
         // Requests the user to type a new password
-        static public string? requestNewPassword(string banner)
+        static public string requestNewPassword(string banner)
         {
             Console.WriteLine();
             Console.Write(banner);
@@ -96,7 +96,7 @@ namespace IXICore.Utils
                 if (pass.Length < 10)
                 {
                     Console.WriteLine("Password needs to be at least 10 characters. Try again.");
-                    return null;
+                    return "";
                 }
 
                 Console.Write("Type it again to confirm: ");
@@ -145,6 +145,7 @@ namespace IXICore.Utils
                 {
                     if (sb.Length > 0)
                     {
+                        Console.WriteLine();
                         break;
                     }
                 }
@@ -157,6 +158,7 @@ namespace IXICore.Utils
                     }
                 }else if(i.Key == ConsoleKey.Escape)
                 {
+                    IxianHandler.requestShutdown();
                     return "";
                 }
                 else if (i.KeyChar != '\u0000')

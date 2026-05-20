@@ -63,7 +63,7 @@ namespace IXICore.Streaming
         }
     }
 
-    abstract class CoreStreamProcessor
+    class CoreStreamProcessor
     {
         static readonly byte[] IXI_AES_KEY_INFO = UTF8Encoding.UTF8.GetBytes("IXI AES Key");
         static readonly byte[] IXI_CHACHA_KEY_INFO = UTF8Encoding.UTF8.GetBytes("IXI ChaCha Key");
