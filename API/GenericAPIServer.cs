@@ -442,6 +442,11 @@ namespace IXICore
                 response = onActivity2(parameters);
             }
 
+            if (methodName.Equals("getactivity", StringComparison.OrdinalIgnoreCase))
+            {
+                response = onGetActivity(parameters);
+            }
+
             if (methodName.Equals("generatenewaddress", StringComparison.OrdinalIgnoreCase))
             {
                 response = onGenerateNewAddress(parameters);
@@ -1612,7 +1617,7 @@ namespace IXICore
                 descending = true;
             }
 
-            Address wallet = null;
+            Address? wallet = null;
             if (parameters.ContainsKey("wallet"))
             {
                 wallet = new Address(Base58Check.Base58CheckEncoding.DecodePlain((string)parameters["wallet"]));
@@ -1628,6 +1633,33 @@ namespace IXICore
             {
                 res = activityStorage.getActivitiesBySeedHashAndType(IxianHandler.getWalletStorage(wallet).getSeedHash(), (ActivityType)type, fromKey, Int32.Parse(count), descending);
             }
+            return new JsonResponse { result = res, error = error };
+        }
+
+        private JsonResponse onGetActivity(Dictionary<string, object> parameters)
+        {
+            if (activityStorage == null)
+            {
+                return new JsonResponse
+                {
+                    result = null,
+                    error = new JsonError()
+                    {
+                        code = (int)RPCErrorCode.RPC_INTERNAL_ERROR,
+                        message = "/getActivity can't be used, because ActivityStorage was not implemented."
+                    }
+                };
+            }
+
+            JsonError? error = null;
+
+            if (!parameters.ContainsKey("id"))
+            {
+                return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_PARAMS, message = "Missing parameter 'id'" } };
+            }
+
+            byte[] id = Convert.FromBase64String((string)parameters["id"]);
+            var res = activityStorage.getActivityById(id, null, true);
             return new JsonResponse { result = res, error = error };
         }
 
