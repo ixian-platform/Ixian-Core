@@ -1596,7 +1596,7 @@ namespace IXICore
             byte[]? fromKey = null;
             if (parameters.ContainsKey("fromId"))
             {
-                fromKey = Convert.FromBase64String((string)parameters["fromId"]);
+                fromKey = Transaction.txIdLegacyToV8((string)parameters["fromId"]);
             }
 
             string count = "50";
@@ -1653,12 +1653,16 @@ namespace IXICore
 
             JsonError? error = null;
 
-            if (!parameters.ContainsKey("id"))
+            byte[] id;
+            if (parameters.ContainsKey("id"))
+            {
+                id = Transaction.txIdLegacyToV8((string)parameters["id"]);
+            }
+            else
             {
                 return new JsonResponse { result = null, error = new JsonError() { code = (int)RPCErrorCode.RPC_INVALID_PARAMS, message = "Missing parameter 'id'" } };
             }
 
-            byte[] id = Convert.FromBase64String((string)parameters["id"]);
             var res = activityStorage.getActivityById(id, null, true);
             return new JsonResponse { result = res, error = error };
         }
