@@ -158,8 +158,10 @@ namespace IXICore.Miner
                             blockHeight = block.blockNum;
                         }
                     }
-
-                    CalculateHash(blockHeight, keyPair, challenge);
+                    if (currentBlockHeight != 0)
+                    {
+                        CalculateHash(blockHeight, keyPair, challenge);
+                    }
                 }
                 catch (Exception e)
                 {
@@ -188,7 +190,7 @@ namespace IXICore.Miner
 
             if (candidateBlock.timestamp + 1800 < Clock.getNetworkTimestamp())
             {
-                candidateBlock = IxianHandler.getBlockHeader(candidateBlock.blockNum - 6);
+                candidateBlock = IxianHandler.getBlockHeader(candidateBlock.blockNum - ConsensusConfig.sigOverlapOffset);
             }
 
             if (candidateBlock == null)
@@ -200,6 +202,18 @@ namespace IXICore.Miner
             ulong lastBlockHeight = candidateBlock.blockNum;
             ulong minCalculationBlockCount = ConsensusConfig.getPlPowMinCalculationBlockTime(IxianHandler.getLastBlockVersion());
 
+            // Restricts SignerPow after FIRST fine solution
+
+            if (currentBlockHeight > 0 && lastFoundBlockHeight > 0)
+            {
+                if ( lastFoundBlockHeight + ConsensusConfig.getPlPowBlocksValidity() > IxianHandler.getLastBlockHeight() )
+                {
+                    // Stop mining on all threads
+                    currentBlockHeight = 0;
+                    ResetStats();
+                    return;
+                }
+            }
             if (currentBlockHeight > 0)
             {
                 // Check if we're mining for at least X blocks and that the blockchain isn't stuck
