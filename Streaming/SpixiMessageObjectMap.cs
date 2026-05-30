@@ -73,6 +73,7 @@ namespace IXICore
                 { SpixiMessageCode.transactionSend, data => new TransactionSend(data) },
                 { SpixiMessageCode.transactionSendRequest, data => new TransactionSendRequest(data) },
                 { SpixiMessageCode.transactionSendResponse, data => new TransactionSendResponse(data) },
+                { SpixiMessageCode.chatStream, data => new ChatStreamMessage(data) },
             };
 
         public static object MapTypeToModel(SpixiMessageCode type, byte[] data)

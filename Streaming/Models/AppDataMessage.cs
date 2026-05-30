@@ -18,11 +18,11 @@ namespace IXICore.Streaming.Models
 {
     class AppDataMessage
     {
-        public byte[] sessionId = null;
-        public byte[] data = null;
-        public string appId = null;
+        public byte[] sessionId;
+        public byte[]? data = null;
+        public string? appId = null;
 
-        public AppDataMessage(byte[] session_id, byte[] in_data, string app_id = null)
+        public AppDataMessage(byte[] session_id, byte[]? in_data, string? app_id = null)
         {
             sessionId = session_id;
             data = in_data;

@@ -60,7 +60,9 @@ namespace IXICore.Streaming
 
         public Dictionary<string, List<ReactionData>> reactions = new Dictionary<string, List<ReactionData>>();
 
-        public FriendMessage(byte[]? id, string msg, long time, bool local_sender, FriendMessageType t, Address? sender_address = null, string sender_nick = "")
+        public int sequence = 0;
+
+        public FriendMessage(byte[]? id, string msg, long time, bool local_sender, FriendMessageType t, Address? sender_address = null, string sender_nick = "", int sequence = 0)
         {
             _id = id;
             message = msg;
@@ -71,6 +73,7 @@ namespace IXICore.Streaming
             confirmed = false;
             senderAddress = sender_address;
             senderNick = sender_nick;
+            this.sequence = sequence;
             transferId = "";
             completed = false;
             filePath = "";
@@ -163,6 +166,10 @@ namespace IXICore.Streaming
                         {
                             errorSending = reader.ReadBoolean();
                         }
+                        if (m.Position < m.Length)
+                        {
+                            sequence = reader.ReadInt32();
+                        }
                     }
                     catch (Exception)
                     {
@@ -190,8 +197,8 @@ namespace IXICore.Streaming
 
                     if (senderAddress != null)
                     {
-                        writer.Write(senderAddress.addressWithChecksum.Length);
-                        writer.Write(senderAddress.addressWithChecksum);
+                        writer.Write(senderAddress.addressNoChecksum.Length);
+                        writer.Write(senderAddress.addressNoChecksum);
                     }
                     else
                     {
@@ -229,6 +236,7 @@ namespace IXICore.Streaming
 
                     writer.Write(sent);
                     writer.Write(errorSending);
+                    writer.Write(sequence);
                 }
                 return m.ToArray();
             }

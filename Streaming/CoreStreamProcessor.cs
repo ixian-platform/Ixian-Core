@@ -291,6 +291,11 @@ namespace IXICore.Streaming
                 message.encryptionType = encryptionType.Value;
             } // else spixi1/spixi2
 
+            if (!remove_after_sending)
+            {
+                message.requireRcvConfirmation = true;
+            }
+
             if (id != null)
             {
                 message.id = id;
@@ -342,27 +347,37 @@ namespace IXICore.Streaming
             foreach (var contact in friend.users.contacts)
             {
                 var contactAddress = contact.Key;
-                var pf = FriendList.getFriend(contactAddress);
-                if (pf == null)
+
+                if (spixi_message.groupSenderAddress != null)
                 {
-                    if (IxianHandler.isMyAddress(contactAddress))
+                    if (friend.metaData.botInfo.hideParticipantAddresses)
                     {
-                        // Self
-                        continue;
+                        if (GroupChat.DeriveGroupAddress(contactAddress, friend.metaData.botInfo.randomId).addressNoChecksum.SequenceEqual(spixi_message.groupSenderAddress))
+                        {
+                            // No need to send back to sender
+                            continue;
+                        }
                     }
-                    else if (spixi_message.groupSenderAddress != null
-                        && spixi_message.groupSenderAddress.SequenceEqual(contactAddress.addressNoChecksum))
+                    else if (spixi_message.groupSenderAddress.SequenceEqual(contactAddress.addressNoChecksum))
                     {
                         // No need to send back to sender
                         continue;
                     }
-                    else
-                    {
-                        // Skip
-                        Logging.warn("Cannot send group message to contact {0}, it is missing, will send to owner.", contactAddress.ToString());
-                        missingContact = true;
-                        continue;
-                    }
+                }
+
+                if (IxianHandler.isMyAddress(contactAddress))
+                {
+                    // Self
+                    continue;
+                }
+
+                var pf = FriendList.getFriend(contactAddress);
+                if (pf == null)
+                {
+                    // Skip
+                    Logging.warn("Cannot send group message to contact {0}, it is missing, will send to owner.", contactAddress.ToString());
+                    missingContact = true;
+                    continue;
                 }
                 contacts.Add(pf);
             }
@@ -370,7 +385,7 @@ namespace IXICore.Streaming
             if (missingContact
                 && !friend.users.getOwner().SequenceEqual(IxianHandler.primaryWalletAddress))
             {
-                // Send only to owner with real sender set to self, indicating that it has to be resent to other participants
+                // Send only to owner with group sender address set to self, indicating that it has to be resent to other participants
                 var pf = FriendList.getFriend(friend.users.getOwner());
                 if (pf == null)
                 {
@@ -743,6 +758,7 @@ namespace IXICore.Streaming
                 if (spixi_message.groupAddress != null)
                 {
                     if (spixi_message.type != SpixiMessageCode.chat
+                        && spixi_message.type != SpixiMessageCode.chatStream
                         && spixi_message.type != SpixiMessageCode.msgReaction
                         && spixi_message.type != SpixiMessageCode.msgDelete
                         && spixi_message.type != SpixiMessageCode.msgRead
@@ -753,7 +769,13 @@ namespace IXICore.Streaming
                         && spixi_message.type != SpixiMessageCode.fileData
                         && spixi_message.type != SpixiMessageCode.fileFullyReceived
                         && spixi_message.type != SpixiMessageCode.acceptFile
-                        && spixi_message.type != SpixiMessageCode.requestFileData)
+                        && spixi_message.type != SpixiMessageCode.requestFileData
+                        && spixi_message.type != SpixiMessageCode.appRequest
+                        && spixi_message.type != SpixiMessageCode.appRequestAccept
+                        && spixi_message.type != SpixiMessageCode.appRequestReject
+                        && spixi_message.type != SpixiMessageCode.appData
+                        && spixi_message.type != SpixiMessageCode.appProtocolData
+                        && spixi_message.type != SpixiMessageCode.appEndSession)
                     {
                         Logging.error("Received invalid message {0} for group {1} from {2}.", spixi_message.type, Base58Check.Base58CheckEncoding.EncodePlain(spixi_message.groupAddress), sender_address.ToString());
                         sendReceivedConfirmation(friend, sender_address, message.id, channel);
@@ -795,15 +817,31 @@ namespace IXICore.Streaming
                             {
                                 spixi_message.groupSenderAddress = group_sender_address.addressNoChecksum;
                             }
-                            bool send_push_notification = true;
-                            if (spixi_message.type != SpixiMessageCode.chat
-                                && spixi_message.type != SpixiMessageCode.msgReaction
-                                && spixi_message.type != SpixiMessageCode.msgDelete
-                                && spixi_message.type != SpixiMessageCode.leave)
+                            bool add_to_pending_messages = false;
+                            bool send_to_server = false;
+                            bool send_push_notification = false;
+                            switch (spixi_message.type)
                             {
-                                send_push_notification = false;
+                                case SpixiMessageCode.chat:
+                                case SpixiMessageCode.chatStream:
+                                case SpixiMessageCode.msgReaction:
+                                case SpixiMessageCode.msgDelete:
+                                case SpixiMessageCode.leave:
+                                case SpixiMessageCode.appRequest:
+                                    add_to_pending_messages = true;
+                                    send_to_server = true;
+                                    send_push_notification = true;
+                                    break;
+
+                                case SpixiMessageCode.msgReceived:
+                                case SpixiMessageCode.msgRead:
+                                case SpixiMessageCode.avatar:
+                                    add_to_pending_messages = true;
+                                    send_to_server = true;
+                                    send_push_notification = false;
+                                    break;
                             }
-                            sendSpixiMessage(friend, spixi_message, null, message.id, true, true, send_push_notification, message.requireRcvConfirmation);
+                            sendSpixiMessage(friend, spixi_message, null, message.id, add_to_pending_messages, send_to_server, send_push_notification, !message.requireRcvConfirmation);
                         }
                         else
                         {
@@ -853,6 +891,7 @@ namespace IXICore.Streaming
                             case SpixiMessageCode.msgReceived:
                             case SpixiMessageCode.msgTyping:
                             case SpixiMessageCode.keys2:
+                            case SpixiMessageCode.chatStream:
                                 // do not send received confirmation
                                 break;
 
@@ -896,6 +935,7 @@ namespace IXICore.Streaming
                         }
                         break;
                     case SpixiMessageCode.chat:
+                    case SpixiMessageCode.chatStream:
                         {
                             // TODO Add a pending chat list for bots, add pending messages to the chat list until pubkey is received and uncoment the code below
                             /*if (replaced_sender_address && (!friend.contacts.ContainsKey(real_sender_address) || friend.contacts[real_sender_address].publicKey == null))
@@ -2132,6 +2172,16 @@ namespace IXICore.Streaming
             return true;
         }
 
+        public static bool sendChatStreamMessage(Friend friend, ChatStreamMessage chat_stream_message, int channel)
+        {
+            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.chat, chat_stream_message.getBytes(), channel);
+            byte[] spixi_msg_bytes = spixi_message.getBytes();
+
+            sendSpixiMessage(friend, spixi_message, null, null, true, true, true, false);
+
+            return true;
+        }
+
         public static bool sendAcceptAdd2(Friend friend, RemoteEndpoint? endpoint = null)
         {
             if (friend.handshakeStatus > 1)
@@ -2971,48 +3021,31 @@ namespace IXICore.Streaming
             });
         }
 
-        public static StreamMessage sendAppRequest(Friend friend, string app_id, byte[] session_id, byte[] data, string app_info)
+        public static byte[] sendAppRequest(Friend friend, string app_id, byte[] session_id, byte[]? data, string app_info)
         {
             // TODO use channels and drop SpixiAppData
             SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.appRequest, new AppDataMessage(session_id, data, app_info).getBytes());
 
-            StreamMessage new_msg = new StreamMessage(friend.protocolVersion);
-            new_msg.type = StreamMessageCode.data;
-            new_msg.recipient = friend.walletAddress;
-            new_msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
-            new_msg.data = spixi_msg.getBytes();
+            var msg_id = Guid.NewGuid().ToByteArray();
+            sendSpixiMessage(friend, spixi_msg, null, msg_id);
 
-            CoreStreamProcessor.sendMessage(friend, new_msg);
-
-            return new_msg;
+            return msg_id;
         }
 
-        public static void sendAppRequestAccept(Friend friend, byte[] session_id, byte[] data = null)
+        public static void sendAppRequestAccept(Friend friend, byte[] session_id, byte[]? data = null)
         {
             // TODO use channels and drop SpixiAppData
             SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.appRequestAccept, new AppDataMessage(session_id, data).getBytes());
 
-            StreamMessage new_msg = new StreamMessage(friend.protocolVersion);
-            new_msg.type = StreamMessageCode.data;
-            new_msg.recipient = friend.walletAddress;
-            new_msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
-            new_msg.data = spixi_msg.getBytes();
-
-            CoreStreamProcessor.sendMessage(friend, new_msg, true, false, false);
+            sendSpixiMessage(friend, spixi_msg, null, null, true, false, false);
         }
 
-        public static void sendAppRequestReject(Friend friend, byte[] session_id, byte[] data = null)
+        public static void sendAppRequestReject(Friend friend, byte[] session_id, byte[]? data = null)
         {
             // TODO use channels and drop SpixiAppData
             SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.appRequestReject, new AppDataMessage(session_id, data).getBytes());
 
-            StreamMessage new_msg = new StreamMessage(friend.protocolVersion);
-            new_msg.type = StreamMessageCode.data;
-            new_msg.recipient = friend.walletAddress;
-            new_msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
-            new_msg.data = spixi_msg.getBytes();
-
-            CoreStreamProcessor.sendMessage(friend, new_msg);
+            sendSpixiMessage(friend, spixi_msg, null, null);
         }
 
         public static void sendAppData(Friend friend, byte[] session_id, byte[] data)
@@ -3020,33 +3053,15 @@ namespace IXICore.Streaming
             // TODO use channels and drop SpixiAppData
             SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.appData, new AppDataMessage(session_id, data).getBytes());
 
-            StreamMessage msg = new StreamMessage(friend.protocolVersion);
-            msg.type = StreamMessageCode.data;
-            msg.recipient = friend.walletAddress;
-            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
-            msg.data = spixi_msg.getBytes();
-            msg.requireRcvConfirmation = false;
-
-            CoreStreamProcessor.sendMessage(friend, msg, false, false, false, !msg.requireRcvConfirmation);
+            sendSpixiMessage(friend, spixi_msg, null, null, false, false, false, true);
         }
 
-        public static void sendAppEndSession(Friend friend, byte[] session_id, byte[] data = null)
+        public static void sendAppEndSession(Friend friend, byte[] session_id, byte[]? data = null)
         {
             // TODO use channels and drop SpixiAppData
             SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.appEndSession, new AppDataMessage(session_id, data).getBytes());
 
-            if (friend == null)
-            {
-                return;
-            }
-
-            StreamMessage msg = new StreamMessage(friend.protocolVersion);
-            msg.type = StreamMessageCode.data;
-            msg.recipient = friend.walletAddress;
-            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
-            msg.data = spixi_msg.getBytes();
-
-            sendMessage(friend, msg, true, true, false, false);
+            sendSpixiMessage(friend, spixi_msg, null, null, true, true, false, false);
         }
 
         public static void sendGetAppProtocols(Friend friend)
@@ -3081,14 +3096,7 @@ namespace IXICore.Streaming
             // TODO use channels and drop SpixiAppData
             SpixiMessage spixi_msg = new SpixiMessage(SpixiMessageCode.appProtocolData, new AppDataMessage(protocol_id, data).getBytes());
 
-            StreamMessage msg = new StreamMessage(friend.protocolVersion);
-            msg.type = StreamMessageCode.data;
-            msg.recipient = friend.walletAddress;
-            msg.sender = IxianHandler.getWalletStorage().getPrimaryAddress();
-            msg.data = spixi_msg.getBytes();
-            msg.requireRcvConfirmation = false;
-
-            sendMessage(friend, msg, false, false, false, !msg.requireRcvConfirmation);
+            sendSpixiMessage(friend, spixi_msg, null, null, false, false, false, true);
         }
 
         /*public static Task<TransactionSendResponse[]> fetchPaymentInformationAsync(List<Address> addresses)

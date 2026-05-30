@@ -74,6 +74,7 @@ namespace IXICore
         openSecureConnection = 50,
         closeSecureConnection = 51,
         createGroup = 52,
+        chatStream = 53,
         reserved = 0xF0, // 0xF0-0xFF reserved for custom apps/services
     }
 

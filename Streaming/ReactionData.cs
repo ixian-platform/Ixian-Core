@@ -48,8 +48,8 @@ namespace IXICore.Streaming
             {
                 using (BinaryWriter writer = new BinaryWriter(m))
                 {
-                    writer.Write(sender.addressWithChecksum.Length);
-                    writer.Write(sender.addressWithChecksum);
+                    writer.Write(sender.addressNoChecksum.Length);
+                    writer.Write(sender.addressNoChecksum);
                     if (data != null)
                     {
                         writer.Write(data);

@@ -162,7 +162,8 @@ namespace IXICore.Network
         //transactionsChunk2 = 57,
         getTransaction3 = 58,
         inventory2 = 59,
-        transactionsChunk3 = 60
+        transactionsChunk3 = 60,
+        reserved = 0xF0, // 0xF0-0xFF reserved for custom apps/services
     }
 
     /// <summary>

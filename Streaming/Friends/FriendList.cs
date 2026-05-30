@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Meta;
+using IXICore.Streaming.Models;
 using IXICore.Utils;
 using System;
 using System.Collections.Generic;
@@ -160,6 +161,11 @@ namespace IXICore.Streaming
 
         public static FriendMessage? addMessageWithType(byte[]? id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
+            return addMessageWithType(type, wallet_address, channel, new ChatStreamMessage(id, message, 0, false), local_sender, sender_address, timestamp, fire_local_notification, payable_data_len);
+        }
+
+        public static FriendMessage? addMessageWithType(FriendMessageType type, Address wallet_address, int channel, ChatStreamMessage chat_stream_message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
+        {
             if (IxianHandler.status == NodeStatus.stopping
                 || IxianHandler.status == NodeStatus.stopped)
             {
@@ -206,7 +212,8 @@ namespace IXICore.Streaming
                 timestamp = Clock.getTimestamp();
             }
 
-            FriendMessage friend_message = new FriendMessage(id, message, timestamp, local_sender, type, sender_address, sender_nick);
+            byte[]? id = chat_stream_message.MessageId;
+            FriendMessage friend_message = new FriendMessage(id, chat_stream_message.Message, timestamp, local_sender, type, sender_address, sender_nick, chat_stream_message.Sequence);
             friend_message.payableDataLen = payable_data_len;
 
             List<FriendMessage>? messages = friend.getMessages(channel);
@@ -224,13 +231,48 @@ namespace IXICore.Streaming
 
                     if(tmp_msg != null)
                     {
-                        Logging.warn("Message with id {0} was already in message list.", Crypto.hashToString(id));
-                        return null;
+                        if (chat_stream_message.Sequence <= tmp_msg.sequence)
+                        {
+                            Logging.warn("Message with id {0} was already in message list.", Crypto.hashToString(id));
+                            return null;
+                        }
+
+                        if (!chat_stream_message.IsStream)
+                        {
+                            // update message with new content and sequence
+                            tmp_msg.message = chat_stream_message.Message;
+                            tmp_msg.sequence = chat_stream_message.Sequence;
+                            tmp_msg.timestamp = timestamp;
+                        }
+                        else if (chat_stream_message.Sequence == tmp_msg.sequence + 1)
+                        {
+                            // append message with new content and update sequence
+                            tmp_msg.message += chat_stream_message.Message;
+                            tmp_msg.sequence = chat_stream_message.Sequence;
+                            tmp_msg.timestamp = timestamp;
+                        }
+                        else
+                        {
+                            Logging.warn("Received stream message with id {0} has invalid sequence. Expected {1} but got {2}.", Crypto.hashToString(id), tmp_msg.sequence + 1, chat_stream_message.Sequence);
+                            return null;
+                        }
+
+                        // Write to chat history
+                        IxianHandler.localStorage.requestWriteMessages(wallet_address, channel);
+                        return tmp_msg;
                     }
                 }
                 else if(!local_sender)
                 {
                     Logging.error("Message id sent by {0} is null!", friend.walletAddress.ToString());
+                    return null;
+                }
+                
+                // New message
+                if (chat_stream_message.IsStream
+                    && chat_stream_message.Sequence > 0)
+                {
+                    Logging.error("Received stream message sent by {0} has invalid sequence. Expected 0 but got {1}.", friend.walletAddress.ToString(), chat_stream_message.Sequence);
                     return null;
                 }
                 messages.Add(friend_message);
