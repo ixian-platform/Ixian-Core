@@ -56,7 +56,7 @@ namespace IXICore.Streaming
             }
 
 
-            Friend f = FriendList.getFriend(msg.recipient);
+            Friend? f = FriendList.getFriend(msg.recipient);
             if (f == null)
                 return true; // return true to skip sending this message and remove it from the queue
 
@@ -155,7 +155,7 @@ namespace IXICore.Streaming
                                 if (str[2] != "")
                                 {
                                     byte[] pk = Convert.FromBase64String(str[2]);
-                                    Friend f = FriendList.getFriend(new Address(pk));
+                                    Friend? f = FriendList.getFriend(new Address(pk));
                                     if (f != null && pk != null)
                                     {
                                         f.setPublicKey(pk);

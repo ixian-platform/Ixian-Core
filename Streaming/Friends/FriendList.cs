@@ -161,10 +161,10 @@ namespace IXICore.Streaming
 
         public static FriendMessage? addMessageWithType(byte[]? id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
-            return addMessageWithType(type, wallet_address, channel, new ChatStreamMessage(id, message, 0, false), local_sender, sender_address, timestamp, fire_local_notification, payable_data_len);
+            return addMessageWithType(type, wallet_address, channel, new ChatStreamMessage(id, message, 0, false), local_sender, sender_address, timestamp, fire_local_notification, payable_data_len).message;
         }
 
-        public static FriendMessage? addMessageWithType(FriendMessageType type, Address wallet_address, int channel, ChatStreamMessage chat_stream_message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
+        public static (FriendMessage? message, bool updated) addMessageWithType(FriendMessageType type, Address wallet_address, int channel, ChatStreamMessage chat_stream_message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
         {
             if (IxianHandler.status == NodeStatus.stopping
                 || IxianHandler.status == NodeStatus.stopped)
@@ -175,7 +175,7 @@ namespace IXICore.Streaming
             if(friend == null)
             {
                 Logging.warn("Received message but contact {0} isn't in our contact list.", wallet_address.ToString());
-                return null;
+                return (null, false);
             }
 
             bool set_read = false;
@@ -220,7 +220,7 @@ namespace IXICore.Streaming
             if(messages == null)
             {
                 Logging.warn("Message with id {0} was sent to invalid channel {1}.", Crypto.hashToString(friend_message.id), channel);
-                return null;
+                return (null, false);
             }
             lock (messages)
             {
@@ -234,7 +234,7 @@ namespace IXICore.Streaming
                         if (chat_stream_message.Sequence <= tmp_msg.sequence)
                         {
                             Logging.warn("Message with id {0} was already in message list.", Crypto.hashToString(id));
-                            return null;
+                            return (null, false);
                         }
 
                         if (!chat_stream_message.IsStream)
@@ -254,18 +254,18 @@ namespace IXICore.Streaming
                         else
                         {
                             Logging.warn("Received stream message with id {0} has invalid sequence. Expected {1} but got {2}.", Crypto.hashToString(id), tmp_msg.sequence + 1, chat_stream_message.Sequence);
-                            return null;
+                            return (null, false);
                         }
 
                         // Write to chat history
                         IxianHandler.localStorage.requestWriteMessages(wallet_address, channel);
-                        return tmp_msg;
+                        return (tmp_msg, true);
                     }
                 }
                 else if(!local_sender)
                 {
                     Logging.error("Message id sent by {0} is null!", friend.walletAddress.ToString());
-                    return null;
+                    return (null, false);
                 }
                 
                 // New message
@@ -273,7 +273,7 @@ namespace IXICore.Streaming
                     && chat_stream_message.Sequence > 0)
                 {
                     Logging.error("Received stream message sent by {0} has invalid sequence. Expected 0 but got {1}.", friend.walletAddress.ToString(), chat_stream_message.Sequence);
-                    return null;
+                    return (null, false);
                 }
                 messages.Add(friend_message);
             }
@@ -298,7 +298,7 @@ namespace IXICore.Streaming
 
             // Write to chat history
             IxianHandler.localStorage.requestWriteMessages(wallet_address, channel);
-            return friend_message;
+            return (friend_message, false);
         }
 
         // Sort the friend list alphabetically based on nickname

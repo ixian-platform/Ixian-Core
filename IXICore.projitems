@@ -95,6 +95,7 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\IXISocketConnections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\MessageCrypto.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AppProtocolsMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\ChatStreamMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\CreateGroupMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\RequestAdd2Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptAdd2Message.cs" />
