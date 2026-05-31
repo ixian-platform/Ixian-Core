@@ -38,13 +38,13 @@ namespace IXICore
         /// Useful for optimized block header sync
         /// Note: Always use a Superblock
         /// </summary>
-        public static ulong bakedBlockHeight = 5875000;
+        public static ulong bakedBlockHeight = 5967000;
 
         /// <summary>
         /// Mainnet block checksum (paired with bakedBlockHeight) of bakedBlockHeight
         /// Useful for optimized block header sync
         /// </summary>
-        public static byte[] bakedBlockChecksum = Crypto.stringToHash("fffd4be0b5e32a0b2b229e91345f47e8b8221853c789fcfdeb1227d0438edf93a3f5fdd39f530c206824234148ffe14e2aafe959a42bea70158dea9eefceac8a");
+        public static byte[] bakedBlockChecksum = Crypto.stringToHash("0bd01052c828ebdc8a7fcee342149a7b966bc5a31f4b6320a3b02439776d587a142f4b29875553f67a7fb301d09161389ea573ee8cef9e80096845ede795f4be");
 
         /// <summary>
         /// Number of wallets to send in each chunk of data when synchronizing new Master Nodes.
@@ -228,5 +228,15 @@ namespace IXICore
 
         public static P2PTransactionMode p2pTransactionMode = P2PTransactionMode.PrimaryAddress;
         public static AddressPaymentFlag defaultPaymentAddressMode = AddressPaymentFlag.OfflineTag;
+
+        /// <summary>
+        ///  Maximum size of a chat message in bytes.
+        /// </summary>
+        public static readonly int maxChatMessageSize = 64000;
+
+        /// <summary>
+        ///  Maximum size of a message id in bytes.
+        /// </summary>
+        public static readonly int maxMessageIdSize = 16;
     }
 }

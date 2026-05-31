@@ -11,6 +11,7 @@
 // MIT License for more details.
 
 using IXICore.Utils;
+using System;
 using System.Text;
 
 namespace IXICore.Streaming.Models
@@ -35,10 +36,18 @@ namespace IXICore.Streaming.Models
             int offset = 0;
 
             var messageIdBytes = data.ReadIxiBytes(offset);
+            if (messageIdBytes.bytes.Length > CoreConfig.maxMessageIdSize)
+            {
+                throw new Exception("Chat message id exceeds maximum size limit.");
+            }
             MessageId = messageIdBytes.bytes;
             offset += messageIdBytes.bytesRead;
 
             var messageBytes = data.ReadIxiBytes(offset);
+            if (messageBytes.bytes.Length > CoreConfig.maxChatMessageSize)
+            {
+                throw new Exception("Chat message exceeds maximum size limit.");
+            }
             Message = Encoding.UTF8.GetString(messageBytes.bytes);
             offset += messageBytes.bytesRead;
 
@@ -52,6 +61,11 @@ namespace IXICore.Streaming.Models
 
         public byte[] getBytes()
         {
+            if (Message.Length > CoreConfig.maxChatMessageSize)
+            {
+                throw new Exception("Chat message exceeds maximum size limit.");
+            }
+
             int totalSize = 0;
 
             var messageIdBytes = MessageId.GetIxiBytes();

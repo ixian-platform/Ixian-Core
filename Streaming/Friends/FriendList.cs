@@ -171,6 +171,12 @@ namespace IXICore.Streaming
             {
                 throw new Exception("Node is stopping or stopped, cannot add message.");
             }
+
+            if (chat_stream_message.Message.Length > CoreConfig.maxChatMessageSize)
+            {
+                throw new Exception("Chat message exceeds maximum size limit.");
+            }
+
             Friend? friend = getFriend(wallet_address);
             if(friend == null)
             {
@@ -237,6 +243,20 @@ namespace IXICore.Streaming
                             return (null, false);
                         }
 
+                        if (tmp_msg.localSender)
+                        {
+                            Logging.error("Received message with id {0} was sent by us, ignoring stream update.", Crypto.hashToString(id));
+                            return (null, false);
+                        }
+
+                        if (tmp_msg.senderAddress != null
+                            && sender_address != null
+                            && !tmp_msg.senderAddress.SequenceEqual(sender_address))
+                        {
+                            Logging.error("Received message with id {0} was sent by a different user, ignoring stream update.", Crypto.hashToString(id));
+                            return (null, false);
+                        }
+
                         if (!chat_stream_message.IsStream)
                         {
                             // update message with new content and sequence
@@ -246,6 +266,11 @@ namespace IXICore.Streaming
                         }
                         else if (chat_stream_message.Sequence == tmp_msg.sequence + 1)
                         {
+                            if (chat_stream_message.Message.Length + tmp_msg.message.Length > CoreConfig.maxChatMessageSize)
+                            {
+                                Logging.error("Combined chat message with id {0} exceeds maximum size limit. Current size: {1}, new content size: {2}, max size: {3}.", Crypto.hashToString(id), tmp_msg.message.Length, chat_stream_message.Message.Length, CoreConfig.maxChatMessageSize);
+                                return (null, false);
+                            }
                             // append message with new content and update sequence
                             tmp_msg.message += chat_stream_message.Message;
                             tmp_msg.sequence = chat_stream_message.Sequence;
