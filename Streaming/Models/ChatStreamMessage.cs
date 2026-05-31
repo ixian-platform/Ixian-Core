@@ -17,12 +17,12 @@ namespace IXICore.Streaming.Models
 {
     public class ChatStreamMessage
     {
-        public byte[] MessageId { get; set;  }
+        public byte[]? MessageId { get; set;  }
         public string Message { get; set; }
         public int Sequence { get; set; }
         public bool IsStream { get; set; }
 
-        public ChatStreamMessage(byte[] messageId, string message, int sequence, bool isStream)
+        public ChatStreamMessage(byte[]? messageId, string message, int sequence, bool isStream)
         {
             MessageId = messageId;
             Message = message;

@@ -2210,7 +2210,7 @@ namespace IXICore.Streaming
 
         public static bool sendChatStreamMessage(Friend friend, ChatStreamMessage chat_stream_message, int channel)
         {
-            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.chat, chat_stream_message.getBytes(), channel);
+            SpixiMessage spixi_message = new SpixiMessage(SpixiMessageCode.chatStream, chat_stream_message.getBytes(), channel);
             byte[] spixi_msg_bytes = spixi_message.getBytes();
 
             sendSpixiMessage(friend, spixi_message, null, null, true, true, true, false);
