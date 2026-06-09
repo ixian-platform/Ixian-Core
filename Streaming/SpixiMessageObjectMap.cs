@@ -33,11 +33,11 @@ namespace IXICore
                 { SpixiMessageCode.keys, data => new KeysMessage(data) },
                 { SpixiMessageCode.msgRead, data => data },
                 { SpixiMessageCode.msgReceived, data => data },
-                /*{ SpixiMessageCode.fileData, data => new FileDataMessage(data) },
+                { SpixiMessageCode.fileData, data => new FileDataMessage(data) },
                 { SpixiMessageCode.requestFileData, data => new RequestFileDataMessage(data) },
                 { SpixiMessageCode.fileHeader, data => new FileHeaderMessage(data) },
                 { SpixiMessageCode.acceptFile, data => new AcceptFileMessage(data) },
-                { SpixiMessageCode.requestCall, data => new RequestCallMessage(data) },
+                /*{ SpixiMessageCode.requestCall, data => new RequestCallMessage(data) },
                 { SpixiMessageCode.acceptCall, data => new AcceptCallMessage(data) },
                 { SpixiMessageCode.rejectCall, data => new RejectCallMessage(data) },
                 { SpixiMessageCode.callData, data => new CallDataMessage(data) },*/

@@ -94,13 +94,17 @@
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\IXISocket.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\IXISocketConnections.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\MessageCrypto.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptFileMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AppProtocolsMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\ChatStreamMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\CreateGroupMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\FileDataMessage.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\FileHeaderMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\RequestAdd2Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\AcceptAdd2Message.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\KeysMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\Keys2Message.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\RequestFileDataMessage.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionRequest.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionSend.cs" />
     <Compile Include="$(MSBuildThisFileDirectory)Streaming\Models\TransactionSendRequest.cs" />
