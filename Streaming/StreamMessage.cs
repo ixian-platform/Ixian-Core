@@ -24,7 +24,12 @@ namespace IXICore
         public SpixiMessageCode type;
         public int channel;
         public object data;
+        [JsonConverter(typeof(AddressConverter))]
+        public Address? groupAddress = null;
+        [JsonConverter(typeof(AddressConverter))]
+        public Address? groupSenderAddress = null;
     }
+
     public class StreamMessageDataConverter : JsonConverter<byte[]>
     {
         public override void WriteJson(JsonWriter writer, byte[]? value, JsonSerializer serializer)
@@ -49,6 +54,16 @@ namespace IXICore
             }
 
             smi.data = data;
+
+            if (sm.groupAddress != null)
+            {
+                smi.groupAddress = new Address(sm.groupAddress);
+            }
+
+            if (sm.groupSenderAddress != null)
+            {
+                smi.groupSenderAddress = new Address(sm.groupSenderAddress);
+            }
 
             serializer.Serialize(writer, smi);
         }
