@@ -26,7 +26,7 @@ namespace IXICore
         /// <summary>
         /// Current version of IxiCore.
         /// </summary>
-        public static readonly string version = "xcore-0.9.8i";
+        public static readonly string version = "xcore-0.9.8j";
 
         /// <summary>
         /// Current version of the Ixian network protocol.
