@@ -159,12 +159,29 @@ namespace IXICore.Streaming
             }
         }
 
-        public static FriendMessage? addMessageWithType(byte[]? id, FriendMessageType type, Address wallet_address, int channel, string message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
+        public static FriendMessage? addMessageWithType(byte[]? id,
+                                                        FriendMessageType type,
+                                                        Address wallet_address,
+                                                        int channel,
+                                                        string message,
+                                                        bool local_sender = false,
+                                                        Address? sender_address = null,
+                                                        long timestamp = 0,
+                                                        bool fire_local_notification = true,
+                                                        int payable_data_len = 0)
         {
             return addMessageWithType(type, wallet_address, channel, new ChatStreamMessage(id, message, 0, false), local_sender, sender_address, timestamp, fire_local_notification, payable_data_len).message;
         }
 
-        public static (FriendMessage? message, bool updated) addMessageWithType(FriendMessageType type, Address wallet_address, int channel, ChatStreamMessage chat_stream_message, bool local_sender = false, Address? sender_address = null, long timestamp = 0, bool fire_local_notification = true, int payable_data_len = 0)
+        public static (FriendMessage? message, bool updated) addMessageWithType(FriendMessageType type,
+                                                                                Address wallet_address,
+                                                                                int channel,
+                                                                                ChatStreamMessage chat_stream_message,
+                                                                                bool local_sender = false,
+                                                                                Address? sender_address = null,
+                                                                                long timestamp = 0,
+                                                                                bool fire_local_notification = true,
+                                                                                int payable_data_len = 0)
         {
             if (IxianHandler.status == NodeStatus.stopping
                 || IxianHandler.status == NodeStatus.stopped)
@@ -243,7 +260,8 @@ namespace IXICore.Streaming
                             return (null, false);
                         }
 
-                        if (tmp_msg.localSender)
+                        if (tmp_msg.localSender
+                            && (sender_address == null || !sender_address.SequenceEqual(IxianHandler.primaryWalletAddress)))
                         {
                             Logging.error("Received message with id {0} was sent by us, ignoring stream update.", Crypto.hashToString(id));
                             return (null, false);
