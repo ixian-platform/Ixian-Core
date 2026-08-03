@@ -236,7 +236,12 @@ namespace IXICore.Streaming
             }
 
             byte[]? id = chat_stream_message.MessageId;
-            FriendMessage friend_message = new FriendMessage(id, chat_stream_message.Message, timestamp, local_sender, type, sender_address, sender_nick, chat_stream_message.Sequence);
+            Address? set_sender_address = sender_address;
+            if (friend.type == FriendType.Normal)
+            {
+                set_sender_address = null;
+            }
+            FriendMessage friend_message = new FriendMessage(id, chat_stream_message.Message, timestamp, local_sender, type, set_sender_address, sender_nick, chat_stream_message.Sequence);
             friend_message.payableDataLen = payable_data_len;
 
             List<FriendMessage>? messages = friend.getMessages(channel);
