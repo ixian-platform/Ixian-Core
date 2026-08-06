@@ -10,6 +10,7 @@
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // MIT License for more details.
 
+using DLT.Meta;
 using IXICore.Meta;
 using IXICore.Utils;
 using System;
@@ -2241,6 +2242,66 @@ namespace IXICore
                 {
                     result.Add((merged_signature.recipientPubKeyOrAddress, 1));
                 }
+            }
+            if (version < BlockVer.v10)
+            {
+                result.Sort((x, y) => _ByteArrayComparer.Compare(x.address.addressNoChecksum, y.address.addressNoChecksum));
+            }
+            //result = result.OrderBy(x => x.difficulty, Comparer<IxiNumber>.Default).ThenBy(x => x.address.addressNoChecksum, new ByteArrayComparer()).ToList();
+            return result;
+        }
+
+        /// <summary>
+        ///  Retrieves a list of Ixian Wallet addresses from the list of signatures only on this block for stakers .
+        /// </summary>
+        /// <returns>List of Ixian wallets which have signed this block and enough balance.</returns>
+        public List<(Address address, IxiNumber difficulty)> getAppliableSignaturesWalletAddresses()
+        {
+            if (compacted)
+            {
+                throw new Exception($"Trying to get signatures wallet addresses on a compacted block {blockNum}");
+            }
+
+            List<(Address address, IxiNumber difficulty)> result = new List<(Address, IxiNumber)>();
+
+            List<BlockSignature> tmp_sigs;
+            Block? tar_block = IxianHandler.getLastBlock();
+            if (tar_block == null){
+                return result;
+            }
+            ulong blocknum = 0;
+            lock (signatures)
+            {
+                if (frozenSignatures != null)
+                {
+                    tmp_sigs = frozenSignatures;
+                    blocknum = tar_block.blockNum - 1;
+                }
+                else
+                {
+                    tmp_sigs = signatures;
+                    blocknum = tar_block.blockNum;
+                }
+            }
+
+            foreach (BlockSignature merged_signature in tmp_sigs)
+            {
+                // Check ixian amount at wallet
+                IxiNumber balance = Node.walletState.getWallet(merged_signature.recipientPubKeyOrAddress).balance;
+                // Add the address to the list 
+                // without low balance and NO signerPow results
+                if ( ConsensusConfig.minimumMasterNodeFunds > balance )
+                {
+                    continue;
+                }
+                if (merged_signature.powSolution != null && merged_signature.blockNum == blocknum)
+                {
+                    result.Add((merged_signature.recipientPubKeyOrAddress, merged_signature.powSolution.difficulty));
+                }
+                // else
+                // {
+                    // result.Add((merged_signature.recipientPubKeyOrAddress, 1));
+                // }
             }
             if (version < BlockVer.v10)
             {
